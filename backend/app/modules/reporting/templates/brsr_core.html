@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>SEBI BRSR Comprehensive Disclosure Report</title>
+    <style>
+        {{ styles_css }}
+    </style>
+</head>
+<body>
+    <div class="watermark">SEALED AUDIT COPY</div>
+
+    <div class="report-header">
+        <h1 class="report-title">{{ report.section_a.company_name }}</h1>
+        <p class="report-subtitle">Business Responsibility and Sustainability Report (BRSR) — {{ report.section_a.financial_year }}</p>
+        <div class="seal-badge">
+            🔒 Cryptographic Snapshot Seal: {{ report.snapshot_hash }}
+        </div>
+    </div>
+
+    <!-- Section A: General Disclosures -->
+    {{ section_a_html }}
+
+    <!-- Section B: Management and Process Disclosures -->
+    {{ section_b_html }}
+
+    <!-- Section C: Principle-wise Performance -->
+    {{ section_c_html }}
+
+</body>
+</html>

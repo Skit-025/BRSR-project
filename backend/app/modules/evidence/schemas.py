@@ -1,0 +1,47 @@
+from typing import Optional, List
+from datetime import datetime, date
+from pydantic import BaseModel, ConfigDict
+
+class ExtractedFieldSuggestion(BaseModel):
+    metric: str
+    value: float
+    unit: str
+    confidence: float
+    page: int
+    bounding_box: Optional[List[float]] = None
+
+class EvidenceFileRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    storage_key: str
+    original_name: str
+    mime_type: str
+    size_bytes: int
+    sha256: str
+    uploader_id: Optional[str] = None
+    uploaded_at: datetime
+    page_ref: Optional[str] = None
+    doc_date: Optional[date] = None
+    version: int
+    scan_status: str
+
+class EvidenceLinkCreate(BaseModel):
+    evidence_id: str
+    data_point_id: str
+    page_ref: Optional[str] = None
+    notes: Optional[str] = None
+
+class EvidenceLinkRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    evidence_id: str
+    data_point_id: str
+    page_ref: Optional[str] = None
+    notes: Optional[str] = None
+
+class EvidenceUploadResponse(BaseModel):
+    evidence: EvidenceFileRead
+    extracted_fields: List[ExtractedFieldSuggestion] = []
+    message: str

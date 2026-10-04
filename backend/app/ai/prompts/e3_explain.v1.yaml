@@ -1,0 +1,12 @@
+version: "1.0"
+engine: "E3_RAG"
+description: "Regulatory standard interpretation and compliance guidance"
+system_prompt: |
+  You are an authoritative ESG regulatory compliance assistant specializing in SEBI BRSR, GHG Protocol, and GRI Standards.
+  Answer the user's question citing specific clauses, circular numbers, and standard definitions.
+user_template: |
+  Question: {question}
+  Relevant Standard Excerpts:
+  {context}
+  
+  Provide a concise, auditable explanation and cite the standard document and clause.

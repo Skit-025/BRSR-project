@@ -1,0 +1,263 @@
+"""
+app/modules/forms/service.py
+Dynamic Digital Forms Engine.
+Generates the Master Digital Form and dynamically projects it into 40 distinct perspectives
+(5 Subsidiaries x 8 Roles) according to entity scope and caller role permissions.
+"""
+from typing import Dict, List, Optional, Any
+from sqlalchemy.orm import Session
+from fastapi import HTTPException, status
+
+from app.modules.org.models import OrgNode, ReportingPeriod, MetricApplicability
+from app.modules.metrics.models import Metric
+from app.modules.collection.models import Submission, DataPoint
+from app.modules.forms.schemas import DigitalFormResponse, FormSection, FormField
+from app.security.rbac import Role
+
+# 5 Authoritative MEIL Subsidiaries
+MEIL_SUBSIDIARIES = [
+    {"code": "MEIL-INFRA",  "name": "MEIL Infrastructure & Civil Engineering"},
+    {"code": "MEIL-ENERGY", "name": "MEIL Energy, Solar & Power Grids"},
+    {"code": "MEIL-WATER",  "name": "MEIL Water Treatment & Lift Irrigation"},
+    {"code": "MEIL-HYDRO",  "name": "MEIL Hydrocarbons & Petrochemical Drilling"},
+    {"code": "MEIL-EV",     "name": "MEIL Electric Mobility & Green Fleets"},
+]
+
+PRINCIPLE_NAMES = {
+    "P1": ("Governance, Ethics & Anti-Corruption", "Governance"),
+    "P2": ("Sustainable & Safe Products/Services", "Governance"),
+    "P3": ("Employee Well-being, Safety & Diversity", "Social"),
+    "P4": ("Stakeholder Inclusiveness & Grievances", "Social"),
+    "P5": ("Human Rights & Fair Labor Practices", "Social"),
+    "P6": ("Environmental Protection, GHG & Waste", "Environment"),
+    "P7": ("Responsible Public Policy Advocacy", "Governance"),
+    "P8": ("Inclusive Growth & CSR Development", "Social"),
+    "P9": ("Consumer Value & Fair Customer Practices", "Governance"),
+}
+
+
+def _lookup_period(db: Session, identifier: str) -> Optional[ReportingPeriod]:
+    """Safely retrieves a ReportingPeriod by code (e.g. 'FY2025-26') or UUID string."""
+    import uuid
+    # Try by code
+    p = db.query(ReportingPeriod).filter(ReportingPeriod.code == identifier).first()
+    if p:
+        return p
+    # Try by UUID only if valid UUID format
+    try:
+        valid_uuid = str(uuid.UUID(identifier))
+        return db.query(ReportingPeriod).filter(ReportingPeriod.id == valid_uuid).first()
+    except (ValueError, TypeError):
+        return None
+
+
+def build_master_digital_form(db: Session, period_id: str) -> DigitalFormResponse:
+    """
+    Builds the Master Digital Form containing all BRSR Core Essential indicators
+    across all 5 subsidiaries and 9 principles.
+    Visible only to System Admin (and ESG Manager/Group Admin).
+    """
+    period = _lookup_period(db, period_id)
+    if not period:
+        period_code = period_id
+    else:
+        period_code = period.code
+
+
+    metrics = db.query(Metric).filter(Metric.is_deleted == False).order_by(Metric.principle, Metric.code).all()
+
+    # Group metrics by principle
+    sections_dict: Dict[str, List[FormField]] = {}
+    for m in metrics:
+        p = f"P{m.principle}" if m.principle else "P6"
+        p_name, pillar = PRINCIPLE_NAMES.get(p, ("General Sustainability", "Environment"))
+        
+        field = FormField(
+            metric_code=m.code,
+            metric_name=m.name,
+            principle=p,
+            pillar=m.category if m.category else pillar,
+            data_type=m.data_type if m.data_type else "numeric",
+            unit=m.base_unit,
+            allowed_units=[m.base_unit] + (m.allowed_units or []),
+            is_mandatory=bool(m.brsr_core),
+            read_only=False,
+            current_value=None,
+            notes=f"SEBI Core Indicator {m.code}",
+            formula_ref=m.calc_formula_code
+        )
+        sections_dict.setdefault(p, []).append(field)
+
+
+    sections: List[FormSection] = []
+    for p in sorted(sections_dict.keys()):
+        p_name, pillar = PRINCIPLE_NAMES.get(p, ("General Sustainability", "Environment"))
+        fields = sections_dict[p]
+        sections.append(
+            FormSection(
+                principle=p,
+                principle_name=p_name,
+                pillar=pillar,
+                field_count=len(fields),
+                fields=fields
+            )
+        )
+
+    # 40 Dimensions Overview (5 subsidiaries x 8 roles)
+    all_roles = [r.value for r in Role]
+    dimensions_summary = {
+        "subsidiaries": MEIL_SUBSIDIARIES,
+        "roles": all_roles,
+        "total_dimensions": len(MEIL_SUBSIDIARIES) * len(all_roles),
+        "description": "Master BRSR Digital Form encompassing all 40 subsidiary-role perspectives."
+    }
+
+    return DigitalFormResponse(
+        form_id="FORM-MEIL-MASTER-BRSR",
+        form_type="master",
+        entity_id=None,
+        entity_code="MEIL-GROUP",
+        entity_name="Megha Engineering & Infrastructures Limited (Consolidated Group)",
+        role=Role.SYSTEM_ADMIN.value,
+        period_id=period_id,
+        period_code=period_code,
+        is_editable=True,
+        can_submit=False,
+        can_approve=False,
+        can_audit=True,
+        can_upload_spreadsheet=True,
+        total_metrics=len(metrics),
+        sections=sections,
+        dimensions_summary=dimensions_summary
+    )
+
+
+def build_scoped_digital_form(
+    db: Session,
+    period_id: str,
+    user_role: str,
+    user_entity_id: Optional[str]
+) -> DigitalFormResponse:
+    """
+    Dynamically projects the master form to the user's specific context.
+    - System Admin sees the master form or can inspect any entity.
+    - Makers see editable fields for their subsidiary/project and can upload spreadsheets.
+    - Checkers see submitted fields with approval actions.
+    - Auditors see assurance fields with audit papers.
+    - Viewers see read-only summaries.
+    """
+    if user_role == Role.SYSTEM_ADMIN.value:
+        return build_master_digital_form(db, period_id)
+
+    # Resolve entity (by code or UUID)
+    import uuid
+    entity = None
+    if user_entity_id:
+        entity = db.query(OrgNode).filter(OrgNode.code == user_entity_id, OrgNode.is_deleted == False).first()
+        if not entity:
+            try:
+                valid_uuid = str(uuid.UUID(user_entity_id))
+                entity = db.query(OrgNode).filter(OrgNode.id == valid_uuid, OrgNode.is_deleted == False).first()
+            except (ValueError, TypeError):
+                entity = None
+
+    entity_code = entity.code if entity else "MEIL-GENERAL"
+    entity_name = entity.name if entity else "MEIL Designated Reporting Entity"
+
+    period = _lookup_period(db, period_id)
+    period_code = period.code if period else period_id
+
+    # Fetch existing data points if submission pack exists
+    current_values: Dict[str, Any] = {}
+    current_notes: Dict[str, str] = {}
+    if entity and period:
+        sub = db.query(Submission).filter(
+            Submission.entity_id == entity.id,
+            Submission.period_id == period.id
+        ).first()
+        if sub:
+            for dp in sub.data_points:
+                current_values[dp.metric_code] = dp.value_numeric if dp.value_numeric is not None else dp.value_text
+                current_notes[dp.metric_code] = dp.notes
+
+
+    # Applicable metrics filter
+    applicable_metric_codes = set()
+    if entity:
+        app_records = db.query(MetricApplicability).filter(
+            MetricApplicability.org_node_id == entity.id,
+            MetricApplicability.is_applicable == True
+        ).all()
+        if app_records:
+            applicable_metric_codes = {r.metric_code for r in app_records}
+
+
+    all_metrics = db.query(Metric).filter(Metric.is_deleted == False).order_by(Metric.principle, Metric.code).all()
+
+    # Role capability flags
+    is_maker = user_role == Role.MAKER.value
+    is_checker = user_role == Role.CHECKER.value
+    is_auditor = user_role == Role.AUDITOR.value
+    is_esg_mgr = user_role in [Role.ESG_MANAGER.value, Role.GROUP_ADMIN.value, Role.SUBSIDIARY_ADMIN.value]
+
+    sections_dict: Dict[str, List[FormField]] = {}
+    for m in all_metrics:
+        # If specific applicability exists for this node, apply it; otherwise include standard core metrics
+        if applicable_metric_codes and m.code not in applicable_metric_codes and not m.brsr_core:
+            continue
+
+        p = f"P{m.principle}" if m.principle else "P6"
+        p_name, pillar = PRINCIPLE_NAMES.get(p, ("General Sustainability", "Environment"))
+
+        field = FormField(
+            metric_code=m.code,
+            metric_name=m.name,
+            principle=p,
+            pillar=m.category if m.category else pillar,
+            data_type=m.data_type if m.data_type else "numeric",
+            unit=m.base_unit,
+            allowed_units=[m.base_unit] + (m.allowed_units or []),
+            is_mandatory=bool(m.brsr_core),
+            read_only=not (is_maker or is_esg_mgr),
+            current_value=current_values.get(m.code),
+            notes=current_notes.get(m.code),
+            formula_ref=m.calc_formula_code
+        )
+        sections_dict.setdefault(p, []).append(field)
+
+
+    sections: List[FormSection] = []
+    total_metrics = 0
+    for p in sorted(sections_dict.keys()):
+        p_name, pillar = PRINCIPLE_NAMES.get(p, ("General Sustainability", "Environment"))
+        fields = sections_dict[p]
+        total_metrics += len(fields)
+        sections.append(
+            FormSection(
+                principle=p,
+                principle_name=p_name,
+                pillar=pillar,
+                field_count=len(fields),
+                fields=fields
+            )
+        )
+
+    form_id = f"FORM-{entity_code}-{user_role.upper()}"
+
+    return DigitalFormResponse(
+        form_id=form_id,
+        form_type="scoped",
+        entity_id=user_entity_id,
+        entity_code=entity_code,
+        entity_name=entity_name,
+        role=user_role,
+        period_id=period_id,
+        period_code=period_code,
+        is_editable=(is_maker or is_esg_mgr),
+        can_submit=is_maker,
+        can_approve=is_checker,
+        can_audit=is_auditor,
+        can_upload_spreadsheet=(is_maker or is_esg_mgr),
+        total_metrics=total_metrics,
+        sections=sections
+    )

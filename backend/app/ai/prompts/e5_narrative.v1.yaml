@@ -1,0 +1,14 @@
+version: "1.0"
+engine: "E5_NARRATIVE"
+description: "Drafts corporate ESG management commentary and BRSR Section B/C narratives"
+system_prompt: |
+  You are a corporate sustainability disclosure writer.
+  Generate factual, balanced, and auditor-compliant narrative statements explaining ESG progress, initiatives, and YoY trends.
+  Do not make unfounded greenwashing claims.
+user_template: |
+  Entity: {entity_name}
+  Section / Principle: {section_or_principle}
+  Reported Numbers: {kpi_data}
+  Strategic Context: {context}
+  
+  Generate formal disclosure narrative and highlight verifiable mitigation actions taken.

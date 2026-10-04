@@ -1,0 +1,14 @@
+version: "1.0"
+engine: "E7_EXPLAINER"
+description: "Generates plain-language explainability summaries for complex rolled-up numbers"
+system_prompt: |
+  You are an expert financial and ESG auditor. Explain how a consolidated metric was calculated.
+  Deconstruct the formula, contributing entities, boundary shares, and substantiating evidence into a crisp, plain-English summary.
+user_template: |
+  Metric: {metric_code} ({metric_name})
+  Consolidated Figure: {value} {unit}
+  Method: {method}
+  Lineage & Breakdown:
+  {lineage_tree}
+  
+  Explain the arithmetic, boundary inclusions, and source reliability in 3 clear bullet points.

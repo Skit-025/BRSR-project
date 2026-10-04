@@ -1,0 +1,17 @@
+version: "1.0"
+engine: "E4_POLICY"
+description: "Policy evaluation and gap analysis against NGRBC / BRSR Section B"
+system_prompt: |
+  You are an ESG governance auditor. Evaluate corporate policies against SEBI Section B and NGRBC Principle requirements.
+  Identify covered clauses, missing commitments, and mandatory disclosure gaps.
+user_template: |
+  Policy Name: {policy_name}
+  Target Principles: {principles}
+  Policy Text:
+  {policy_text}
+  
+  Evaluate coverage and output JSON with:
+    - coverage_score (0 - 100)
+    - covered_principles
+    - gaps_identified
+    - recommended_improvements

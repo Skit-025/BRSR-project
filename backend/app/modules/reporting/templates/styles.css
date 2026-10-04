@@ -1,0 +1,102 @@
+/* SEBI BRSR Formal Disclosure Stylesheet */
+@page {
+    size: A4 portrait;
+    margin: 20mm 15mm 20mm 15mm;
+    @bottom-right {
+        content: "Page " counter(page) " of " counter(pages);
+        font-family: Arial, sans-serif;
+        font-size: 9pt;
+        color: #64748b;
+    }
+    @bottom-left {
+        content: "MEIL ESG-BRSR Sealed Audit Copy";
+        font-family: Arial, sans-serif;
+        font-size: 9pt;
+        color: #64748b;
+    }
+}
+
+body {
+    font-family: "Segoe UI", Arial, sans-serif;
+    color: #1e293b;
+    line-height: 1.5;
+    font-size: 10.5pt;
+    margin: 0;
+    padding: 0;
+}
+
+.report-header {
+    border-bottom: 3px solid #0f766e;
+    padding-bottom: 12px;
+    margin-bottom: 24px;
+}
+
+.report-title {
+    font-size: 20pt;
+    font-weight: 700;
+    color: #0f766e;
+    margin: 0 0 4px 0;
+}
+
+.report-subtitle {
+    font-size: 12pt;
+    color: #475569;
+    margin: 0;
+}
+
+.seal-badge {
+    background-color: #f0fdf4;
+    border: 1px solid #86efac;
+    color: #166534;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 9pt;
+    font-family: monospace;
+    margin-top: 10px;
+    display: inline-block;
+}
+
+.section-title {
+    font-size: 14pt;
+    font-weight: 600;
+    color: #0f172a;
+    border-left: 4px solid #0f766e;
+    padding-left: 8px;
+    margin: 24px 0 12px 0;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 20px;
+}
+
+th, td {
+    border: 1px solid #cbd5e1;
+    padding: 8px 10px;
+    text-align: left;
+    font-size: 9.5pt;
+}
+
+th {
+    background-color: #f1f5f9;
+    font-weight: 600;
+    color: #334155;
+}
+
+tr:nth-child(even) td {
+    background-color: #f8fafc;
+}
+
+.watermark {
+    position: fixed;
+    top: 40%;
+    left: 15%;
+    font-size: 55pt;
+    color: rgba(148, 163, 184, 0.12);
+    transform: rotate(-35deg);
+    pointer-events: none;
+    z-index: -1;
+    font-weight: 800;
+    letter-spacing: 5px;
+}

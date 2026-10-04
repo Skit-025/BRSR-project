@@ -1,0 +1,41 @@
+<div class="section-container">
+    <div class="section-title">SECTION C: PRINCIPLE-WISE PERFORMANCE DISCLOSURE</div>
+    <table>
+        <thead>
+            <tr>
+                <th style="width: 10%;">Principle</th>
+                <th style="width: 15%;">Metric Code</th>
+                <th style="width: 30%;">Indicator Name</th>
+                <th style="width: 15%;">Reported Value</th>
+                <th style="width: 10%;">Unit</th>
+                <th style="width: 10%;">BRSR Core</th>
+                <th style="width: 10%;">Assurance</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in report.section_c %}
+            <tr>
+                <td style="text-align: center;">P{{ item.principle }}</td>
+                <td><code>{{ item.metric_code }}</code></td>
+                <td>{{ item.metric_name }}</td>
+                <td style="text-align: right; font-weight: 600;">{{ item.value }}</td>
+                <td>{{ item.unit }}</td>
+                <td style="text-align: center;">
+                    {% if item.brsr_core %}
+                    <span style="color: #0f766e; font-weight: 600;">CORE</span>
+                    {% else %}
+                    -
+                    {% endif %}
+                </td>
+                <td style="text-align: center;">
+                    {% if item.evidence_verified %}
+                    <span style="color: #16a34a; font-weight: 600;">✓ Verified</span>
+                    {% else %}
+                    <span style="color: #ca8a04;">Pending</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>

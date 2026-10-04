@@ -1,0 +1,49 @@
+<div class="section-container">
+    <div class="section-title">SECTION A: GENERAL DISCLOSURES</div>
+    <table>
+        <tr>
+            <th style="width: 35%;">Field</th>
+            <th>Details</th>
+        </tr>
+        <tr>
+            <td>Corporate Identity Number (CIN)</td>
+            <td><strong>{{ report.section_a.cin }}</strong></td>
+        </tr>
+        <tr>
+            <td>Name of the Listed Entity</td>
+            <td><strong>{{ report.section_a.company_name }}</strong></td>
+        </tr>
+        <tr>
+            <td>Year of Incorporation</td>
+            <td>{{ report.section_a.year_of_incorporation }}</td>
+        </tr>
+        <tr>
+            <td>Registered Office Address</td>
+            <td>{{ report.section_a.registered_office }}</td>
+        </tr>
+        <tr>
+            <td>Corporate Address</td>
+            <td>{{ report.section_a.corporate_address }}</td>
+        </tr>
+        <tr>
+            <td>Email & Telephone</td>
+            <td>{{ report.section_a.email }} | {{ report.section_a.telephone }}</td>
+        </tr>
+        <tr>
+            <td>Website</td>
+            <td><a href="{{ report.section_a.website }}">{{ report.section_a.website }}</a></td>
+        </tr>
+        <tr>
+            <td>Financial Year Reported</td>
+            <td><strong>{{ report.section_a.financial_year }}</strong></td>
+        </tr>
+        <tr>
+            <td>Paid-up Capital (INR)</td>
+            <td>₹ {{ report.section_a.paid_up_capital_inr }}</td>
+        </tr>
+        <tr>
+            <td>Reporting Boundary</td>
+            <td>{{ report.section_a.reporting_boundary }}</td>
+        </tr>
+    </table>
+</div>
