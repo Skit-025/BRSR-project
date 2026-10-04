@@ -6,6 +6,7 @@ Seeds the 2 primary System Administrator accounts required for MEIL BRSR Portal.
 """
 import logging
 from app.db.session import SessionLocal
+import app.db.registry  # registers all models including OrgNode
 from app.modules.auth.models import User, UserRole, UserRoleAssignment
 from app.modules.auth.service import get_password_hash
 
