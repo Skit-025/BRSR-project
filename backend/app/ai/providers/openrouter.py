@@ -1,17 +1,63 @@
 import json
 import base64
+import re
 import logging
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 import httpx
 from app.ai.providers.base import BaseAIProvider
 from app.config.settings import settings
 
 logger = logging.getLogger(__name__)
 
+
+def _parse_json_robust(content: str) -> Dict[str, Any]:
+    """
+    Parses JSON from LLM responses even if wrapped in markdown blocks
+    (```json ... ```) or preceded/followed by reasoning commentary.
+    """
+    text = (content or "").strip()
+    if not text:
+        raise ValueError("Empty LLM response")
+
+    # 1. Strip markdown fences
+    if "```json" in text:
+        parts = text.split("```json")
+        if len(parts) > 1:
+            candidate = parts[1].split("```")[0].strip()
+            try:
+                return json.loads(candidate)
+            except Exception:
+                pass
+    elif "```" in text:
+        parts = text.split("```")
+        if len(parts) > 1:
+            candidate = parts[1].split("```")[0].strip()
+            try:
+                return json.loads(candidate)
+            except Exception:
+                pass
+
+    # 2. Try direct load
+    try:
+        return json.loads(text)
+    except Exception:
+        pass
+
+    # 3. Extract outermost { ... }
+    m = re.search(r"(\{.*\})", text, re.DOTALL)
+    if m:
+        try:
+            return json.loads(m.group(1))
+        except Exception:
+            pass
+
+    raise ValueError(f"Could not parse valid JSON from LLM response: {text[:200]}")
+
+
 class OpenRouterProvider(BaseAIProvider):
     """
-    OpenRouter Provider supporting open-source models (Llama 3.3, Mistral, Qwen, etc.)
-    with OpenAI-compatible endpoints.
+    OpenRouter Provider supporting open-source models with OpenAI-compatible endpoints,
+    automatic multi-model fallback, and robust JSON output extraction.
     """
     BASE_URL = "https://openrouter.ai/api/v1"
 
@@ -36,7 +82,7 @@ class OpenRouterProvider(BaseAIProvider):
         messages = []
         if system_prompt:
             messages.append({"role": "system", "content": system_prompt})
-        
+
         user_message = (
             f"You MUST return strictly valid JSON matching this schema: {json.dumps(schema_dict)}\n"
             f"Do not include any explanation or markdown formatting outside the JSON block.\n\n"
@@ -44,19 +90,32 @@ class OpenRouterProvider(BaseAIProvider):
         )
         messages.append({"role": "user", "content": user_message})
 
-        payload = {
-            "model": settings.OPENROUTER_MODEL_TEXT,
-            "messages": messages,
-            "response_format": {"type": "json_object"},
-            "temperature": 0.1
-        }
+        models_to_try = [
+            settings.OPENROUTER_MODEL_TEXT,
+            "meta-llama/llama-3.3-70b-instruct",
+            "openrouter/free",
+        ]
+        models_to_try = list(dict.fromkeys([m for m in models_to_try if m]))
 
-        with httpx.Client(timeout=30.0) as client:
-            resp = client.post(f"{self.BASE_URL}/chat/completions", headers=self._headers(), json=payload)
-            resp.raise_for_status()
-            data = resp.json()
-            content = data["choices"][0]["message"]["content"]
-            return json.loads(content)
+        last_error = None
+        for model in models_to_try:
+            payload = {
+                "model": model,
+                "messages": messages,
+                "temperature": 0.1
+            }
+            try:
+                with httpx.Client(timeout=45.0) as client:
+                    resp = client.post(f"{self.BASE_URL}/chat/completions", headers=self._headers(), json=payload)
+                    resp.raise_for_status()
+                    data = resp.json()
+                    content = data["choices"][0]["message"]["content"]
+                    return _parse_json_robust(content)
+            except Exception as e:
+                logger.warning(f"OpenRouter text model '{model}' failed: {e}. Trying fallback...")
+                last_error = e
+
+        raise RuntimeError(f"All OpenRouter text models failed. Last error: {last_error}")
 
     def generate_vision_json(self, prompt: str, image_bytes: bytes, mime_type: str, schema_dict: Dict[str, Any]) -> Dict[str, Any]:
         if not self.is_available():
@@ -71,7 +130,12 @@ class OpenRouterProvider(BaseAIProvider):
                 "content": [
                     {
                         "type": "text",
-                        "text": f"Extract data strictly matching this JSON schema: {json.dumps(schema_dict)}\n\nPrompt: {prompt}"
+                        "text": (
+                            f"You are an ESG document reader. Extract data matching this JSON schema:\n"
+                            f"{json.dumps(schema_dict)}\n\n"
+                            f"Prompt:\n{prompt}\n\n"
+                            f"Return valid JSON only."
+                        )
                     },
                     {
                         "type": "image_url",
@@ -81,19 +145,37 @@ class OpenRouterProvider(BaseAIProvider):
             }
         ]
 
-        payload = {
-            "model": settings.OPENROUTER_MODEL_VISION,
-            "messages": messages,
-            "response_format": {"type": "json_object"},
-            "temperature": 0.1
-        }
+        # Prioritized free & working vision models on OpenRouter
+        models_to_try = [
+            settings.OPENROUTER_MODEL_VISION or "dots-studio/dots-3-note-preview:free",
+            "dots-studio/dots-3-note-preview:free",
+            "openrouter/free",
+            "google/gemma-4-26b-a4b-it:free",
+        ]
+        models_to_try = list(dict.fromkeys([m for m in models_to_try if m]))
 
-        with httpx.Client(timeout=45.0) as client:
-            resp = client.post(f"{self.BASE_URL}/chat/completions", headers=self._headers(), json=payload)
-            resp.raise_for_status()
-            data = resp.json()
-            content = data["choices"][0]["message"]["content"]
-            return json.loads(content)
+        last_error = None
+        for model in models_to_try:
+            payload = {
+                "model": model,
+                "messages": messages,
+                "temperature": 0.1
+            }
+            try:
+                logger.info(f"Calling OpenRouter vision model '{model}'...")
+                with httpx.Client(timeout=65.0) as client:
+                    resp = client.post(f"{self.BASE_URL}/chat/completions", headers=self._headers(), json=payload)
+                    resp.raise_for_status()
+                    data = resp.json()
+                    content = data["choices"][0]["message"]["content"]
+                    parsed = _parse_json_robust(content)
+                    logger.info(f"OpenRouter vision model '{model}' succeeded: extracted {list(parsed.keys())}")
+                    return parsed
+            except Exception as e:
+                logger.warning(f"OpenRouter vision model '{model}' failed: {e}. Trying fallback...")
+                last_error = e
+
+        raise RuntimeError(f"All OpenRouter vision models failed. Last error: {last_error}")
 
     def generate_text(self, prompt: str, system_prompt: Optional[str] = None) -> str:
         if not self.is_available():
@@ -110,7 +192,7 @@ class OpenRouterProvider(BaseAIProvider):
             "temperature": 0.2
         }
 
-        with httpx.Client(timeout=30.0) as client:
+        with httpx.Client(timeout=35.0) as client:
             resp = client.post(f"{self.BASE_URL}/chat/completions", headers=self._headers(), json=payload)
             resp.raise_for_status()
             data = resp.json()
