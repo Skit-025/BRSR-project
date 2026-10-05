@@ -48,17 +48,16 @@ def get_master_form(
 )
 def get_scoped_form(
     period_id: str = Query(..., description="Reporting period ID"),
-    entity_id: Optional[str] = Query(None, description="Optional entity override for admins"),
+    entity_id: Optional[str] = Query(None, description="Optional entity override for admins or makers"),
     current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db)
 ):
     """
     Returns the caller's scoped digital form view.
-    - System Admin gets master view or specified entity view.
-    - Employee gets view strictly filtered by their assigned subsidiary/project and role.
+    - If entity_id is specified (by admin, manager, or maker), projects parameters for that entity.
+    - Otherwise defaults to user's assigned org node.
     """
-    # If system admin or group admin specifies an entity, inspect that entity; otherwise use user's assigned node
-    target_entity_id = entity_id if (current_user.role in [Role.SYSTEM_ADMIN.value, Role.GROUP_ADMIN.value, Role.ESG_MANAGER.value] and entity_id) else (str(current_user.org_node_id) if current_user.org_node_id else None)
+    target_entity_id = entity_id if entity_id else (str(current_user.org_node_id) if current_user.org_node_id else None)
     
     return build_scoped_digital_form(
         db=db,

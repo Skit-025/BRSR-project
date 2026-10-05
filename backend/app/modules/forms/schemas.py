@@ -34,6 +34,8 @@ class DigitalFormResponse(BaseModel):
     role: str
     period_id: str
     period_code: str
+    submission_id: Optional[str] = None
+    submission_status: Optional[str] = "DRAFT"
     is_editable: bool
     can_submit: bool
     can_approve: bool

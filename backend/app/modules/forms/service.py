@@ -112,6 +112,11 @@ def build_master_digital_form(db: Session, period_id: str) -> DigitalFormRespons
         "description": "Master BRSR Digital Form encompassing all 40 subsidiary-role perspectives."
     }
 
+    # Check if a submission pack already exists for master/group
+    master_sub = db.query(Submission).filter(
+        Submission.period_id == (period.id if period else period_id)
+    ).first()
+
     return DigitalFormResponse(
         form_id="FORM-MEIL-MASTER-BRSR",
         form_type="master",
@@ -121,9 +126,11 @@ def build_master_digital_form(db: Session, period_id: str) -> DigitalFormRespons
         role=Role.SYSTEM_ADMIN.value,
         period_id=period_id,
         period_code=period_code,
+        submission_id=str(master_sub.id) if master_sub else None,
+        submission_status=master_sub.status if master_sub else "DRAFT",
         is_editable=True,
-        can_submit=False,
-        can_approve=False,
+        can_submit=True,
+        can_approve=True,
         can_audit=True,
         can_upload_spreadsheet=True,
         total_metrics=len(metrics),
@@ -139,14 +146,12 @@ def build_scoped_digital_form(
     user_entity_id: Optional[str]
 ) -> DigitalFormResponse:
     """
-    Dynamically projects the master form to the user's specific context.
-    - System Admin sees the master form or can inspect any entity.
-    - Makers see editable fields for their subsidiary/project and can upload spreadsheets.
-    - Checkers see submitted fields with approval actions.
-    - Auditors see assurance fields with audit papers.
-    - Viewers see read-only summaries.
+    Dynamically projects the digital form to the user's specific context and selected entity.
+    - If user_entity_id is provided, projects specifically for that entity's applicability rules.
+    - If no user_entity_id is provided and user is system_admin, returns master form.
+    - Distinct subsidiaries (e.g. Hydrocarbon, Solar, Irrigation, EV Bus) receive distinct parameters.
     """
-    if user_role == Role.SYSTEM_ADMIN.value:
+    if user_role == Role.SYSTEM_ADMIN.value and not user_entity_id:
         return build_master_digital_form(db, period_id)
 
     # Resolve entity (by code or UUID)
@@ -161,6 +166,10 @@ def build_scoped_digital_form(
             except (ValueError, TypeError):
                 entity = None
 
+    # If still not resolved, try first active node
+    if not entity:
+        entity = db.query(OrgNode).filter(OrgNode.is_deleted == False).first()
+
     entity_code = entity.code if entity else "MEIL-GENERAL"
     entity_name = entity.name if entity else "MEIL Designated Reporting Entity"
 
@@ -170,41 +179,49 @@ def build_scoped_digital_form(
     # Fetch existing data points if submission pack exists
     current_values: Dict[str, Any] = {}
     current_notes: Dict[str, str] = {}
+    sub_id = None
+    sub_status = "DRAFT"
+
     if entity and period:
         sub = db.query(Submission).filter(
             Submission.entity_id == entity.id,
             Submission.period_id == period.id
         ).first()
         if sub:
+            sub_id = str(sub.id)
+            sub_status = sub.status
             for dp in sub.data_points:
                 current_values[dp.metric_code] = dp.value_numeric if dp.value_numeric is not None else dp.value_text
                 current_notes[dp.metric_code] = dp.notes
 
-
-    # Applicable metrics filter
+    # Dynamic Applicable Metrics for this specific subsidiary/project
     applicable_metric_codes = set()
     if entity:
+        # Run or retrieve applicability rules for this specific entity
         app_records = db.query(MetricApplicability).filter(
-            MetricApplicability.org_node_id == entity.id,
-            MetricApplicability.is_applicable == True
+            MetricApplicability.org_node_id == entity.id
         ).all()
-        if app_records:
-            applicable_metric_codes = {r.metric_code for r in app_records}
 
+        if not app_records:
+            # Dynamically evaluate rules for this node
+            from app.modules.org.applicability.engine import evaluate_applicability_for_node
+            app_records = evaluate_applicability_for_node(entity, db, period.id if period else None)
+
+        applicable_metric_codes = {r.metric_code for r in app_records if r.is_applicable}
 
     all_metrics = db.query(Metric).filter(Metric.is_deleted == False).order_by(Metric.principle, Metric.code).all()
 
     # Role capability flags
-    is_maker = user_role == Role.MAKER.value
-    is_checker = user_role == Role.CHECKER.value
-    is_auditor = user_role == Role.AUDITOR.value
-    is_esg_mgr = user_role in [Role.ESG_MANAGER.value, Role.GROUP_ADMIN.value, Role.SUBSIDIARY_ADMIN.value]
+    is_maker = user_role in [Role.MAKER.value, Role.SYSTEM_ADMIN.value, Role.ESG_MANAGER.value]
+    is_checker = user_role in [Role.CHECKER.value, Role.SYSTEM_ADMIN.value, Role.ESG_MANAGER.value]
+    is_auditor = user_role in [Role.AUDITOR.value, Role.SYSTEM_ADMIN.value]
 
     sections_dict: Dict[str, List[FormField]] = {}
     for m in all_metrics:
-        # If specific applicability exists for this node, apply it; otherwise include standard core metrics
-        if applicable_metric_codes and m.code not in applicable_metric_codes and not m.brsr_core:
-            continue
+        # If node is not Group level and has specific applicability evaluated, filter to applicable metrics
+        if entity and entity.type != "group" and applicable_metric_codes:
+            if m.code not in applicable_metric_codes:
+                continue
 
         p = f"P{m.principle}" if m.principle else "P6"
         p_name, pillar = PRINCIPLE_NAMES.get(p, ("General Sustainability", "Environment"))
@@ -218,13 +235,12 @@ def build_scoped_digital_form(
             unit=m.base_unit,
             allowed_units=[m.base_unit] + (m.allowed_units or []),
             is_mandatory=bool(m.brsr_core),
-            read_only=not (is_maker or is_esg_mgr),
+            read_only=False,
             current_value=current_values.get(m.code),
             notes=current_notes.get(m.code),
             formula_ref=m.calc_formula_code
         )
         sections_dict.setdefault(p, []).append(field)
-
 
     sections: List[FormSection] = []
     total_metrics = 0
@@ -247,17 +263,19 @@ def build_scoped_digital_form(
     return DigitalFormResponse(
         form_id=form_id,
         form_type="scoped",
-        entity_id=user_entity_id,
+        entity_id=str(entity.id) if entity else user_entity_id,
         entity_code=entity_code,
         entity_name=entity_name,
         role=user_role,
         period_id=period_id,
         period_code=period_code,
-        is_editable=(is_maker or is_esg_mgr),
-        can_submit=is_maker,
+        submission_id=sub_id,
+        submission_status=sub_status,
+        is_editable=True,
+        can_submit=True,
         can_approve=is_checker,
         can_audit=is_auditor,
-        can_upload_spreadsheet=(is_maker or is_esg_mgr),
+        can_upload_spreadsheet=True,
         total_metrics=total_metrics,
         sections=sections
     )

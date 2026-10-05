@@ -9,6 +9,9 @@ class ExtractedFieldSuggestion(BaseModel):
     confidence: float
     page: int
     bounding_box: Optional[List[float]] = None
+    metadata: Optional[dict] = None
+    doc_type: Optional[str] = None
+    run_id: Optional[str] = None
 
 class EvidenceFileRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -44,4 +47,6 @@ class EvidenceLinkRead(BaseModel):
 class EvidenceUploadResponse(BaseModel):
     evidence: EvidenceFileRead
     extracted_fields: List[ExtractedFieldSuggestion] = []
+    is_relevant: bool = True
+    rejection_reason: Optional[str] = None
     message: str
