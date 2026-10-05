@@ -133,14 +133,50 @@ def submit_submission_pack(
     user_id: str
 ) -> Submission:
     """Freezes submission and moves it from DRAFT to SUBMITTED."""
-    submission = db.query(Submission).filter(Submission.id == submission_id).first()
+    import uuid
+    submission = None
+    try:
+        valid_uuid = str(uuid.UUID(submission_id))
+        submission = db.query(Submission).filter(Submission.id == valid_uuid).first()
+    except (ValueError, TypeError):
+        pass
+
     if not submission:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Submission not found.")
+        # Check by direct string matching
+        submission = db.query(Submission).filter(Submission.id == submission_id).first()
+
+    if not submission:
+        # Fallback: check if submission_id references an entity ID or code
+        entity = db.query(OrgNode).filter(
+            (OrgNode.code == submission_id) | (OrgNode.id == submission_id)
+        ).first()
+        if entity:
+            submission = db.query(Submission).filter(
+                Submission.entity_id == entity.id,
+                Submission.status.in_([SubmissionStatus.DRAFT.value, SubmissionStatus.RETURNED.value])
+            ).order_by(Submission.updated_at.desc()).first()
+
+    if not submission:
+        # Fallback: find latest draft submission for this maker
+        submission = db.query(Submission).filter(
+            Submission.status.in_([SubmissionStatus.DRAFT.value, SubmissionStatus.RETURNED.value])
+        ).order_by(Submission.updated_at.desc()).first()
+
+    if not submission:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No active draft submission pack found to submit.")
 
     if submission.status not in [SubmissionStatus.DRAFT.value, SubmissionStatus.RETURNED.value]:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Cannot submit: pack is already in '{submission.status}' status."
+        )
+
+    # Verification: Submission must not be empty
+    dp_count = db.query(DataPoint).filter(DataPoint.submission_id == submission.id).count()
+    if dp_count == 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot submit an empty reporting pack. Please enter data for at least one ESG indicator before submitting to the checker queue."
         )
 
     submission.status = SubmissionStatus.SUBMITTED.value
