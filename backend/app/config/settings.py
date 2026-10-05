@@ -33,11 +33,11 @@ class Settings(BaseSettings):
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
 
     # AI Gateway Settings
-    AI_PROVIDER: str = "gemini"  # "gemini", "openrouter", "mock"
+    AI_PROVIDER: str = "openrouter"  # "gemini", "openrouter", "mock"
     GEMINI_API_KEY: Optional[str] = None
     OPENROUTER_API_KEY: Optional[str] = None
     OPENROUTER_MODEL_TEXT: str = "meta-llama/llama-3.3-70b-instruct"
-    OPENROUTER_MODEL_VISION: str = "meta-llama/llama-3.2-11b-vision-instruct"
+    OPENROUTER_MODEL_VISION: str = "dots-studio/dots-3-note-preview:free"
     AI_AUTO_FALLBACK_ON_ERROR: bool = True
     AI_MODEL_VISION: str = "models/gemini-3.8-flash"
     AI_MODEL_TEXT: str = "models/gemini-3.8-flash"
