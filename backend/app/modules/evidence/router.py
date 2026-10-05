@@ -7,7 +7,8 @@ from app.modules.evidence.schemas import (
     EvidenceFileRead,
     EvidenceLinkCreate,
     EvidenceLinkRead,
-    EvidenceUploadResponse
+    EvidenceUploadResponse,
+    ExtractedFieldSuggestion
 )
 from app.modules.evidence.service import process_and_store_evidence, link_evidence_to_datapoint
 from app.modules.evidence.storage import storage_service
@@ -31,7 +32,7 @@ async def upload_evidence_file(
     file_bytes = await file.read()
     mime_type = file.content_type or "application/octet-stream"
 
-    evidence, suggestions = process_and_store_evidence(
+    evidence, suggestions, is_relevant, rejection_reason = process_and_store_evidence(
         db=db,
         filename=file.filename or "uploaded_evidence",
         file_bytes=file_bytes,
@@ -41,10 +42,18 @@ async def upload_evidence_file(
         run_ocr=run_ocr
     )
 
+    message = (
+        "Evidence verified and stored in immutable vault."
+        if is_relevant else
+        f"File stored but rejected by AI engine: {rejection_reason or 'Unrelated document.'}"
+    )
+
     return EvidenceUploadResponse(
         evidence=EvidenceFileRead.model_validate(evidence),
         extracted_fields=suggestions,
-        message="Evidence verified and stored in immutable vault."
+        is_relevant=is_relevant,
+        rejection_reason=rejection_reason,
+        message=message
     )
 
 @router.get("", response_model=List[EvidenceFileRead])
@@ -59,6 +68,41 @@ def get_evidence_metadata(evidence_id: str, db: Session = Depends(get_db)):
     if not evidence:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Evidence file not found.")
     return evidence
+
+@router.post("/{evidence_id}/extract", response_model=List[ExtractedFieldSuggestion])
+def extract_from_existing_evidence(
+    evidence_id: str,
+    doc_type_hint: Optional[str] = None,
+    db: Session = Depends(get_db)
+):
+    """Re-runs or inspects AI Engine E1 OCR on an existing evidence document."""
+    from app.ai.e1_extract.extractor import e1_engine
+    from app.ai.schemas import E1ExtractRequest
+    evidence = db.query(EvidenceFile).filter(EvidenceFile.id == evidence_id).first()
+    if not evidence:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Evidence file not found.")
+    req = E1ExtractRequest(
+        evidence_id=evidence.id,
+        doc_type_hint=doc_type_hint
+    )
+    e1_res = e1_engine.extract_from_file(req)
+    suggestions = []
+    for f in e1_res.fields:
+        val = float(f.value) if isinstance(f.value, (int, float)) else 0.0
+        suggestions.append(
+            ExtractedFieldSuggestion(
+                metric=f.metric,
+                value=val,
+                unit=f.unit,
+                confidence=f.confidence,
+                page=f.page,
+                bounding_box=f.bbox,
+                metadata=f.metadata or {},
+                doc_type=e1_res.doc_type,
+                run_id=e1_res.run_id
+            )
+        )
+    return suggestions
 
 @router.get("/{evidence_id}/download")
 def download_evidence_file(evidence_id: str, db: Session = Depends(get_db)):
