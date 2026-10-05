@@ -93,3 +93,7 @@ class TokenPayload(BaseModel):
     org_node_id: Optional[str] = None
     exp: Optional[int] = None
 
+
+class AdminDeleteUserRequest(BaseModel):
+    admin_password: str
+
