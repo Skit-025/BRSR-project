@@ -21,6 +21,7 @@ from app.modules.auth.schemas import (
     RefreshTokenRequest,
     TokenResponse,
     BootstrapAdminRequest,
+    AdminDeleteUserRequest,
 )
 from app.modules.auth.service import (
     authenticate_user,
@@ -204,6 +205,27 @@ def admin_list_users(
     return users
 
 
+@router.post(
+    "/admin/users/{user_id}/delete",
+    status_code=status.HTTP_200_OK,
+    summary="Delete / deactivate a user account with admin password verification (System Admin ONLY)"
+)
+def admin_delete_user_post(
+    user_id: str,
+    payload: AdminDeleteUserRequest,
+    admin_user: User = Depends(require_system_admin),
+    db: Session = Depends(get_db)
+):
+    """
+    System Admin deletes a user account after verifying their administrator password.
+    """
+    try:
+        delete_user_by_admin(db, admin_user, user_id, admin_password=payload.admin_password)
+        return {"status": "success", "message": f"User {user_id} successfully deleted."}
+    except (ValueError, PermissionError) as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
 @router.delete(
     "/admin/users/{user_id}",
     status_code=status.HTTP_200_OK,
@@ -211,14 +233,16 @@ def admin_list_users(
 )
 def admin_delete_user(
     user_id: str,
+    admin_password: Optional[str] = None,
     admin_user: User = Depends(require_system_admin),
     db: Session = Depends(get_db)
 ):
     """
-    System Admin deletes a user account. This terminates user access and revokes permanent role assignments.
+    System Admin deletes a user account with admin password verification.
     """
     try:
-        delete_user_by_admin(db, admin_user, user_id)
+        delete_user_by_admin(db, admin_user, user_id, admin_password=admin_password)
         return {"status": "success", "message": f"User {user_id} successfully deleted."}
     except (ValueError, PermissionError) as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
