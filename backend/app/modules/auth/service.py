@@ -140,12 +140,30 @@ def provision_user_by_admin(
     return user, password_to_use
 
 
-def delete_user_by_admin(db: Session, admin_user: User, user_id: str) -> None:
+def delete_user_by_admin(db: Session, admin_user: User, user_id: str, admin_password: Optional[str] = None) -> None:
     """
     Sole method to delete a user. System Admin soft-deletes and revokes all active role assignments.
+    Requires administrator password re-verification for high-privilege account revocation.
     """
     if admin_user.role != Role.SYSTEM_ADMIN.value:
         raise PermissionError("Only System Admin is authorized to delete users.")
+
+    if not admin_password or not admin_password.strip():
+        raise ValueError("Administrator password is required to confirm user deletion.")
+
+    # Re-verify the administrator's password
+    pwd_valid = False
+    cleaned_pwd = admin_password.strip()
+    if verify_password(cleaned_pwd, admin_user.hashed_password):
+        pwd_valid = True
+    else:
+        for v in [cleaned_pwd.replace(" ", ""), cleaned_pwd]:
+            if verify_password(v, admin_user.hashed_password):
+                pwd_valid = True
+                break
+
+    if not pwd_valid:
+        raise ValueError("Incorrect administrator password. Deletion unauthorized.")
 
     if str(admin_user.id) == str(user_id):
         raise ValueError("System Administrator cannot delete their own account.")
