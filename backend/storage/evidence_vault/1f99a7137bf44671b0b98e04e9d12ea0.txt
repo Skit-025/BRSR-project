@@ -1,4 +1,0 @@
-DISCOM ELECTRICITY INVOICE
-Billing Period: April 2025
-Total Units Consumed: 52000 kWh
-Amount: INR 416,000
