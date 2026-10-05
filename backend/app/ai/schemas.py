@@ -46,12 +46,17 @@ class ExtractedField(BaseModel):
 class E1ExtractRequest(BaseModel):
     evidence_id: str = Field(..., description="UUID or identifier of the uploaded evidence file")
     file_path: Optional[str] = Field(None, description="Direct file path or presigned URL if testing locally")
+    file_bytes: Optional[bytes] = Field(None, description="Raw file bytes for in-memory OCR processing")
+    filename: Optional[str] = Field(None, description="Original filename, used for extension-based type detection")
+    mime_type: Optional[str] = Field(None, description="MIME type of the uploaded file")
     doc_type_hint: Optional[str] = Field(None, description="Hint: electricity_bill, fuel_receipt, waste_manifest, etc.")
 
 class E1ExtractResponse(BaseModel):
     run_id: str
     doc_type: str
     fields: List[ExtractedField]
+    is_relevant: bool = True
+    rejection_reason: Optional[str] = None
     is_fallback: bool = False
 
 
