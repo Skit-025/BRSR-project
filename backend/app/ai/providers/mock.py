@@ -56,26 +56,13 @@ class MockFallbackProvider(BaseAIProvider):
         return {}
 
     def generate_vision_json(self, prompt: str, image_bytes: bytes, mime_type: str, schema_dict: Dict[str, Any]) -> Dict[str, Any]:
-        logger.info("MockFallbackProvider: executing Vision document extraction fallback.")
-        # Simulates extraction from a standard DISCOM electricity bill
+        logger.info("MockFallbackProvider: Vision extraction - no real OCR provider available, returning empty fields.")
+        # Return empty fields — do NOT fabricate meter readings or consumption values
         return {
-            "doc_type": "electricity_bill",
-            "fields": [
-                {
-                    "metric": "ENV-ENERGY-001",
-                    "value": 52000.0,
-                    "unit": "kWh",
-                    "confidence": 0.95,
-                    "page": 1,
-                    "bbox": [120.0, 340.0, 480.0, 390.0],
-                    "metadata": {
-                        "billing_period": "01-31 Mar 2026",
-                        "meter_id": "MTR-88213",
-                        "discom": "TSSPDCL",
-                        "tariff": "HT-1 Industrial"
-                    }
-                }
-            ]
+            "doc_type": "unknown",
+            "fields": [],
+            "is_relevant": False,
+            "rejection_reason": "AI provider unavailable. Please configure a Gemini or OpenRouter API key to enable document extraction."
         }
 
     def generate_text(self, prompt: str, system_prompt: Optional[str] = None) -> str:
