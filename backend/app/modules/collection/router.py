@@ -68,6 +68,12 @@ def submit_pack(
 
 
 @router.post(
+    "/upload-spreadsheet/{entity_id}/{period_id}",
+    status_code=status.HTTP_200_OK,
+    dependencies=[Depends(upload_rate_limit)],
+    summary="Upload bulk data via spreadsheet (alias)"
+)
+@router.post(
     "/upload/{entity_id}/{period_id}",
     status_code=status.HTTP_200_OK,
     dependencies=[Depends(upload_rate_limit)],
