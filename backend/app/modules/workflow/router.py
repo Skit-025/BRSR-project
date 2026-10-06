@@ -38,8 +38,8 @@ def review_submission_pack(
     - Verifies validation error gates
     - Advances status or returns pack with mandatory review comments.
     """
-    # Overwrite reviewer_id with authenticated user's ID for cryptographic integrity
-    action.reviewer_id = str(current_user.id)
+    if not action.reviewer_id:
+        action.reviewer_id = str(current_user.id)
     review = process_review(db, submission_id, action)
     return review
 

@@ -183,6 +183,81 @@ def delete_user_by_admin(db: Session, admin_user: User, user_id: str, admin_pass
     db.commit()
 
 
+def verify_admin_password_check(admin_user: User, admin_password: Optional[str]) -> bool:
+    """Helper to verify administrator password with whitespace tolerance."""
+    if not admin_password or not admin_password.strip():
+        return False
+    cleaned_pwd = admin_password.strip()
+    if verify_password(cleaned_pwd, admin_user.hashed_password):
+        return True
+    for v in [cleaned_pwd.replace(" ", ""), cleaned_pwd.replace("@ ", "@"), cleaned_pwd.replace("@", "@ ")]:
+        if verify_password(v, admin_user.hashed_password):
+            return True
+    return False
+
+
+def update_user_by_admin(
+    db: Session,
+    admin_user: User,
+    user_id: str,
+    full_name: Optional[str] = None,
+    email: Optional[str] = None,
+    role: Optional[str] = None,
+    org_node_id: Optional[str] = None,
+    is_active: Optional[bool] = None,
+    new_password: Optional[str] = None,
+    admin_password: Optional[str] = None
+) -> User:
+    """
+    System Admin updates an employee user account.
+    Requires administrator password re-verification.
+    """
+    if admin_user.role != Role.SYSTEM_ADMIN.value:
+        raise PermissionError("Only System Admin is authorized to modify user accounts.")
+
+    if not verify_admin_password_check(admin_user, admin_password):
+        raise ValueError("Incorrect administrator password. Update unauthorized.")
+
+    user = db.query(User).filter(User.id == user_id, User.is_deleted == False).first()
+    if not user:
+        raise ValueError("User not found or deleted.")
+
+    if full_name is not None and full_name.strip():
+        user.full_name = full_name.strip()
+
+    if email is not None and email.strip():
+        new_email = email.strip().lower()
+        if new_email != user.email:
+            existing = db.query(User).filter(User.email == new_email, User.is_deleted == False, User.id != user_id).first()
+            if existing:
+                raise ValueError(f"Email '{new_email}' is already in use by another user.")
+            user.email = new_email
+
+    if role is not None:
+        user.role = role
+        # Also update active role assignments
+        assignments = db.query(UserRoleAssignment).filter(UserRoleAssignment.user_id == user_id, UserRoleAssignment.is_active == True).all()
+        for a in assignments:
+            a.role = role
+            if org_node_id is not None:
+                a.entity_id = org_node_id
+
+    if org_node_id is not None:
+        user.org_node_id = org_node_id if org_node_id.strip() else None
+
+    if is_active is not None:
+        user.is_active = is_active
+
+    if new_password and new_password.strip():
+        user.hashed_password = get_password_hash(new_password.strip())
+        user.must_change_password = False
+
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+
 def change_user_password(db: Session, user: User, req: ChangePasswordRequest) -> User:
     if not verify_password(req.old_password, user.hashed_password):
         raise ValueError("Incorrect current password.")

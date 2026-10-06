@@ -20,8 +20,9 @@ def get_descendants(db: Session, node_id: str) -> List[OrgNode]:
         return []
     # Using materialized path prefix matching
     prefix = f"{target.path}."
+    from sqlalchemy import cast, String
     return db.query(OrgNode).filter(
-        (OrgNode.path.startswith(prefix)) | (OrgNode.id == target.id),
+        (cast(OrgNode.path, String).startswith(prefix)) | (OrgNode.id == target.id),
         OrgNode.is_deleted == False
     ).all()
 

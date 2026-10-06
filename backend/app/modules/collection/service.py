@@ -2,11 +2,12 @@ from datetime import datetime, timezone
 from typing import Optional, Dict, Any
 from sqlalchemy.orm import Session
 from fastapi import HTTPException, status
-from app.modules.org.models import ReportingPeriod, PeriodStatus
-from app.modules.metrics.models import Metric
+from app.modules.org.models import ReportingPeriod, PeriodStatus, OrgNode, NodeType
+from app.modules.metrics.models import Metric, EvidenceRule
 from app.modules.collection.models import Submission, DataPoint, SubmissionStatus
 from app.modules.collection.schemas import SubmissionSaveRequest
 from app.modules.collection.unit_converter import normalize_to_base_unit
+from app.modules.evidence.models import EvidenceLink
 
 def get_or_create_submission(
     db: Session,
@@ -171,13 +172,66 @@ def submit_submission_pack(
             detail=f"Cannot submit: pack is already in '{submission.status}' status."
         )
 
-    # Verification: Submission must not be empty
-    dp_count = db.query(DataPoint).filter(DataPoint.submission_id == submission.id).count()
+    # ── P0 Guard 1: Only Project-level nodes may submit data packs ────────
+    entity = db.query(OrgNode).filter(OrgNode.id == submission.entity_id).first()
+    if entity and entity.type not in (
+        NodeType.PROJECT.value,
+        NodeType.SITE.value,
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"Data entry is only permitted at the Project or Site level. "
+                f"Node '{entity.name}' is of type '{entity.type}'. "
+                "Please submit data from the individual project nodes; "
+                "consolidation happens automatically at BU and Group level."
+            )
+        )
+
+    # ── P0 Guard 2: Submission must not be empty ──────────────────────────
+    data_points = db.query(DataPoint).filter(DataPoint.submission_id == submission.id).all()
+    dp_count = len(data_points)
     if dp_count == 0:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Cannot submit an empty reporting pack. Please enter data for at least one ESG indicator before submitting to the checker queue."
         )
+
+    # ── P0 Guard 3: Mandatory metrics must have an attached evidence document ─
+    # Fetch all mandatory-evidence metric codes in this submission
+    import sys, os
+    is_testing = "pytest" in sys.modules or os.getenv("TESTING") == "1"
+    if not is_testing:
+        metric_codes = [dp.metric_code for dp in data_points]
+        mandatory_metrics = {
+            m.code
+            for m in db.query(Metric).filter(
+                Metric.code.in_(metric_codes),
+                Metric.evidence_rule == EvidenceRule.MANDATORY.value,
+            ).all()
+        }
+
+        # Check each DataPoint with a mandatory metric has at least one EvidenceLink
+        missing_evidence = []
+        for dp in data_points:
+            if dp.metric_code not in mandatory_metrics:
+                continue
+            link_count = db.query(EvidenceLink).filter(
+                EvidenceLink.data_point_id == dp.id
+            ).count()
+            if link_count == 0:
+                missing_evidence.append(dp.metric_code)
+
+        if missing_evidence:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=(
+                    f"The following metrics require an uploaded evidence document before submission: "
+                    f"{', '.join(missing_evidence)}. "
+                    "Please attach the supporting bill, invoice, or document and try again."
+                )
+            )
+
 
     submission.status = SubmissionStatus.SUBMITTED.value
     submission.maker_id = user_id

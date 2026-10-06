@@ -72,9 +72,15 @@ def build_master_digital_form(db: Session, period_id: str) -> DigitalFormRespons
         p = f"P{m.principle}" if m.principle else "P6"
         p_name, pillar = PRINCIPLE_NAMES.get(p, ("General Sustainability", "Environment"))
         
+        ind_type = "Essential" if (getattr(m, 'indicator_type', None) == "essential" or m.brsr_core) else "Leadership"
+        p_num = m.principle or 6
+        disclosure_name = f"Principle {p_num}: {ind_type} Indicator — {m.name}"
+        
         field = FormField(
             metric_code=m.code,
             metric_name=m.name,
+            indicator_disclosure_name=disclosure_name,
+            definition=m.definition or m.name,
             principle=p,
             pillar=m.category if m.category else pillar,
             data_type=m.data_type if m.data_type else "numeric",
@@ -226,9 +232,15 @@ def build_scoped_digital_form(
         p = f"P{m.principle}" if m.principle else "P6"
         p_name, pillar = PRINCIPLE_NAMES.get(p, ("General Sustainability", "Environment"))
 
+        ind_type = "Essential" if (getattr(m, 'indicator_type', None) == "essential" or m.brsr_core) else "Leadership"
+        p_num = m.principle or 6
+        disclosure_name = f"Principle {p_num}: {ind_type} Indicator — {m.name}"
+
         field = FormField(
             metric_code=m.code,
             metric_name=m.name,
+            indicator_disclosure_name=disclosure_name,
+            definition=m.definition or m.name,
             principle=p,
             pillar=m.category if m.category else pillar,
             data_type=m.data_type if m.data_type else "numeric",

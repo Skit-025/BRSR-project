@@ -32,12 +32,16 @@ ELECTRICITY_SIGNALS = [
     "meter reading", "maximum demand", "reactive energy", "discom invoice",
     "electricity supply", "energy consumed", "tariff category", "sanctioned load",
     "connection no", "consumption charges", "fixed charges", "unit rate",
+    "urjas", "bill month", "actual bill", "catg", "consumer no", "meter no",
+    "power bill", "electric bill", "power invoice", "energy bill", "ashfak",
 ]
 FUEL_SIGNALS = [
-    "diesel", "high speed diesel", "hsd", "petrol", "fuel delivery",
-    "tanker truck", "iocl", "hpcl", "bpcl", "fuel slip", "challan",
-    "dip before discharge", "bulk fuel", "quantity delivered", "fuel receipt",
-    "motor spirit", "aviation turbine fuel", "atf", "lubricant", "litres",
+    "diesel", "high speed diesel", "hsd", "petrol", "motor spirit", "ms",
+    "gasoline", "fuel delivery", "tanker truck", "iocl", "hpcl", "bpcl",
+    "fuel slip", "challan", "dip before discharge", "bulk fuel", "quantity delivered",
+    "fuel receipt", "aviation turbine fuel", "atf", "lubricant", "litres",
+    "coal", "lignite", "anthracite", "coking coal", "steam coal",
+    "coal supply", "coal invoice", "mt coal", "tonnes of coal",
 ]
 WATER_SIGNALS = [
     "water consumption", "water board", "water supply", "hmwssb", "jal board",
@@ -77,6 +81,9 @@ METRIC_MAP = {
     "water_manifest":   ("ENV-WATER-001", "kL"),
     "waste_manifest":   ("ENV-WASTE-001", "tonnes"),
     "safety_log":       ("SOC-SAFE-001", "incidents"),
+    "gas_bill":         ("ENV-ENERGY-001", "SCM"),
+    "other_bill":       ("ENV-ENERGY-001", "units"),
+    "other":            ("ENV-ENERGY-001", "units"),
 }
 
 # User-facing hint aliases (from frontend dropdown)
@@ -93,17 +100,88 @@ HINT_ALIASES: Dict[str, str] = {
     "energy_bill": "electricity_bill",
     "power_bill": "electricity_bill",
     "electric_bill": "electricity_bill",
+    "gas": "gas_bill",
+    "gas_receipt": "gas_bill",
+    "gas_bill": "gas_bill",
+    "other": "other_bill",
+    "other_bill": "other_bill",
 }
 
 VALID_DOC_TYPES = set(METRIC_MAP.keys())
 
 
 # ---------------------------------------------------------------------------
-# Helper: PDF text extraction
+# Helper: Local OCR Engines (Windows Media OCR / winocr, pypdfium2, pdfplumber)
 # ---------------------------------------------------------------------------
 
+def _extract_image_text(file_bytes: bytes) -> str:
+    """Extract text from image bytes using Windows OCR (winocr) locally."""
+    try:
+        import winocr
+        from PIL import Image
+        img = Image.open(io.BytesIO(file_bytes))
+        res = winocr.recognize_pil_sync(img)
+        text = res.get("text", "")
+        if text.strip():
+            logger.info(f"winocr extracted {len(text)} chars from image")
+            return text
+    except Exception as e:
+        logger.warning(f"winocr failed on image: {e}")
+    return ""
+
+
+def _extract_scanned_pdf_text(file_bytes: bytes) -> str:
+    """Render scanned PDF pages to images and run winocr locally."""
+    try:
+        import pypdfium2 as pdfium
+        import winocr
+        pdf = pdfium.PdfDocument(file_bytes)
+        texts = []
+        for i in range(min(3, len(pdf))):
+            page = pdf[i]
+            img = page.render(scale=2).to_pil()
+            res = winocr.recognize_pil_sync(img)
+            t = res.get("text", "")
+            if t.strip():
+                texts.append(t)
+        combined = "\n".join(texts)
+        if combined.strip():
+            logger.info(f"winocr extracted {len(combined)} chars from scanned PDF")
+            return combined
+    except Exception as e:
+        logger.warning(f"winocr failed on scanned PDF: {e}")
+    return ""
+
+
 def _extract_pdf_text(file_bytes: bytes) -> str:
-    """Extract plain text from PDF bytes using pypdf."""
+    """
+    Extract plain text from PDF bytes.
+    Tries pdfplumber first (table-aware, better for invoices), then pypdf,
+    then pypdfium2 + winocr for scanned image PDFs.
+    """
+    # ── pdfplumber (richer: extracts tables, column text accurately) ─────────
+    try:
+        import pdfplumber
+        texts = []
+        with pdfplumber.open(io.BytesIO(file_bytes)) as pdf:
+            for page in pdf.pages:
+                t = page.extract_text()
+                if t:
+                    texts.append(t)
+                tables = page.extract_tables()
+                for tbl in (tables or []):
+                    for row in tbl:
+                        row_text = " | ".join(str(c) for c in row if c)
+                        if row_text.strip():
+                            texts.append(row_text)
+        result = "\n".join(texts)
+        if len(result.strip()) > 30:
+            logger.info(f"pdfplumber extraction: {len(result)} chars")
+            return result
+    except Exception as e:
+        logger.warning(f"pdfplumber failed: {e}, trying pypdf...")
+
+    # ── pypdf fallback ───────────────────────────────────────────────────────
     try:
         import pypdf
         reader = pypdf.PdfReader(io.BytesIO(file_bytes))
@@ -112,10 +190,19 @@ def _extract_pdf_text(file_bytes: bytes) -> str:
             t = page.extract_text()
             if t:
                 texts.append(t)
-        return "\n".join(texts)
+        result = "\n".join(texts)
+        if len(result.strip()) > 30:
+            logger.info(f"pypdf extraction: {len(result)} chars")
+            return result
     except Exception as e:
         logger.warning(f"pypdf text extraction failed: {e}")
-        return ""
+
+    # ── Scanned PDF fallback: render pages to images and run winocr ──────────
+    scanned_text = _extract_scanned_pdf_text(file_bytes)
+    if scanned_text:
+        return scanned_text
+
+    return ""
 
 
 # ---------------------------------------------------------------------------
@@ -218,8 +305,11 @@ def _extract_deterministic(text: str, doc_type: str) -> List[ExtractedField]:
 
     if doc_type == "electricity_bill":
         patterns = [
-            r"(?:total billed units|units consumed|billed units|total units|net energy|energy consumed|consumption)[:.\s]*([0-9,]+(?:\.[0-9]+)?)\s*(?:kwh|units)?",
-            r"([0-9,]+(?:\.[0-9]+)?)\s*kwh",
+            r"(?:total\s+billed\s+units|units\s+consumed|billed\s+units|total\s+units|net\s+energy|energy\s+consumed|total\s+consumption|consumption\s+charges|consumption)[:.\s]*([0-9,]+(?:\.[0-9]+)?)\s*(?:kwh|units)?",
+            r"([0-9,]+(?:\.[0-9]+)?)\s*(?:kwh|units|kvah|k\.w\.h)",
+            r"(?:bill\s+month[^\n\d]*)\b([0-9]+(?:\.[0-9]+)?)\b",
+            r"(?:actual\s+bill[^\n\d]*)\b([0-9]+(?:\.[0-9]+)?)\b",
+            r"(?:catg[^\n\d]*)\b([0-9]+(?:\.[0-9]+)?)\b",
         ]
         val = None
         for pat in patterns:
@@ -227,9 +317,20 @@ def _extract_deterministic(text: str, doc_type: str) -> List[ExtractedField]:
             if m:
                 try:
                     val = float(m.group(1).replace(",", ""))
-                    break
+                    if val > 0:
+                        break
                 except ValueError:
                     continue
+        if (val is None or val <= 0) and any(sig in text.lower() for sig in ELECTRICITY_SIGNALS):
+            nums = re.findall(r"\b\d+(?:\.\d+)?\b", text)
+            for n in nums:
+                try:
+                    fn = float(n)
+                    if 0.5 <= fn <= 5000000 and not (1990 <= fn <= 2035):
+                        val = fn
+                        break
+                except ValueError:
+                    pass
         if val is not None and val > 0:
             fields.append(ExtractedField(
                 metric="ENV-ENERGY-001",
@@ -241,28 +342,57 @@ def _extract_deterministic(text: str, doc_type: str) -> List[ExtractedField]:
             ))
 
     elif doc_type == "fuel_receipt":
-        patterns = [
-            r"(?:quantity delivered|quantity|volume|fuel supplied)[:.\s]*([0-9,]+(?:\.[0-9]+)?)\s*(?:litres|liters|l|kl)?",
-            r"([0-9,]+(?:\.[0-9]+)?)\s*(?:litres|liters)",
-        ]
-        val = None
-        for pat in patterns:
-            m = re.search(pat, text, re.IGNORECASE)
-            if m:
-                try:
-                    val = float(m.group(1).replace(",", ""))
-                    break
-                except ValueError:
-                    continue
-        if val is not None and val > 0:
-            fields.append(ExtractedField(
-                metric="ENV-ENERGY-002",
-                value=val,
-                unit="Litres",
-                confidence=0.92,
-                page=1,
-                metadata=meta
-            ))
+        # ── Coal: mass in tonnes ─────────────────────────────────────────────
+        coal_detected = any(sig in text.lower() for sig in ["coal", "lignite", "anthracite", "coking coal"])
+        if coal_detected:
+            coal_patterns = [
+                r"(?:quantity|coal supplied|coal delivered|weight|net weight|total coal)[:.\s]*([0-9,]+(?:\.[0-9]+)?)\s*(?:tonnes?|mt|t\b)",
+                r"([0-9,]+(?:\.[0-9]+)?)\s*(?:mt|tonnes?)",
+            ]
+            val = None
+            for pat in coal_patterns:
+                m = re.search(pat, text, re.IGNORECASE)
+                if m:
+                    try:
+                        val = float(m.group(1).replace(",", ""))
+                        if val > 0:
+                            break
+                    except ValueError:
+                        continue
+            if val is not None and val > 0:
+                fields.append(ExtractedField(
+                    metric="ENV-ENERGY-002",
+                    value=val,
+                    unit="tonnes",          # frontend will convert: val * 25 GJ/t
+                    confidence=0.90,
+                    page=1,
+                    metadata=meta
+                ))
+        else:
+            # ── Liquid fuels (petrol / diesel): volume in litres ────────────
+            patterns = [
+                r"(?:quantity delivered|quantity|volume|fuel supplied)[:.\s]*([0-9,]+(?:\.[0-9]+)?)\s*(?:litres|liters|l|kl)?",
+                r"([0-9,]+(?:\.[0-9]+)?)\s*(?:litres|liters|kl)",
+            ]
+            val = None
+            for pat in patterns:
+                m = re.search(pat, text, re.IGNORECASE)
+                if m:
+                    try:
+                        val = float(m.group(1).replace(",", ""))
+                        if val > 0:
+                            break
+                    except ValueError:
+                        continue
+            if val is not None and val > 0:
+                fields.append(ExtractedField(
+                    metric="ENV-ENERGY-002",
+                    value=val,
+                    unit="Litres",          # frontend applies petrol/diesel density formula
+                    confidence=0.92,
+                    page=1,
+                    metadata=meta
+                ))
 
     elif doc_type == "water_manifest":
         patterns = [
@@ -323,6 +453,62 @@ def _extract_deterministic(text: str, doc_type: str) -> List[ExtractedField]:
             page=1,
             metadata=meta
         ))
+
+    elif doc_type == "gas_bill":
+        patterns = [
+            r"(?:gas consumed|consumption|scm consumed|volume|units consumed|quantity)[:\.\s]*([0-9,]+(?:\.[0-9]+)?)\s*(?:scm|m3|cu\.?m|cubic\.?m)?",
+            r"([0-9,]+(?:\.[0-9]+)?)\s*(?:scm|standard cubic metre)",
+        ]
+        val = None
+        for pat in patterns:
+            m = re.search(pat, text, re.IGNORECASE)
+            if m:
+                try:
+                    val = float(m.group(1).replace(",", ""))
+                    if val > 0:
+                        break
+                except ValueError:
+                    continue
+        if val is None or val <= 0:
+            nums = re.findall(r"\b\d+(?:\.\d+)?\b", text)
+            for n in nums:
+                try:
+                    fn = float(n)
+                    if 1 <= fn <= 5000000 and not (1990 <= fn <= 2035):
+                        val = fn
+                        break
+                except ValueError:
+                    pass
+        if val is not None and val > 0:
+            fields.append(ExtractedField(
+                metric="ENV-ENERGY-001",
+                value=val,
+                unit="SCM",
+                confidence=0.88,
+                page=1,
+                metadata=meta
+            ))
+
+    elif doc_type in ("other_bill", "other"):
+        nums = re.findall(r"\b([0-9,]+(?:\.[0-9]+)?)\b", text)
+        val = None
+        for n in nums:
+            try:
+                fn = float(n.replace(",", ""))
+                if 0.1 <= fn <= 99999999 and not (1990 <= fn <= 2035):
+                    val = fn
+                    break
+            except ValueError:
+                pass
+        if val is not None and val > 0:
+            fields.append(ExtractedField(
+                metric="ENV-ENERGY-001",
+                value=val,
+                unit="units",
+                confidence=0.75,
+                page=1,
+                metadata=meta
+            ))
 
     return fields
 
@@ -571,8 +757,8 @@ def run_extraction_pipeline(request: E1ExtractRequest, db_session=None) -> E1Ext
     document_text = ""
 
     if is_image:
-        # Images cannot be text-extracted — handled by vision LLM
-        document_text = ""
+        document_text = _extract_image_text(file_bytes)
+        logger.info(f"E1 image text extracted via local OCR: {len(document_text)} chars")
     elif mime_type == "application/pdf" or filename.lower().endswith(".pdf"):
         document_text = _extract_pdf_text(file_bytes)
         logger.info(f"E1 PDF text extracted: {len(document_text)} chars")
@@ -600,7 +786,8 @@ def run_extraction_pipeline(request: E1ExtractRequest, db_session=None) -> E1Ext
 
     # ── Step 3: Determine document type ───────────────────────────────────
     #
-    # Priority A: User selected bill type explicitly in the UI → trust it
+    # Priority A: User selected bill type + content verified → trust it
+    # Priority A2: User selected bill type but content contradicts → REJECT
     # Priority B: Image file with no hint → ask vision LLM to classify
     # Priority C: PDF/text with no hint → keyword check on extracted text
 
@@ -608,21 +795,91 @@ def run_extraction_pipeline(request: E1ExtractRequest, db_session=None) -> E1Ext
     # Normalize aliases (e.g. "fuel_bill" → "fuel_receipt")
     user_hint = HINT_ALIASES.get(user_hint, user_hint)
 
+    # ── Cross-validation helper: map doc_type to its signal list ─────────────
+    DOC_TYPE_SIGNALS_MAP = {
+        "electricity_bill": ELECTRICITY_SIGNALS,
+        "fuel_receipt": FUEL_SIGNALS,
+        "water_manifest": WATER_SIGNALS,
+        "waste_manifest": WASTE_SIGNALS,
+        "safety_log": SAFETY_SIGNALS,
+    }
+    HUMAN_DOC_NAMES = {
+        "electricity_bill": "Electricity Bill",
+        "fuel_receipt": "Fuel / Diesel Receipt",
+        "water_manifest": "Water Manifest / Bill",
+        "waste_manifest": "Waste Manifest",
+        "safety_log": "Safety Log",
+    }
+
+    def _content_matches_doc_type(text_lower: str, expected_type: str) -> Tuple[bool, str]:
+        """
+        Checks if the content keywords match the expected doc type.
+        Returns (is_match, detected_actual_type).
+        For images with no text, always returns True (can't verify without vision).
+        """
+        if not text_lower:
+            return True, expected_type  # No text to check (image), trust the hint
+        # Check what type the content actually looks like
+        actual_type = None
+        for dtype, signals in DOC_TYPE_SIGNALS_MAP.items():
+            if any(sig in text_lower for sig in signals):
+                actual_type = dtype
+                break
+        if actual_type is None:
+            # Check for fast-reject signals first
+            for signal, _ in UNRELATED_STRONG_SIGNALS:
+                if signal in text_lower:
+                    return False, "unrelated"
+            # No signals found at all — could still be a poorly OCR'd bill
+            return True, expected_type
+        if actual_type == expected_type:
+            return True, actual_type
+        # Mismatch: user said electricity, but content looks like fuel
+        return False, actual_type
+
     if user_hint and user_hint in VALID_DOC_TYPES:
-        # ── A: User explicitly selected bill type ────────────────────────
+        # ── A: User explicitly selected bill type — cross-validate content ──
+        if document_text and not is_image:
+            text_lower = combined_text.lower()
+            is_match, actual_type = _content_matches_doc_type(text_lower, user_hint)
+            if not is_match:
+                if actual_type == "unrelated":
+                    rej_msg = (
+                        f"⛔ This document does not appear to be an ESG utility document. "
+                        f"You selected '{HUMAN_DOC_NAMES.get(user_hint, user_hint)}' but the content "
+                        f"does not match any accepted ESG bill type. "
+                        f"Only electricity bills, fuel/diesel receipts, water bills, waste manifests, or safety logs are accepted."
+                    )
+                else:
+                    actual_human = HUMAN_DOC_NAMES.get(actual_type, actual_type)
+                    selected_human = HUMAN_DOC_NAMES.get(user_hint, user_hint)
+                    rej_msg = (
+                        f"⛔ Document type mismatch! You selected '{selected_human}' "
+                        f"but the uploaded document appears to be a '{actual_human}'. "
+                        f"Please select the correct bill type from the dropdown and re-upload, "
+                        f"or upload the correct '{selected_human}' document."
+                    )
+                logger.info(f"E1 type mismatch for '{filename}': user_hint='{user_hint}', actual='{actual_type}'")
+                return E1ExtractResponse(
+                    run_id=run_id,
+                    doc_type="mismatch",
+                    fields=[],
+                    is_relevant=False,
+                    rejection_reason=rej_msg,
+                    is_fallback=False
+                )
         doc_type = user_hint
         is_relevant = True
         rejection_reason = ""
-        logger.info(f"E1 user-provided bill type trusted: '{doc_type}' for '{filename}'")
+        logger.info(f"E1 user-provided bill type verified: '{doc_type}' for '{filename}'")
 
     elif is_image:
         # ── B: Image file, no hint → vision LLM decides ─────────────────
-        # We cannot text-check an image. Let vision LLM classify and extract.
         logger.info(f"E1 image file '{filename}' with no user hint → vision LLM classification")
         doc_type = "electricity_bill"   # will be corrected by vision LLM
         is_relevant = True
         rejection_reason = ""
-        # We'll do the actual vision extraction in Step 6 (run_relevance_check=True)
+        # Vision extraction in Step 6 (run_relevance_check=True)
 
     else:
         # ── C: PDF / text → keyword relevance check ──────────────────────
@@ -649,42 +906,45 @@ def run_extraction_pipeline(request: E1ExtractRequest, db_session=None) -> E1Ext
 
     logger.info(f"E1 accepted '{filename}' as: {doc_type}")
 
-    # ── Step 4: LLM text extraction (PDFs with extractable text) ──────────
+    # ── Step 4: Fast deterministic regex extraction (PDFs and OCR images) ──
     extracted_fields: List[ExtractedField] = []
     if document_text:
+        extracted_fields = _extract_deterministic(document_text, doc_type)
+        if extracted_fields:
+            logger.info(f"E1 deterministic regex extracted {len(extracted_fields)} field(s) for '{doc_type}'")
+
+    # ── Step 5: LLM text extraction fallback for complex documents ─────────
+    if not extracted_fields and document_text:
+        logger.info(f"E1 calling LLM text extraction for '{doc_type}'")
         extracted_fields = _extract_with_llm(document_text, doc_type, request.evidence_id) or []
 
-    # ── Step 5: Deterministic regex fallback (PDFs) ───────────────────────
-    if not extracted_fields and document_text:
-        logger.info(f"E1 deterministic regex for '{doc_type}'")
-        extracted_fields = _extract_deterministic(document_text, doc_type)
-
-    # ── Step 6: Vision LLM (images + scanned PDFs with no text) ───────────
-    if not extracted_fields and file_bytes:
-        need_vision = is_image or not document_text
-        if need_vision:
-            effective_mime = mime_type if is_image else "image/jpeg"
-            # run_relevance_check=True only for images where the user gave no hint
-            run_rel_check = is_image and not (user_hint and user_hint in VALID_DOC_TYPES)
-            vis_relevant, vis_rejection, vis_fields = _extract_with_vision(
-                file_bytes=file_bytes,
-                mime_type=effective_mime,
-                doc_type=doc_type,
-                run_relevance_check=run_rel_check,
+    # ── Step 6: Vision LLM (only for files where no text could be extracted) ───
+    if not extracted_fields and file_bytes and not document_text:
+        need_vision = True
+        effective_mime = mime_type if is_image else "image/jpeg"
+        # run_relevance_check=True only for images where the user gave no hint
+        run_rel_check = is_image and not (user_hint and user_hint in VALID_DOC_TYPES)
+        vis_relevant, vis_rejection, vis_fields = _extract_with_vision(
+            file_bytes=file_bytes,
+            mime_type=effective_mime,
+            doc_type=doc_type,
+            run_relevance_check=run_rel_check,
+        )
+        if not vis_relevant:
+            return E1ExtractResponse(
+                run_id=run_id,
+                doc_type="unrelated",
+                fields=[],
+                is_relevant=False,
+                rejection_reason=vis_rejection,
+                is_fallback=False
             )
-            if not vis_relevant:
-                return E1ExtractResponse(
-                    run_id=run_id,
-                    doc_type="unrelated",
-                    fields=[],
-                    is_relevant=False,
-                    rejection_reason=vis_rejection,
-                    is_fallback=False
-                )
-            extracted_fields = vis_fields
+        extracted_fields = vis_fields
 
     if not extracted_fields:
         logger.warning(f"E1 no fields extracted from '{filename}' (type={doc_type})")
+        # No fallback hardcoded data — return empty fields with a helpful message
+        # The document was accepted as relevant, just no values could be parsed
 
     # ── Step 7: Validate ──────────────────────────────────────────────────
     validated = validate_fields(extracted_fields)

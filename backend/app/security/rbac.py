@@ -20,7 +20,6 @@ class Role(str, Enum):
     CHECKER          = "checker"           # Reviews & approves/rejects submissions (Maker != Checker enforced)
     AUDITOR          = "auditor"           # Independent assurance, read-only data, audit trails & findings
     VIEWER           = "viewer"            # Read-only dashboards and analytics
-    SUPER_ADMIN      = "system_admin"      # Alias for SYSTEM_ADMIN backwards-compatibility
 
 
 # Permission identifiers
@@ -61,13 +60,8 @@ class Permission(str, Enum):
 
 # Role → set of allowed permissions
 ROLE_PERMISSIONS: dict[Role, Set[Permission]] = {
-    Role.SYSTEM_ADMIN: {
-        Permission.USER_MANAGE, Permission.USER_CREATE, Permission.USER_DELETE,
-        Permission.FORM_MASTER,
-        Permission.ORG_READ, Permission.ORG_WRITE,
-        Permission.METRIC_READ, Permission.SUBMISSION_READ,
-        Permission.REPORT_READ, Permission.AUDIT_READ,
-    },
+    Role.SYSTEM_ADMIN: set(Permission),  # System Admin has access to all features, writes, overrides, and controls
+
 
     Role.GROUP_ADMIN: {
         Permission.ORG_READ,
@@ -147,7 +141,9 @@ ROLE_PERMISSIONS: dict[Role, Set[Permission]] = {
 
 
 def has_permission(role: str, permission: Permission) -> bool:
-    """Return True if `role` is granted `permission`."""
+    """Return True if `role` is granted `permission`. System Admin has full super-admin access."""
+    if role == Role.SYSTEM_ADMIN.value or role == Role.SYSTEM_ADMIN:
+        return True
     try:
         r = Role(role)
     except ValueError:

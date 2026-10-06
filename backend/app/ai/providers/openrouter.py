@@ -91,9 +91,9 @@ class OpenRouterProvider(BaseAIProvider):
         messages.append({"role": "user", "content": user_message})
 
         models_to_try = [
-            settings.OPENROUTER_MODEL_TEXT,
-            "meta-llama/llama-3.3-70b-instruct",
             "openrouter/free",
+            "meta-llama/llama-3.3-70b-instruct",
+            settings.OPENROUTER_MODEL_TEXT,
         ]
         models_to_try = list(dict.fromkeys([m for m in models_to_try if m]))
 
@@ -105,7 +105,7 @@ class OpenRouterProvider(BaseAIProvider):
                 "temperature": 0.1
             }
             try:
-                with httpx.Client(timeout=45.0) as client:
+                with httpx.Client(timeout=20.0) as client:
                     resp = client.post(f"{self.BASE_URL}/chat/completions", headers=self._headers(), json=payload)
                     resp.raise_for_status()
                     data = resp.json()
@@ -147,10 +147,10 @@ class OpenRouterProvider(BaseAIProvider):
 
         # Prioritized free & working vision models on OpenRouter
         models_to_try = [
-            settings.OPENROUTER_MODEL_VISION or "dots-studio/dots-3-note-preview:free",
-            "dots-studio/dots-3-note-preview:free",
             "openrouter/free",
-            "google/gemma-4-26b-a4b-it:free",
+            "qwen/qwen3.8-flash",
+            "google/gemini-3.7-flash",
+            settings.OPENROUTER_MODEL_VISION,
         ]
         models_to_try = list(dict.fromkeys([m for m in models_to_try if m]))
 
@@ -163,7 +163,7 @@ class OpenRouterProvider(BaseAIProvider):
             }
             try:
                 logger.info(f"Calling OpenRouter vision model '{model}'...")
-                with httpx.Client(timeout=65.0) as client:
+                with httpx.Client(timeout=25.0) as client:
                     resp = client.post(f"{self.BASE_URL}/chat/completions", headers=self._headers(), json=payload)
                     resp.raise_for_status()
                     data = resp.json()

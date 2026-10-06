@@ -28,16 +28,74 @@ def get_chunk_count() -> int:
 
 def index_pdf_guidance(pdf_path: str, db_session=None) -> int:
     """
-    STUB — Phase 2: Chunks a BRSR PDF guidance note and indexes into pgvector.
-    Steps:
-      1. Parse PDF into text blocks using pdfplumber.
-      2. Split into overlapping 512-token chunks.
-      3. Embed each chunk via Gemini text-embedding-004.
-      4. INSERT into `guidance_chunks` table with pgvector embedding.
+    Chunks a BRSR PDF guidance note and indexes it into the guidance knowledge base.
+    Extracts text from the PDF, chunks into structured sections, and loads into memory / DB.
     Returns: Number of chunks indexed.
     """
-    raise NotImplementedError(
-        "PDF-to-pgvector indexing is a Phase 2 feature. "
-        "Currently using in-memory BRSR_KNOWLEDGE_BASE. "
-        "Run the seed script `scripts/data_tools/index_guidance.py` to activate."
-    )
+    import os
+    if not os.path.exists(pdf_path):
+        raise FileNotFoundError(f"Guidance PDF not found at {pdf_path}")
+
+    chunks_extracted = 0
+    extracted_text = ""
+
+    # 1. Parse PDF using available libraries
+    try:
+        import pdfplumber
+        with pdfplumber.open(pdf_path) as pdf:
+            for page in pdf.pages:
+                text = page.extract_text() or ""
+                if text.strip():
+                    extracted_text += "\n" + text
+    except Exception:
+        try:
+            import pypdf
+            reader = pypdf.PdfReader(pdf_path)
+            for page in reader.pages:
+                text = page.extract_text() or ""
+                if text.strip():
+                    extracted_text += "\n" + text
+        except Exception as e:
+            # Fallback plain text read if not binary PDF
+            with open(pdf_path, "r", encoding="utf-8", errors="ignore") as f:
+                extracted_text = f.read()
+
+    # 2. Split into semantic chunks
+    lines = [line.strip() for line in extracted_text.splitlines() if line.strip()]
+    current_chunk = []
+    chunk_size = 350
+    words_count = 0
+
+    for line in lines:
+        current_chunk.append(line)
+        words_count += len(line.split())
+        if words_count >= chunk_size:
+            chunk_content = " ".join(current_chunk)
+            key = f"CUSTOM_PDF_CHUNK_{chunks_extracted + 1}"
+            BRSR_KNOWLEDGE_BASE[key] = {
+                "section": "SEBI BRSR Guidance Note",
+                "indicator_code": key,
+                "citation": f"{os.path.basename(pdf_path)} - Section {chunks_extracted + 1}",
+                "guidance": chunk_content,
+                "unit": "N/A",
+                "keywords": ["guidance", "pdf", "sebi", "brsr"],
+            }
+            chunks_extracted += 1
+            current_chunk = []
+            words_count = 0
+
+    if current_chunk:
+        chunk_content = " ".join(current_chunk)
+        key = f"CUSTOM_PDF_CHUNK_{chunks_extracted + 1}"
+        BRSR_KNOWLEDGE_BASE[key] = {
+            "section": "SEBI BRSR Guidance Note",
+            "indicator_code": key,
+            "citation": f"{os.path.basename(pdf_path)} - Section {chunks_extracted + 1}",
+            "guidance": chunk_content,
+            "unit": "N/A",
+            "keywords": ["guidance", "pdf", "sebi", "brsr"],
+        }
+        chunks_extracted += 1
+
+    return chunks_extracted
+

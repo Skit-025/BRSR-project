@@ -24,10 +24,11 @@ def stage_05_rollup(
     if not root_node:
         raise ValueError(f"Root node '{root_node_id}' not found.")
 
+    from sqlalchemy import cast, String
     # Fetch all descendant active nodes in boundary
     descendants = (
         db.query(OrgNode)
-        .filter(OrgNode.path.like(f"{root_node.path}%"), OrgNode.is_deleted == False)
+        .filter(cast(OrgNode.path, String).like(f"{root_node.path}%"), OrgNode.is_deleted == False)
         .all()
     )
     node_map = {n.id: n for n in descendants}

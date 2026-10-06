@@ -43,10 +43,37 @@ def test_evidence_upload_with_sha256_verification_and_ocr():
     assert res_dl.content == bill_content
 
     # 4. Test Evidence Linking to a DataPoint (Audit Lineage Trace)
-    fake_dp_id = f"dp-energy-{uuid.uuid4().hex[:6]}"
+    from app.db.session import SessionLocal
+    from app.modules.org.models import OrgNode, ReportingPeriod
+    from app.modules.collection.models import Submission, DataPoint
+
+    db = SessionLocal()
+    dp = db.query(DataPoint).first()
+    if not dp:
+        node = db.query(OrgNode).first()
+        period = db.query(ReportingPeriod).first()
+        sub = db.query(Submission).filter(Submission.entity_id == node.id, Submission.period_id == period.id).first()
+        if not sub:
+            sub = Submission(entity_id=node.id, period_id=period.id, status="DRAFT", version=1)
+            db.add(sub)
+            db.flush()
+        dp = DataPoint(
+            submission_id=sub.id,
+            metric_code="ENV-ENERGY-001",
+            value_numeric=52000.0,
+            unit="kWh",
+            status="ACTUAL",
+            entry_method="manual_form"
+        )
+        db.add(dp)
+        db.commit()
+    real_dp_id = str(dp.id)
+    db.close()
+
+
     link_payload = {
         "evidence_id": evidence_id,
-        "data_point_id": fake_dp_id,
+        "data_point_id": real_dp_id,
         "page_ref": "Page 1, Total Units Row",
         "notes": "Verified against DISCOM online portal"
     }
@@ -54,12 +81,13 @@ def test_evidence_upload_with_sha256_verification_and_ocr():
     assert res_link.status_code == 201
 
     # 5. Query Audit Lineage for the DataPoint
-    res_trace = client.get(f"/api/v1/evidence/datapoint/{fake_dp_id}")
+    res_trace = client.get(f"/api/v1/evidence/datapoint/{real_dp_id}")
     assert res_trace.status_code == 200
     links = res_trace.json()
-    assert len(links) == 1
-    assert links[0]["evidence_id"] == evidence_id
-    assert links[0]["page_ref"] == "Page 1, Total Units Row"
+    assert len(links) >= 1
+    matched = [l for l in links if l["evidence_id"] == evidence_id]
+    assert len(matched) == 1
+    assert matched[0]["page_ref"] == "Page 1, Total Units Row"
 
 def test_tampered_evidence_rejected_by_sha256():
     bill_content = b"GENUINE DIESEL LOGBOOK - 1200 LITRES"

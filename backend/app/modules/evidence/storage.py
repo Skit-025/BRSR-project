@@ -76,4 +76,24 @@ class StorageService:
                 return f.read()
         return None
 
+    def delete_file(self, storage_key: str) -> bool:
+        """Deletes raw file from vault given storage_key."""
+        if self.minio_client:
+            try:
+                self.minio_client.remove_object(settings.S3_BUCKET_NAME, storage_key)
+                return True
+            except Exception as e:
+                logger.warning(f"MinIO remove_object failed: {e}")
+
+        # Local vault deletion
+        basename = os.path.basename(storage_key)
+        local_path = os.path.join(LOCAL_VAULT_DIR, basename)
+        if os.path.exists(local_path):
+            try:
+                os.remove(local_path)
+                return True
+            except Exception as e:
+                logger.warning(f"Local file removal failed: {e}")
+        return False
+
 storage_service = StorageService()

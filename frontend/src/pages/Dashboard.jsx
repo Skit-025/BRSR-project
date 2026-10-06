@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
 import {
   AreaChart, Area, BarChart, Bar,
   ResponsiveContainer, XAxis, YAxis, Tooltip, CartesianGrid, Legend
@@ -10,8 +11,11 @@ import {
 import { useDashboardSummary, useOrgPeriods, useOrgNodes } from '../hooks/useApi';
 
 export default function Dashboard() {
-  const { data: periods = [] } = useOrgPeriods();
-  const { data: nodes = [] } = useOrgNodes();
+  const { data: rawPeriods = [] } = useOrgPeriods();
+  const { data: rawNodes = [] } = useOrgNodes();
+
+  const periods = Array.isArray(rawPeriods) ? rawPeriods : [];
+  const nodes = Array.isArray(rawNodes) ? rawNodes : [];
 
   const [selectedPeriod, setSelectedPeriod] = useState('');
   const [selectedEntity, setSelectedEntity] = useState('');
@@ -79,9 +83,13 @@ export default function Dashboard() {
               className="select-input"
               style={{ padding: '6px 12px', borderRadius: '6px', background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', color: 'var(--text-primary)', fontSize: '13px' }}
             >
-              {periods.map(p => (
-                <option key={p.id} value={p.id}>{p.code} ({p.status})</option>
-              ))}
+              {periods.length === 0 ? (
+                <option value="">No Periods Configured</option>
+              ) : (
+                periods.map(p => (
+                  <option key={p.id} value={p.id}>{p.code} ({p.status})</option>
+                ))
+              )}
             </select>
           </div>
 
@@ -94,15 +102,19 @@ export default function Dashboard() {
               className="select-input"
               style={{ padding: '6px 12px', borderRadius: '6px', background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', color: 'var(--text-primary)', fontSize: '13px' }}
             >
-              {nodes.map(n => (
-                <option key={n.id} value={n.id}>{n.name} [{n.type.toUpperCase()}]</option>
-              ))}
+              {nodes.length === 0 ? (
+                <option value="">No Units Configured</option>
+              ) : (
+                nodes.map(n => (
+                  <option key={n.id} value={n.id}>{n.name} [{n.type.toUpperCase()}]</option>
+                ))
+              )}
             </select>
           </div>
 
           <button
             onClick={() => refetch()}
-            disabled={isRefetching}
+            disabled={isRefetching || !activePeriodId || !activeEntityId}
             className="btn btn-secondary"
             style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 14px', borderRadius: '6px' }}
           >
@@ -111,6 +123,37 @@ export default function Dashboard() {
           </button>
         </div>
       </div>
+
+      {/* Onboarding Callout when workspace has no nodes or periods */}
+      {nodes.length === 0 && (
+        <div style={{
+          background: 'rgba(99, 102, 241, 0.08)',
+          border: '1px solid var(--border-brand)',
+          borderRadius: '12px',
+          padding: '24px 28px',
+          marginBottom: '28px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: '16px'
+        }}>
+          <div>
+            <h3 style={{ fontSize: '16px', color: '#fff', margin: '0 0 6px 0', fontWeight: 700 }}>
+              Live Workspace Clean & Ready
+            </h3>
+            <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: 0, maxWidth: '680px', lineHeight: 1.5 }}>
+              All mock data has been purged from your live database. To begin collecting statutory SEBI BRSR reports, configure your Group & Subsidiary organization units in Org Hierarchy. Or use Mock Mode to explore simulated data.
+            </p>
+          </div>
+          <div style={{ display: 'flex', gap: '10px' }}>
+            <Link to="/org" className="btn btn-primary" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              <Building2 size={14} />
+              <span>Configure Org Hierarchy</span>
+            </Link>
+          </div>
+        </div>
+      )}
 
       {/* KPI Cards Grid */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '16px', marginBottom: '24px' }}>

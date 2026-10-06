@@ -15,6 +15,8 @@ class FormField(BaseModel):
     current_value: Optional[Any] = None
     notes: Optional[str] = None
     formula_ref: Optional[str] = None
+    indicator_disclosure_name: Optional[str] = None
+    definition: Optional[str] = None
 
 
 class FormSection(BaseModel):

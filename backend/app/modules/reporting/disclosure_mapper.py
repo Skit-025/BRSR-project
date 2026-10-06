@@ -75,9 +75,9 @@ def compile_brsr_report(
         )
 
     # 3. Compile Section A & B
-    # Count contributing sites under this entity
+    from sqlalchemy import cast, String
     sites_count = db.query(OrgNode).filter(
-        OrgNode.path.startswith(node.path),
+        cast(OrgNode.path, String).like(f"{node.path}%"),
         OrgNode.type.in_(["project", "site"])
     ).count()
 

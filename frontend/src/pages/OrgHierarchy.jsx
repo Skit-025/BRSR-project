@@ -2,9 +2,12 @@ import React, { useState } from 'react';
 import { 
   Building2, ChevronRight, Plus, Calendar, Layers, 
   Globe, AlertCircle, CheckCircle2, X, RefreshCw, Filter, Search, Lock, Unlock,
-  Info, Eye, ExternalLink, ShieldCheck, Clock, FileText
+  Info, Eye, ExternalLink, ShieldCheck, Clock, FileText, Edit3, ShieldAlert
 } from 'lucide-react';
-import { useOrgNodes, useOrgPeriods, useCreateNode, useCreatePeriod } from '../hooks/useApi';
+import { useOrgNodes, useOrgPeriods, useCreateNode, useCreatePeriod, useUpdateNode, useUpdatePeriod } from '../hooks/useApi';
+import { useAuth } from '../context/AuthContext';
+import { authApi } from '../api/client';
+import Modal from '../components/Modal';
 
 const NODE_TYPES = [
   { value: 'group', label: 'Group (Level 1)', cls: 'badge-brand' },
@@ -29,8 +32,11 @@ const PROJECT_TYPES = [
 export default function OrgHierarchy() {
   const { data: nodes = [], isLoading: loadN, refetch: refetchNodes } = useOrgNodes();
   const { data: periods = [], isLoading: loadP, refetch: refetchPeriods } = useOrgPeriods();
+  const { user, isAdmin } = useAuth();
   const createNode = useCreateNode();
+  const updateNode = useUpdateNode();
   const createPeriod = useCreatePeriod();
+  const updatePeriod = useUpdatePeriod();
 
   // Modals & Detail states
   const [showNodeModal, setShowNodeModal] = useState(false);
@@ -40,8 +46,16 @@ export default function OrgHierarchy() {
   const [selectedNodeDetail, setSelectedNodeDetail] = useState(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
+  // Admin Edit Unit & Period States
+  const [editingNode, setEditingNode] = useState(null);
+  const [editNodeForm, setEditNodeForm] = useState({});
+  const [adminPasswordForNode, setAdminPasswordForNode] = useState('');
+  const [nodeUpdateError, setNodeUpdateError] = useState('');
+  const [updatingNodePending, setUpdatingNodePending] = useState(false);
+
   const [notice, setNotice] = useState(null);
   const [errorMsg, setErrorMsg] = useState('');
+
   const [searchNode, setSearchNode] = useState('');
   const [filterType, setFilterType] = useState('ALL');
 
@@ -151,13 +165,77 @@ export default function OrgHierarchy() {
     }
   };
 
+  // ── Admin Edit Functions ──
+  const handleOpenEditNode = (node) => {
+    setEditingNode(node);
+    setEditNodeForm({
+      name: node.name || '',
+      code: node.code || '',
+      boundary: node.boundary !== undefined ? node.boundary : true,
+      ownership_pct: node.ownership_pct !== undefined ? node.ownership_pct : 100,
+      project_type: node.project_type || 'corporate',
+      location_state: node.location_state || '',
+    });
+    setAdminPasswordForNode('');
+    setNodeUpdateError('');
+  };
+
+  const handleSaveEditNode = async (e) => {
+    e.preventDefault();
+    setNodeUpdateError('');
+    setUpdatingNodePending(true);
+    try {
+      if (isAdmin) {
+        if (!adminPasswordForNode.trim()) {
+          throw new Error('Please enter your Administrator password to authorize this modification.');
+        }
+        await authApi.verifyPassword(adminPasswordForNode.trim());
+      }
+      await updateNode.mutateAsync({
+        id: editingNode.id,
+        data: editNodeForm
+      });
+      setNotice({ type: 'success', text: `Unit "${editNodeForm.name}" updated successfully.` });
+      setEditingNode(null);
+      if (selectedNodeDetail && selectedNodeDetail.id === editingNode.id) {
+        setSelectedNodeDetail({ ...selectedNodeDetail, ...editNodeForm });
+      }
+      refetchNodes();
+    } catch (err) {
+      setNodeUpdateError(err.response?.data?.detail || err.message || 'Failed to update unit.');
+    } finally {
+      setUpdatingNodePending(false);
+    }
+  };
+
+  const handleTogglePeriodStatus = async (period) => {
+    const newStatus = period.status === 'LOCKED' ? 'OPEN' : 'LOCKED';
+    try {
+      await updatePeriod.mutateAsync({
+        id: period.id,
+        data: { status: newStatus }
+      });
+      setNotice({ type: 'success', text: `Reporting period ${period.code} is now ${newStatus}.` });
+      if (selectedPeriodDetail && selectedPeriodDetail.id === period.id) {
+        setSelectedPeriodDetail({ ...selectedPeriodDetail, status: newStatus });
+      }
+      refetchPeriods();
+    } catch (err) {
+      setErrorMsg(err.response?.data?.detail || err.message || 'Failed to update period.');
+    }
+  };
+
+  // Safe array guards
+  const nodeList = Array.isArray(nodes) ? nodes : [];
+  const periodList = Array.isArray(periods) ? periods : [];
+
   // Filtered nodes
-  const filteredNodes = nodes.filter((n) => {
+  const filteredNodes = nodeList.filter((n) => {
     const matchType = filterType === 'ALL' || n.type === filterType;
-    const term = searchNode.toLowerCase();
+    const term = (searchNode || '').toLowerCase();
     const matchSearch = !term || 
-      n.name.toLowerCase().includes(term) || 
-      n.code.toLowerCase().includes(term) ||
+      (n.name && n.name.toLowerCase().includes(term)) || 
+      (n.code && n.code.toLowerCase().includes(term)) ||
       (n.path && n.path.toLowerCase().includes(term));
     return matchType && matchSearch;
   });
@@ -227,7 +305,7 @@ export default function OrgHierarchy() {
           <div>
             <div className="card-title" style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '16px' }}>
               <Calendar size={18} color="var(--brand-400)" />
-              <span>Reporting Periods & Statutory Audit Windows ({periods.length})</span>
+              <span>Reporting Periods & Statutory Audit Windows ({periodList.length})</span>
             </div>
             <div className="card-subtitle text-muted text-sm" style={{ marginTop: '2px' }}>
               Fiscal timelines, monthly collection packs, and SEBI BRSR compliance audit windows
@@ -268,12 +346,25 @@ export default function OrgHierarchy() {
               <RefreshCw size={20} className="spin" style={{ margin: '0 auto 8px', display: 'block' }} />
               Loading reporting periods...
             </div>
-          ) : periods.length === 0 ? (
-            <div style={{ padding: '30px', color: 'var(--text-muted)', gridColumn: '1 / -1', textAlign: 'center' }}>
-              No reporting periods configured. Click '+ Add Period' to configure fiscal cycles.
+          ) : periodList.length === 0 ? (
+            <div style={{ padding: '36px 20px', color: 'var(--text-muted)', gridColumn: '1 / -1', textAlign: 'center', background: 'rgba(255,255,255,0.015)', borderRadius: '8px', border: '1px dashed var(--border-default)' }}>
+              <Calendar size={28} color="var(--brand-400)" style={{ margin: '0 auto 8px', display: 'block' }} />
+              <div style={{ fontSize: '14px', fontWeight: 600, color: '#fff', marginBottom: 4 }}>No Reporting Periods Configured</div>
+              <p style={{ fontSize: '12px', color: 'var(--text-secondary)', maxWidth: 420, margin: '0 auto 12px' }}>
+                Create a reporting period (e.g. FY 2025-26) to establish statutory collection cycles and enable ESG data submissions.
+              </p>
+              <button 
+                type="button" 
+                className="btn btn-primary btn-sm"
+                onClick={() => { setShowPeriodModal(true); setErrorMsg(''); }}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+              >
+                <Plus size={14} />
+                <span>+ Create First Period</span>
+              </button>
             </div>
           ) : (
-            periods.map((p) => {
+            periodList.map((p) => {
               const isLocked = p.status === 'LOCKED';
               return (
                 <div 
@@ -422,8 +513,29 @@ export default function OrgHierarchy() {
                 </tr>
               ) : filteredNodes.length === 0 ? (
                 <tr>
-                  <td colSpan={8} style={{ textAlign: 'center', padding: '36px', color: 'var(--text-muted)' }}>
-                    No organization units found matching your filters.
+                  <td colSpan={8} style={{ textAlign: 'center', padding: '48px 24px' }}>
+                    <div style={{ maxWidth: 440, margin: '0 auto' }}>
+                      <Building2 size={32} color="var(--brand-400)" style={{ margin: '0 auto 10px', display: 'block' }} />
+                      <div style={{ fontSize: '15px', fontWeight: 700, color: '#fff', marginBottom: 6 }}>
+                        {nodeList.length === 0 ? 'No Organization Units Configured' : 'No Matching Units Found'}
+                      </div>
+                      <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: 16, lineHeight: 1.5 }}>
+                        {nodeList.length === 0 
+                          ? 'Start by creating your Root Group Entity (e.g. MEIL-GROUP) or subsidiary units to establish statutory audit boundaries.'
+                          : 'Try changing your search term or filtering options.'}
+                      </p>
+                      {nodeList.length === 0 && (
+                        <button 
+                          type="button" 
+                          className="btn btn-primary btn-sm"
+                          onClick={() => { setShowNodeModal(true); setErrorMsg(''); }}
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                        >
+                          <Plus size={14} />
+                          <span>+ Add Root Group Unit</span>
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ) : (
@@ -505,10 +617,12 @@ export default function OrgHierarchy() {
       </div>
 
       {/* Modal: Add Org Unit */}
-      {showNodeModal && (
-        <div className="modal-backdrop">
-          <div className="modal-dialog anim-slide">
-            <div className="modal-header">
+      <Modal 
+        isOpen={showNodeModal} 
+        onClose={() => setShowNodeModal(false)} 
+        maxWidth="560px"
+      >
+        <div className="modal-header">
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <div className="modal-header-icon">
                   <Building2 size={18} color="var(--brand-400)" />
@@ -580,7 +694,7 @@ export default function OrgHierarchy() {
                     onChange={(e) => setNodeForm({ ...nodeForm, parent_id: e.target.value })}
                   >
                     <option value="">None (Root Node)</option>
-                    {nodes.map(n => (
+                    {nodeList.map(n => (
                       <option key={n.id} value={n.id}>[{n.type.toUpperCase()}] {n.name}</option>
                     ))}
                   </select>
@@ -658,15 +772,15 @@ export default function OrgHierarchy() {
                 </button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
+      </Modal>
 
       {/* Modal: New Reporting Period */}
-      {showPeriodModal && (
-        <div className="modal-backdrop">
-          <div className="modal-dialog anim-slide">
-            <div className="modal-header">
+      <Modal 
+        isOpen={showPeriodModal} 
+        onClose={() => setShowPeriodModal(false)} 
+        maxWidth="560px"
+      >
+        <div className="modal-header">
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <div className="modal-header-icon">
                   <Calendar size={18} color="var(--brand-400)" />
@@ -772,114 +886,129 @@ export default function OrgHierarchy() {
                 </button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
+      </Modal>
 
       {/* Modal: Period Details Inspector */}
       {selectedPeriodDetail && (
-        <div className="modal-backdrop">
-          <div className="modal-dialog anim-slide" style={{ maxWidth: '640px' }}>
-            <div className="modal-header">
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <div className="modal-header-icon">
-                  <Calendar size={18} color="var(--brand-400)" />
-                </div>
-                <div>
-                  <h3 style={{ fontSize: '16px', color: '#fff' }}>Reporting Period Details</h3>
-                  <p style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-                    Statutory configuration & SEBI compliance window for {selectedPeriodDetail.code}
-                  </p>
-                </div>
+        <Modal 
+          isOpen={Boolean(selectedPeriodDetail)} 
+          onClose={() => setSelectedPeriodDetail(null)} 
+          maxWidth="640px"
+        >
+          <div className="modal-header">
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div className="modal-header-icon">
+                <Calendar size={18} color="var(--brand-400)" />
               </div>
-              <button className="icon-btn" onClick={() => setSelectedPeriodDetail(null)}>
-                <X size={18} />
-              </button>
-            </div>
-
-            <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-              {/* Highlight Grid */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
-                <div style={{ background: 'var(--bg-elevated)', padding: '12px 16px', borderRadius: '8px', border: '1px solid var(--border-default)' }}>
-                  <div style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Period Code</div>
-                  <div style={{ fontSize: '16px', fontWeight: 700, color: 'var(--brand-400)', fontFamily: 'JetBrains Mono', marginTop: 2 }}>
-                    {selectedPeriodDetail.code}
-                  </div>
-                </div>
-
-                <div style={{ background: 'var(--bg-elevated)', padding: '12px 16px', borderRadius: '8px', border: '1px solid var(--border-default)' }}>
-                  <div style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Status & Security</div>
-                  <div style={{ marginTop: 4 }}>
-                    {selectedPeriodDetail.status === 'LOCKED' ? (
-                      <span className="badge badge-rose" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                        <Lock size={11} /> LOCKED (Audit Frozen)
-                      </span>
-                    ) : (
-                      <span className="badge badge-emerald" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                        <Unlock size={11} /> OPEN (Submissions Active)
-                      </span>
-                    )}
-                  </div>
-                </div>
-
-                <div style={{ background: 'var(--bg-elevated)', padding: '12px 16px', borderRadius: '8px', border: '1px solid var(--border-default)' }}>
-                  <div style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Financial Year</div>
-                  <div style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)', marginTop: 2 }}>
-                    FY {selectedPeriodDetail.financial_year}
-                  </div>
-                </div>
-
-                <div style={{ background: 'var(--bg-elevated)', padding: '12px 16px', borderRadius: '8px', border: '1px solid var(--border-default)' }}>
-                  <div style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Period Granularity</div>
-                  <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)', marginTop: 2 }}>
-                    {selectedPeriodDetail.period_type?.toUpperCase()} PACK {selectedPeriodDetail.month ? `(Month ${selectedPeriodDetail.month})` : selectedPeriodDetail.quarter ? `(Q${selectedPeriodDetail.quarter})` : ''}
-                  </div>
-                </div>
-              </div>
-
-              {/* Date Window */}
-              <div style={{ background: 'var(--bg-elevated)', padding: '14px 18px', borderRadius: '8px', border: '1px solid var(--border-default)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                  <Clock size={14} color="var(--brand-400)" />
-                  <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>Calendar Collection Window</span>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: '13px', color: 'var(--text-secondary)' }}>
-                  <span><strong>Start:</strong> {selectedPeriodDetail.start_date}</span>
-                  <span style={{ color: 'var(--text-muted)' }}>→</span>
-                  <span><strong>End:</strong> {selectedPeriodDetail.end_date}</span>
-                </div>
-              </div>
-
-              {/* SEBI Compliance Scope */}
-              <div style={{ background: 'rgba(99, 102, 241, 0.08)', padding: '14px 18px', borderRadius: '8px', border: '1px solid var(--border-brand)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                  <ShieldCheck size={15} color="var(--brand-400)" />
-                  <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>SEBI BRSR Statutory Governance</span>
-                </div>
-                <p style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: 0, lineHeight: 1.5 }}>
-                  This period covers all 39 BRSR indicators across 7 hierarchy tiers. Maker data entries submitted during this window are cryptographically hashed and gated by Four-Eyes Checker verification.
+              <div>
+                <h3 style={{ fontSize: '16px', color: '#fff' }}>Reporting Period Details</h3>
+                <p style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                  Statutory configuration & SEBI compliance window for {selectedPeriodDetail?.code}
                 </p>
               </div>
             </div>
+            <button className="icon-btn" onClick={() => setSelectedPeriodDetail(null)}>
+              <X size={18} />
+            </button>
+          </div>
 
-            <div className="modal-footer">
-              <button 
-                type="button" 
-                className="btn btn-secondary" 
-                onClick={() => setSelectedPeriodDetail(null)}
-              >
-                Close Details
-              </button>
+          <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+            {/* Highlight Grid */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
+              <div style={{ background: 'var(--bg-elevated)', padding: '12px 16px', borderRadius: '8px', border: '1px solid var(--border-default)' }}>
+                <div style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Period Code</div>
+                <div style={{ fontSize: '16px', fontWeight: 700, color: 'var(--brand-400)', fontFamily: 'JetBrains Mono', marginTop: 2 }}>
+                  {selectedPeriodDetail?.code}
+                </div>
+              </div>
+
+              <div style={{ background: 'var(--bg-elevated)', padding: '12px 16px', borderRadius: '8px', border: '1px solid var(--border-default)' }}>
+                <div style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Status & Security</div>
+                <div style={{ marginTop: 4 }}>
+                  {selectedPeriodDetail?.status === 'LOCKED' ? (
+                    <span className="badge badge-rose" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                      <Lock size={11} /> LOCKED (Audit Frozen)
+                    </span>
+                  ) : (
+                    <span className="badge badge-emerald" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                      <Unlock size={11} /> OPEN (Submissions Active)
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              <div style={{ background: 'var(--bg-elevated)', padding: '12px 16px', borderRadius: '8px', border: '1px solid var(--border-default)' }}>
+                <div style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Financial Year</div>
+                <div style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)', marginTop: 2 }}>
+                  FY {selectedPeriodDetail?.financial_year}
+                </div>
+              </div>
+
+              <div style={{ background: 'var(--bg-elevated)', padding: '12px 16px', borderRadius: '8px', border: '1px solid var(--border-default)' }}>
+                <div style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Period Granularity</div>
+                <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)', marginTop: 2 }}>
+                  {selectedPeriodDetail?.period_type?.toUpperCase()} PACK {selectedPeriodDetail?.month ? `(Month ${selectedPeriodDetail.month})` : selectedPeriodDetail?.quarter ? `(Q${selectedPeriodDetail.quarter})` : ''}
+                </div>
+              </div>
+            </div>
+
+            {/* Date Window */}
+            <div style={{ background: 'var(--bg-elevated)', padding: '14px 18px', borderRadius: '8px', border: '1px solid var(--border-default)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                <Clock size={14} color="var(--brand-400)" />
+                <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>Calendar Collection Window</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: '13px', color: 'var(--text-secondary)' }}>
+                <span><strong>Start:</strong> {selectedPeriodDetail?.start_date}</span>
+                <span style={{ color: 'var(--text-muted)' }}>→</span>
+                <span><strong>End:</strong> {selectedPeriodDetail?.end_date}</span>
+              </div>
+            </div>
+
+            {/* SEBI Compliance Scope */}
+            <div style={{ background: 'rgba(99, 102, 241, 0.08)', padding: '14px 18px', borderRadius: '8px', border: '1px solid var(--border-brand)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                <ShieldCheck size={15} color="var(--brand-400)" />
+                <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>SEBI BRSR Statutory Governance</span>
+              </div>
+              <p style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: 0, lineHeight: 1.5 }}>
+                This period covers all 39 BRSR indicators across 7 hierarchy tiers. Maker data entries submitted during this window are cryptographically hashed and gated by Four-Eyes Checker verification.
+              </p>
             </div>
           </div>
-        </div>
+
+          <div className="modal-footer" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div>
+              {isAdmin && (
+                <button 
+                  type="button"
+                  className={`btn btn-sm ${selectedPeriodDetail?.status === 'LOCKED' ? 'btn-success' : 'btn-danger'}`}
+                  onClick={() => handleTogglePeriodStatus(selectedPeriodDetail)}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                >
+                  {selectedPeriodDetail?.status === 'LOCKED' ? <Unlock size={13} /> : <Lock size={13} />}
+                  <span>{selectedPeriodDetail?.status === 'LOCKED' ? 'Unlock Period (Admin)' : 'Audit Freeze Period (Admin)'}</span>
+                </button>
+              )}
+            </div>
+            <button 
+              type="button" 
+              className="btn btn-secondary" 
+              onClick={() => setSelectedPeriodDetail(null)}
+            >
+              Close Details
+            </button>
+          </div>
+        </Modal>
       )}
 
       {/* Modal: Dedicated All Periods Console */}
-      {showAllPeriodsModal && (
-        <div className="modal-backdrop">
-          <div className="modal-dialog anim-slide" style={{ maxWidth: '820px', maxHeight: '85vh', display: 'flex', flexDirection: 'column' }}>
-            <div className="modal-header">
+      <Modal 
+        isOpen={showAllPeriodsModal} 
+        onClose={() => setShowAllPeriodsModal(false)} 
+        maxWidth="840px"
+      >
+        <div className="modal-header">
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <div className="modal-header-icon">
                   <Calendar size={18} color="var(--brand-400)" />
@@ -910,7 +1039,14 @@ export default function OrgHierarchy() {
                     </tr>
                   </thead>
                   <tbody>
-                    {periods.map(p => (
+                    {periodList.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} style={{ textAlign: 'center', padding: '24px', color: 'var(--text-muted)' }}>
+                          No reporting periods configured.
+                        </td>
+                      </tr>
+                    ) : (
+                      periodList.map(p => (
                       <tr key={p.id}>
                         <td>
                           <span style={{ fontFamily: 'JetBrains Mono', fontWeight: 700, color: '#fff' }}>
@@ -946,7 +1082,7 @@ export default function OrgHierarchy() {
                           </button>
                         </td>
                       </tr>
-                    ))}
+                    )))}
                   </tbody>
                 </table>
               </div>
@@ -961,100 +1097,263 @@ export default function OrgHierarchy() {
                 Close Console
               </button>
             </div>
-          </div>
-        </div>
-      )}
+      </Modal>
 
       {/* Modal: Entity Unit Details Inspector */}
       {selectedNodeDetail && (
-        <div className="modal-backdrop">
-          <div className="modal-dialog anim-slide" style={{ maxWidth: '640px' }}>
-            <div className="modal-header">
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <div className="modal-header-icon">
-                  <Building2 size={18} color="var(--brand-400)" />
-                </div>
-                <div>
-                  <h3 style={{ fontSize: '16px', color: '#fff' }}>Entity Unit Details</h3>
-                  <p style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-                    7-Tier Hierarchy Node: {selectedNodeDetail.name}
-                  </p>
-                </div>
+        <Modal 
+          isOpen={Boolean(selectedNodeDetail)} 
+          onClose={() => setSelectedNodeDetail(null)} 
+          maxWidth="640px"
+        >
+          <div className="modal-header">
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div className="modal-header-icon">
+                <Building2 size={18} color="var(--brand-400)" />
               </div>
-              <button className="icon-btn" onClick={() => setSelectedNodeDetail(null)}>
-                <X size={18} />
-              </button>
+              <div>
+                <h3 style={{ fontSize: '16px', color: '#fff' }}>Entity Unit Details</h3>
+                <p style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                  7-Tier Hierarchy Node: {selectedNodeDetail?.name}
+                </p>
+              </div>
             </div>
+            <button className="icon-btn" onClick={() => setSelectedNodeDetail(null)}>
+              <X size={18} />
+            </button>
+          </div>
 
-            <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
-                <div style={{ background: 'var(--bg-elevated)', padding: '12px 16px', borderRadius: '8px', border: '1px solid var(--border-default)' }}>
-                  <div style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Entity Name</div>
-                  <div style={{ fontSize: '14px', fontWeight: 700, color: '#fff', marginTop: 2 }}>{selectedNodeDetail.name}</div>
-                </div>
+          <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
+              <div style={{ background: 'var(--bg-elevated)', padding: '12px 16px', borderRadius: '8px', border: '1px solid var(--border-default)' }}>
+                <div style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Entity Name</div>
+                <div style={{ fontSize: '14px', fontWeight: 700, color: '#fff', marginTop: 2 }}>{selectedNodeDetail?.name}</div>
+              </div>
 
-                <div style={{ background: 'var(--bg-elevated)', padding: '12px 16px', borderRadius: '8px', border: '1px solid var(--border-default)' }}>
-                  <div style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Unique Code</div>
-                  <div style={{ fontSize: '14px', fontWeight: 700, color: 'var(--brand-400)', fontFamily: 'JetBrains Mono', marginTop: 2 }}>{selectedNodeDetail.code}</div>
-                </div>
+              <div style={{ background: 'var(--bg-elevated)', padding: '12px 16px', borderRadius: '8px', border: '1px solid var(--border-default)' }}>
+                <div style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Unique Code</div>
+                <div style={{ fontSize: '14px', fontWeight: 700, color: 'var(--brand-400)', fontFamily: 'JetBrains Mono', marginTop: 2 }}>{selectedNodeDetail?.code}</div>
+              </div>
 
-                <div style={{ background: 'var(--bg-elevated)', padding: '12px 16px', borderRadius: '8px', border: '1px solid var(--border-default)' }}>
-                  <div style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Hierarchy Level</div>
-                  <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', marginTop: 2, textTransform: 'capitalize' }}>
-                    {selectedNodeDetail.type?.replace('_', ' ')}
-                  </div>
-                </div>
-
-                <div style={{ background: 'var(--bg-elevated)', padding: '12px 16px', borderRadius: '8px', border: '1px solid var(--border-default)' }}>
-                  <div style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Audit Boundary</div>
-                  <div style={{ marginTop: 4 }}>
-                    <span className={`badge ${selectedNodeDetail.boundary ? 'badge-emerald' : 'badge-gray'}`}>
-                      {selectedNodeDetail.boundary ? 'SEBI In-Scope' : 'Excluded'}
-                    </span>
-                  </div>
-                </div>
-
-                <div style={{ background: 'var(--bg-elevated)', padding: '12px 16px', borderRadius: '8px', border: '1px solid var(--border-default)' }}>
-                  <div style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Project Sector</div>
-                  <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', marginTop: 2, textTransform: 'capitalize' }}>
-                    {PROJECT_TYPES.find(p => p.value === selectedNodeDetail.project_type)?.label || selectedNodeDetail.project_type}
-                  </div>
-                </div>
-
-                <div style={{ background: 'var(--bg-elevated)', padding: '12px 16px', borderRadius: '8px', border: '1px solid var(--border-default)' }}>
-                  <div style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Ownership & Control</div>
-                  <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', marginTop: 2 }}>
-                    {selectedNodeDetail.ownership_pct}% ({selectedNodeDetail.control_type?.replace('_', ' ')})
-                  </div>
+              <div style={{ background: 'var(--bg-elevated)', padding: '12px 16px', borderRadius: '8px', border: '1px solid var(--border-default)' }}>
+                <div style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Hierarchy Level</div>
+                <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', marginTop: 2, textTransform: 'capitalize' }}>
+                  {selectedNodeDetail?.type?.replace('_', ' ')}
                 </div>
               </div>
 
               <div style={{ background: 'var(--bg-elevated)', padding: '12px 16px', borderRadius: '8px', border: '1px solid var(--border-default)' }}>
-                <div style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600, marginBottom: 4 }}>PostgreSQL ltree Materialized Path</div>
-                <div style={{ fontSize: '12px', color: 'var(--brand-400)', fontFamily: 'JetBrains Mono' }}>
-                  {selectedNodeDetail.path || 'ROOT'}
+                <div style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Audit Boundary</div>
+                <div style={{ marginTop: 4 }}>
+                  <span className={`badge ${selectedNodeDetail?.boundary ? 'badge-emerald' : 'badge-gray'}`}>
+                    {selectedNodeDetail?.boundary ? 'SEBI In-Scope' : 'Excluded'}
+                  </span>
                 </div>
               </div>
 
               <div style={{ background: 'var(--bg-elevated)', padding: '12px 16px', borderRadius: '8px', border: '1px solid var(--border-default)' }}>
-                <div style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600, marginBottom: 4 }}>Geographical Location</div>
-                <div style={{ fontSize: '13px', color: 'var(--text-primary)' }}>
-                  {selectedNodeDetail.location_state ? `${selectedNodeDetail.location_state}, ` : ''}{selectedNodeDetail.location_country || 'India'}
+                <div style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Project Sector</div>
+                <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', marginTop: 2, textTransform: 'capitalize' }}>
+                  {PROJECT_TYPES.find(p => p.value === selectedNodeDetail?.project_type)?.label || selectedNodeDetail?.project_type}
+                </div>
+              </div>
+
+              <div style={{ background: 'var(--bg-elevated)', padding: '12px 16px', borderRadius: '8px', border: '1px solid var(--border-default)' }}>
+                <div style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Ownership & Control</div>
+                <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', marginTop: 2 }}>
+                  {selectedNodeDetail?.ownership_pct}% ({selectedNodeDetail?.control_type?.replace('_', ' ')})
                 </div>
               </div>
             </div>
 
-            <div className="modal-footer">
-              <button 
-                type="button" 
-                className="btn btn-secondary" 
-                onClick={() => setSelectedNodeDetail(null)}
-              >
-                Close Details
-              </button>
+            <div style={{ background: 'var(--bg-elevated)', padding: '12px 16px', borderRadius: '8px', border: '1px solid var(--border-default)' }}>
+              <div style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600, marginBottom: 4 }}>PostgreSQL ltree Materialized Path</div>
+              <div style={{ fontSize: '12px', color: 'var(--brand-400)', fontFamily: 'JetBrains Mono' }}>
+                {selectedNodeDetail?.path || 'ROOT'}
+              </div>
+            </div>
+
+            <div style={{ background: 'var(--bg-elevated)', padding: '12px 16px', borderRadius: '8px', border: '1px solid var(--border-default)' }}>
+              <div style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600, marginBottom: 4 }}>Geographical Location</div>
+              <div style={{ fontSize: '13px', color: 'var(--text-primary)' }}>
+                {selectedNodeDetail?.location_state ? `${selectedNodeDetail.location_state}, ` : ''}{selectedNodeDetail?.location_country || 'India'}
+              </div>
             </div>
           </div>
-        </div>
+
+          <div className="modal-footer" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div>
+              {isAdmin && (
+                <button 
+                  type="button" 
+                  className="btn btn-primary"
+                  onClick={() => {
+                    handleOpenEditNode(selectedNodeDetail);
+                  }}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                >
+                  <Edit3 size={14} />
+                  <span>Edit Unit Details (Admin)</span>
+                </button>
+              )}
+            </div>
+            <button 
+              type="button" 
+              className="btn btn-secondary" 
+              onClick={() => setSelectedNodeDetail(null)}
+            >
+              Close Details
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      {/* Modal: System Admin Edit Organization Unit */}
+      {editingNode && (
+        <Modal
+          isOpen={Boolean(editingNode)}
+          onClose={() => setEditingNode(null)}
+          maxWidth="580px"
+        >
+          <div className="modal-header">
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div className="modal-header-icon" style={{ background: 'rgba(99, 102, 241, 0.15)', color: 'var(--brand-400)' }}>
+                <Edit3 size={18} />
+              </div>
+              <div>
+                <h3 style={{ fontSize: '16px', color: '#fff', margin: 0 }}>System Admin: Edit Unit</h3>
+                <p style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: '2px 0 0 0' }}>
+                  Modify unit details & SEBI statutory boundaries ({editingNode?.code})
+                </p>
+              </div>
+            </div>
+            <button className="icon-btn" onClick={() => setEditingNode(null)}>
+              <X size={18} />
+            </button>
+          </div>
+
+          {nodeUpdateError && (
+            <div className="login-error-banner" style={{ margin: '16px 24px 0' }}>
+              <AlertCircle size={16} />
+              <span>{nodeUpdateError}</span>
+            </div>
+          )}
+
+          <form onSubmit={handleSaveEditNode} className="modal-body">
+            <div className="form-group">
+              <label>Unit Name <span className="text-rose">*</span></label>
+              <input
+                type="text"
+                className="form-control"
+                value={editNodeForm.name || ''}
+                onChange={(e) => setEditNodeForm({ ...editNodeForm, name: e.target.value })}
+                required
+              />
+            </div>
+
+            <div className="form-group">
+              <label>Unit Code</label>
+              <input
+                type="text"
+                className="form-control"
+                value={editNodeForm.code || ''}
+                onChange={(e) => setEditNodeForm({ ...editNodeForm, code: e.target.value.toUpperCase() })}
+                required
+              />
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <div className="form-group">
+                <label>SEBI Audit Boundary</label>
+                <select
+                  className="form-control"
+                  value={editNodeForm.boundary ? 'true' : 'false'}
+                  onChange={(e) => setEditNodeForm({ ...editNodeForm, boundary: e.target.value === 'true' })}
+                >
+                  <option value="true">SEBI In-Scope (Consolidated)</option>
+                  <option value="false">Excluded from Audit</option>
+                </select>
+              </div>
+
+              <div className="form-group">
+                <label>Ownership Share (%)</label>
+                <input
+                  type="number"
+                  step="0.1"
+                  min="0"
+                  max="100"
+                  className="form-control"
+                  value={editNodeForm.ownership_pct !== undefined ? editNodeForm.ownership_pct : 100}
+                  onChange={(e) => setEditNodeForm({ ...editNodeForm, ownership_pct: parseFloat(e.target.value) || 0 })}
+                />
+              </div>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <div className="form-group">
+                <label>Project Sector</label>
+                <select
+                  className="form-control"
+                  value={editNodeForm.project_type || 'corporate'}
+                  onChange={(e) => setEditNodeForm({ ...editNodeForm, project_type: e.target.value })}
+                >
+                  {PROJECT_TYPES.map(p => (
+                    <option key={p.value} value={p.value}>{p.label}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="form-group">
+                <label>Operational State / UT</label>
+                <input
+                  type="text"
+                  className="form-control"
+                  placeholder="e.g. Telangana, Andhra Pradesh"
+                  value={editNodeForm.location_state || ''}
+                  onChange={(e) => setEditNodeForm({ ...editNodeForm, location_state: e.target.value })}
+                />
+              </div>
+            </div>
+
+            {/* Administrator Password Authorization Gate */}
+            <div style={{ background: 'rgba(239, 68, 68, 0.08)', border: '1px solid rgba(239, 68, 68, 0.25)', borderRadius: '8px', padding: '14px 16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, color: '#ef4444', fontWeight: 600, fontSize: '13px' }}>
+                <ShieldAlert size={16} />
+                <span>Administrator Password Required</span>
+              </div>
+              <p style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: '0 0 10px 0', lineHeight: 1.4 }}>
+                Enter your System Administrator password to cryptographically authorize this hierarchy update.
+              </p>
+              <input
+                type="password"
+                className="form-control"
+                placeholder="Enter your administrator password"
+                value={adminPasswordForNode}
+                onChange={(e) => setAdminPasswordForNode(e.target.value)}
+                required
+              />
+            </div>
+
+            <div className="modal-footer" style={{ borderTop: '1px solid var(--border-default)', paddingTop: 14, marginTop: 10 }}>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => setEditingNode(null)}
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="btn btn-primary"
+                disabled={updatingNodePending}
+                style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+              >
+                {updatingNodePending ? <RefreshCw size={14} className="spin" /> : <CheckCircle2 size={14} />}
+                <span>{updatingNodePending ? 'Authorizing...' : 'Authorize & Save Changes'}</span>
+              </button>
+            </div>
+          </form>
+        </Modal>
       )}
     </div>
   );

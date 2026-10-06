@@ -85,20 +85,20 @@ def run_consolidation_engine(
                     
                     # Boundary calculation: operational control takes 100%, equity share takes ownership_pct
                     if child.control_type == ControlType.EQUITY_SHARE.value:
-                        effective_share = child.ownership_pct
+                        effective_share = float(child.ownership_pct) if child.ownership_pct is not None else 100.0
                     else:
                         effective_share = 100.0
 
-                    weighted_val = child_val * (effective_share / 100.0)
+                    weighted_val = float(child_val) * (effective_share / 100.0)
                     sum_weighted_val += weighted_val
-                    sum_unweighted_val += child_val
+                    sum_unweighted_val += float(child_val)
                     total_active_children += 1
 
                     child_records.append({
                         "child_id": child.id,
                         "child_code": child.code,
                         "child_name": child.name,
-                        "raw_value": child_val,
+                        "raw_value": float(child_val),
                         "unit": child_unit,
                         "share_pct": effective_share,
                         "weighted_value": weighted_val
@@ -132,11 +132,13 @@ def run_consolidation_engine(
                 ConsolidatedValue.metric_code == metric_code
             ).first()
 
+            parent_share = float(parent.ownership_pct) if parent.ownership_pct is not None else 100.0
+
             if existing:
                 existing.value = final_val
                 existing.unit = metric.base_unit
                 existing.method = roll_method
-                existing.share_pct = parent.ownership_pct
+                existing.share_pct = parent_share
                 existing.child_contributions = child_records
                 existing.version += 1
             else:
@@ -147,7 +149,7 @@ def run_consolidation_engine(
                     value=final_val,
                     unit=metric.base_unit,
                     method=roll_method,
-                    share_pct=parent.ownership_pct,
+                    share_pct=parent_share,
                     child_contributions=child_records
                 )
                 db.add(cons_rec)

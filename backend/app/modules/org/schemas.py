@@ -21,6 +21,7 @@ class OrgNodeCreate(BaseModel):
 
 class OrgNodeUpdate(BaseModel):
     name: Optional[str] = None
+    code: Optional[str] = None
     ownership_pct: Optional[float] = None
     control_type: Optional[ControlType] = None
     boundary: Optional[bool] = None
@@ -30,6 +31,15 @@ class OrgNodeUpdate(BaseModel):
     is_pat_designated: Optional[bool] = None
     has_land_acquisition: Optional[bool] = None
     is_active: Optional[bool] = None
+    admin_password: Optional[str] = None
+
+
+class ReportingPeriodUpdate(BaseModel):
+    status: Optional[PeriodStatus] = None
+    start_date: Optional[date] = None
+    end_date: Optional[date] = None
+    admin_password: Optional[str] = None
+
 
 class OrgNodeRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)

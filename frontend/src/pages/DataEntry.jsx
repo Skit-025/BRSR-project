@@ -1,14 +1,575 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useLocation } from 'react-router-dom';
 import {
   FileText, Save, Send, Download, Upload, CheckCircle2,
   Building2, Calendar, RefreshCw, Layers, AlertCircle, X, Sparkles,
-  Eye, Info, ShieldCheck, Clock, ExternalLink, Cpu, BookOpen, Edit3, ArrowRight
+  Eye, Info, ShieldCheck, Clock, ExternalLink, Cpu, BookOpen, Edit3, ArrowRight,
+  HelpCircle, RotateCcw, Trash2
 } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useOrgNodes, useOrgPeriods, useScopedForm, useSavePack, useSubmitPack } from '../hooks/useApi';
 import { formsApi, collectionApi, evidenceApi, aiApi, API_BASE } from '../api/client';
 import { useAuth } from '../context/AuthContext';
+import Modal from '../components/Modal';
+
+// ── BRSR Principles Knowledge Dictionary ─────────────────────────────────────
+const BRSR_PRINCIPLES_MAP = {
+  P1: {
+    name: 'Principle 1: Ethics, Transparency & Accountability',
+    pillar: 'Governance',
+    desc: 'Businesses should conduct and govern themselves with integrity, and in a manner that is Ethical, Transparent and Accountable.'
+  },
+  P2: {
+    name: 'Principle 2: Safe & Sustainable Goods & Services',
+    pillar: 'Governance',
+    desc: 'Businesses should provide goods and services in a manner that is sustainable and safe across all product and service lifecycles.'
+  },
+  P3: {
+    name: 'Principle 3: Employee Well-being & Workplace Safety',
+    pillar: 'Social',
+    desc: 'Businesses should respect and promote the well-being of all employees and contractual workers, including occupational health, safety, and training.'
+  },
+  P4: {
+    name: 'Principle 4: Stakeholder Inclusiveness & Grievances',
+    pillar: 'Social',
+    desc: 'Businesses should respect the interests of and be responsive to all its stakeholders, especially disadvantaged and vulnerable communities.'
+  },
+  P5: {
+    name: 'Principle 5: Human Rights & Fair Labor Practices',
+    pillar: 'Social',
+    desc: 'Businesses should respect and promote human rights across all direct and supply-chain operational facilities.'
+  },
+  P6: {
+    name: 'Principle 6: Environmental Protection, GHG & Waste',
+    pillar: 'Environment',
+    desc: 'Businesses should protect and restore the environment: energy conservation, GHG mitigation, water stewardship, and circular waste management.'
+  },
+  P7: {
+    name: 'Principle 7: Responsible Public Policy Advocacy',
+    pillar: 'Governance',
+    desc: 'Businesses, when engaging in influencing public and regulatory policy, should do so in a manner that is responsible and transparent.'
+  },
+  P8: {
+    name: 'Principle 8: Inclusive Growth & Social Development',
+    pillar: 'Social',
+    desc: 'Businesses should promote inclusive growth and equitable socio-economic development through CSR, local hiring, and community engagement.'
+  },
+  P9: {
+    name: 'Principle 9: Consumer Value & Responsibility',
+    pillar: 'Governance',
+    desc: 'Businesses should engage with and provide true value to their consumers and clients in an honest, responsible, and transparent manner.'
+  },
+};
+
+const KNOWN_CODE_EXPLANATIONS = {
+  // ── Operational Metric Codes (Dual-Layer Architecture) ───────────────────────
+  'ENV-ENERGY-001': {
+    title: 'Principle 6: Essential Indicator 1 — Total Electricity Consumption (Grid & Captive)',
+    meaning: 'Disclose total electricity consumed in MWh or GJ, including purchased grid electricity from DISCOMs and self-generated captive power (solar, DG).',
+    evidence: 'DISCOM monthly HT/LT electricity invoices, HT substation meter logs, solar generation registers.',
+  },
+  'ENV-ENERGY-002': {
+    title: 'Principle 6: Essential Indicator 1 — Fuel Consumption (Diesel, Petrol, Coal)',
+    meaning: 'Capture physical fuel consumption (litres of diesel/petrol in gensets, vehicles, machinery, and tonnes of coal in thermal units) converted to Gigajoules (GJ) using calorific density factors.',
+    evidence: 'Fuel supplier delivery vouchers, weighbridge tickets, diesel dispensing pump logs, coal consignment receipts.',
+  },
+  'ENV-GHG-001': {
+    title: 'Principle 6: Essential Indicator 3 — Direct Scope 1 GHG Emissions',
+    meaning: 'Gross direct greenhouse gas emissions resulting from stationary and mobile fuel combustion (diesel generators, heavy tunnel boring rigs, excavators, plant transport) in metric tons of CO₂ equivalent (tCO₂e).',
+    evidence: 'Fuel weighbridge logs, generator run-hour logs, IPCC emission factor conversions.',
+  },
+  'ENV-GHG-002': {
+    title: 'Principle 6: Essential Indicator 4 — Indirect Scope 2 GHG Emissions',
+    meaning: 'Gross location-based indirect greenhouse gas emissions resulting from purchased grid electricity consumed at project sites, pumping stations, and corporate offices.',
+    evidence: 'State DISCOM HT electricity bills, CEA Grid Emission Factor Database (v19/v20).',
+  },
+  'ENV-WATER-001': {
+    title: 'Principle 6: Essential Indicator 6 — Water Consumption from All Sources',
+    meaning: 'Total volume of water withdrawn and consumed across operational sites, labor colonies, and offices in Kiloliters (KL) or cubic meters (m³).',
+    evidence: 'Municipal water bills, flow meter registers, tanker logbooks, groundwater extraction logs.',
+  },
+  'ENV-WASTE-001': {
+    title: 'Principle 6: Essential Indicator 8 — Total Solid Waste Generated & Diverted',
+    meaning: 'Total weight of solid waste generated across construction and project facilities in Metric Tons (MT), including metal scrap, concrete debris, and camp solid waste.',
+    evidence: 'Hazardous/Non-hazardous waste disposal manifests, weighbridge tickets, authorized recycler receipts.',
+  },
+  'SOC-SAFE-001': {
+    title: 'Principle 3: Essential Indicator 3 — Workplace Safety LTIFR',
+    meaning: 'Critical workplace safety metric: Number of lost-time injuries resulting in permanent or temporary disability per million manhours worked.',
+    evidence: 'Site safety committee logs, incident investigation reports, HSE monthly bulletin.',
+  },
+  'SOC-SAFE-002': {
+    title: 'Principle 3: Essential Indicator 4 — Work-Related Fatalities',
+    meaning: 'Total number of work-related fatal accidents among permanent staff and contract laborers across all operating project sites and fabrication yards.',
+    evidence: 'Factories Act incident registers, statutory compensation claims.',
+  },
+  'SOC-EMP-001': {
+    title: 'Principle 3: Essential Indicator 1 — Workforce Breakdown & Headcount',
+    meaning: 'Total combined permanent and contractual workforce headcount across company operations, categorized by gender and job tier.',
+    evidence: 'HR ERP roster (SAP/SuccessFactors), EPF/ESI statutory monthly returns.',
+  },
+  'SOC-WELF-001': {
+    title: 'Principle 3: Essential Indicator 5 — Employee Training & Skill Development',
+    meaning: 'Average training hours completed per employee/worker during the reporting period across health, safety, technical skills, and compliance.',
+    evidence: 'LMS training logs, toolbox talk sign-off sheets, external certification records.',
+  },
+  'GOV-ETH-001': {
+    title: 'Principle 1: Essential Indicator 1 — Anti-Corruption & Ethics Code Coverage',
+    meaning: 'Measures what percentage of total workforce received formal training and signed acknowledgment of corporate anti-bribery, integrity, and ethical standards.',
+    evidence: 'HR LMS training logs, employee acknowledgment signatures.',
+  },
+  'GOV-COMP-001': {
+    title: 'Principle 1: Essential Indicator 2 — Stakeholder Grievances & Complaints Resolved',
+    meaning: 'Discloses the total count of formal stakeholder grievances or vigilance complaints received and successfully investigated and resolved.',
+    evidence: 'Audit Committee vigilance register, disciplinary hearing records, ombudsman log.',
+  },
+
+  // ── SEBI Statutory Metric Codes ──────────────────────────────────────────────
+  'P1-E-01': {
+    title: 'Code of Conduct & Ethics Coverage',
+    meaning: 'Measures what percentage of total workforce received formal training and signed acknowledgment of corporate anti-bribery, integrity, and ethical standards.',
+    evidence: 'HR LMS training logs, employee acknowledgment signatures.',
+  },
+  'P1-L-01': {
+    title: 'Anti-Corruption & Bribery Cases Investigated',
+    meaning: 'Discloses the total count of formal corruption or bribery complaints logged, investigated, or upheld by internal vigilance.',
+    evidence: 'Audit Committee vigilance register, disciplinary hearing records.',
+  },
+  'P1-E-02': {
+    title: 'Whistle-blower / Speak-Up Policy Coverage',
+    meaning: 'Proportion of permanent and contractual staff having safe access to an independent, confidential grievance and whistle-blower hotline without retaliation.',
+    evidence: 'Board Whistle-blower Policy document, ombudsman log.',
+  },
+  'P3-E-01': {
+    title: 'Permanent Employees (Male)',
+    meaning: 'Total headcount of male permanent employees on company payroll at the end of the reporting period.',
+    evidence: 'HR ERP roster (SAP/SuccessFactors), EPF/ESI statutory monthly returns.',
+  },
+  'P3-E-02': {
+    title: 'Permanent Employees (Female)',
+    meaning: 'Total headcount of female permanent employees on company payroll at the end of the reporting period.',
+    evidence: 'HR ERP roster, gender diversity census.',
+  },
+  'P3-E-03': {
+    title: 'Lost-Time Injury Frequency Rate (LTIFR)',
+    meaning: 'Critical workplace safety metric: Number of lost-time injuries resulting in permanent or temporary disability per million manhours worked.',
+    evidence: 'Site safety committee logs, incident investigation reports, HSE monthly bulletin.',
+  },
+  'P3-E-04': {
+    title: 'Work-Related Fatalities',
+    meaning: 'Total number of work-related fatal accidents among permanent staff and contract laborers across all operating project sites and fabrication yards.',
+    evidence: 'Factories Act incident registers, statutory compensation claims.',
+  },
+  'P3-L-01': {
+    title: 'Health Insurance Coverage',
+    meaning: 'Percentage of the workforce covered under group health insurance and personal accident compensation schemes.',
+    evidence: 'Corporate group mediclaim policy schedule, active premium endorsement receipts.',
+  },
+  'P6-E-01': {
+    title: 'Total Energy Consumed (Gross)',
+    meaning: 'Total energy consumed across all operations (electricity drawn from grid + captive power + diesel fuel consumed in gensets & heavy equipment) converted to Gigajoules (GJ).',
+    evidence: 'DISCOM electricity invoices, HT substation logs, diesel fuel supply receipts. (1 kWh = 0.0036 GJ; 1 L Diesel ≈ 0.038 GJ).',
+  },
+  'P6-E-02': {
+    title: 'Energy Intensity per Turnover',
+    meaning: 'Ratio of total energy consumed (in Gigajoules) to total gross revenue/turnover in Crore Rupees (GJ / ₹ Crore). Measures corporate energy efficiency.',
+    evidence: 'Audited financial statements and consolidated utility energy logs.',
+  },
+  'P6-E-03': {
+    title: 'Direct Scope 1 GHG Emissions',
+    meaning: 'Gross direct greenhouse gas emissions resulting from stationary and mobile fuel combustion (diesel generators, heavy tunnel boring rigs, company transport) in metric tons of CO₂ equivalent (tCO₂e).',
+    evidence: 'Fuel weighbridge logs, generator run-hour logs, IPCC emission factor conversions.',
+  },
+  'P6-E-04': {
+    title: 'Indirect Scope 2 GHG Emissions',
+    meaning: 'Gross indirect greenhouse gas emissions from generation of purchased grid electricity consumed at project sites, pumping stations, and corporate offices.',
+    evidence: 'State DISCOM HT electricity bills, CEA Grid Emission Factor Database (v19/v20).',
+  },
+  'P6-E-05': {
+    title: 'Total Gross GHG Emissions (Scope 1 + 2)',
+    meaning: 'Combined total corporate carbon footprint: Direct Scope 1 emissions + Indirect Scope 2 emissions (tCO₂e). Key SEBI BRSR Core indicator.',
+    evidence: 'Consolidated GHG inventory spreadsheet, third-party GHG verification statement.',
+  },
+  'P6-E-06': {
+    title: 'Total Water Consumption',
+    meaning: 'Total volume of water withdrawn and consumed across all operations, labor colonies, and sites in Kiloliters (KL).',
+    evidence: 'Municipal water bills, flow meter registers, tanker logbooks, groundwater extraction logs.',
+  },
+  'P6-E-07': {
+    title: 'Water Intensity per Turnover',
+    meaning: 'Ratio of total water consumption (KL) to total gross revenue (₹ Crore). Measures water efficiency in industrial operations.',
+    evidence: 'Water balance audit, audited financials.',
+  },
+  'P6-E-08': {
+    title: 'Total Solid Waste Generated',
+    meaning: 'Total weight of solid waste generated across construction and project facilities in Metric Tons (MT), including metal scrap, concrete debris, and camp solid waste.',
+    evidence: 'Hazardous/Non-hazardous waste disposal manifests, weighbridge tickets, authorized recycler receipts.',
+  },
+  'P6-L-01': {
+    title: 'Renewable Energy Share (%)',
+    meaning: 'Percentage of total electricity and energy consumed that is derived from zero-emission renewable sources (rooftop solar, green open access tariffs).',
+    evidence: 'Solar net-metering generation logs, green energy open access certificates.',
+  },
+  'P6-L-02': {
+    title: 'Net-Zero Target Commitment Year',
+    meaning: 'The designated calendar year by which executive board policy commits the company to reach net-zero greenhouse gas neutrality.',
+    evidence: 'Board of Directors sustainability resolution, Climate Action transition roadmap.',
+  },
+  'P9-E-01': {
+    title: 'Consumer Complaints Received',
+    meaning: 'Total formal quality, safety, or service complaints received from clients or end consumers during the fiscal window.',
+    evidence: 'CRM grievance register, customer service escalation log.',
+  },
+  'P9-E-02': {
+    title: 'Consumer Complaints Resolved (%)',
+    meaning: 'Percentage of total consumer grievances successfully investigated and resolved within agreed SLA timelines.',
+    evidence: 'Grievance redressal tracking portal, customer sign-off reports.',
+  },
+};
+
+function decodeMetricCode(code, field) {
+  const parts = (code || '').split('-');
+  
+  // Resolve Principle key (P1 to P9)
+  let pKey = 'P6';
+  if (/^P[1-9]/i.test(parts[0])) {
+    pKey = parts[0].toUpperCase();
+  } else if (field?.principle) {
+    pKey = String(field.principle).startsWith('P') ? String(field.principle) : `P${field.principle}`;
+  } else if (parts[0] === 'ENV') {
+    pKey = 'P6';
+  } else if (parts[0] === 'SOC') {
+    pKey = 'P3';
+  } else if (parts[0] === 'GOV') {
+    pKey = 'P1';
+  }
+
+  const principleInfo = BRSR_PRINCIPLES_MAP[pKey] || {
+    name: `Principle ${pKey.replace('P', '')}`,
+    pillar: parts[0] === 'ENV' ? 'Environment' : parts[0] === 'SOC' ? 'Social' : parts[0] === 'GOV' ? 'Governance' : 'General Sustainability',
+    desc: 'Statutory Business Responsibility and Sustainability Principle.'
+  };
+
+  const isEssential = field?.is_mandatory ?? (parts[1] === 'E' || parts[0] === 'ENV' || parts[0] === 'SOC' || parts[0] === 'GOV');
+  const typeLabel = isEssential ? 'Essential Indicator (Mandatory)' : 'Leadership Indicator (Voluntary)';
+  const typeBadgeCls = isEssential ? 'badge-amber' : 'badge-purple';
+  const typeDesc = isEssential 
+    ? 'Mandatory statutory disclosure under SEBI BRSR Core for reasonable assurance by top listed entities.'
+    : 'Aspirational leadership disclosure showcasing advanced ESG performance benchmarks.';
+
+  const known = KNOWN_CODE_EXPLANATIONS[code] || {};
+  // Prioritize indicator_disclosure_name so official description is never lost
+  const title = field?.indicator_disclosure_name || known.title || field?.metric_name || field?.name || field?.label || `Indicator ${code}`;
+  const meaning = known.meaning || field?.definition || field?.notes || 'Disclose measured sustainability indicator data for this reporting period.';
+  const evidence = known.evidence || 'Utility bills, meter logs, HR records, or operational logbooks.';
+
+  return {
+    code,
+    pKey,
+    principleName: principleInfo.name,
+    pillar: field?.pillar || principleInfo.pillar,
+    principleDesc: principleInfo.desc,
+    typeKey: parts[1] || 'E',
+    typeLabel,
+    typeBadgeCls,
+    typeDesc,
+    numKey: parts[2] || '01',
+    title,
+    meaning,
+    evidence,
+    unit: field?.unit || 'units',
+    dataType: field?.data_type || field?.field_type || (field?.unit === '%' ? 'Percentage (%)' : field?.unit === 'count' ? 'Integer (Count)' : 'Numeric (Float)'),
+    isMandatory: field?.is_mandatory ?? isEssential,
+  };
+}
+
+// ── Hover Explainer Component for cryptic SEBI metric codes ──────────────────
+function CodeHelpButton({ code, field }) {
+  const [show, setShow] = useState(false);
+  const [coords, setCoords] = useState({ top: 0, left: 0 });
+  const btnRef = useRef(null);
+  const info = decodeMetricCode(code, field);
+
+  const handleMouseEnter = () => {
+    if (!btnRef.current) return;
+    const rect = btnRef.current.getBoundingClientRect();
+    const tooltipWidth = 360;
+    const left = Math.max(12, Math.min(rect.left - 20, window.innerWidth - tooltipWidth - 20));
+    const top = rect.bottom + 6;
+    setCoords({ top, left });
+    setShow(true);
+  };
+
+  const handleMouseLeave = () => {
+    setShow(false);
+  };
+
+  return (
+    <>
+      <button
+        ref={btnRef}
+        type="button"
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          setShow(prev => !prev);
+          handleMouseEnter();
+        }}
+        aria-label={`Explain code ${code}`}
+        title="Hover or click to see what this SEBI metric code means"
+        style={{
+          width: 17,
+          height: 17,
+          borderRadius: '50%',
+          border: '1px solid rgba(99, 102, 241, 0.5)',
+          background: show ? 'var(--brand-500)' : 'rgba(99, 102, 241, 0.16)',
+          color: show ? '#fff' : 'var(--brand-400)',
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          fontSize: '11px',
+          fontWeight: 800,
+          cursor: 'pointer',
+          padding: 0,
+          lineHeight: 1,
+          flexShrink: 0,
+          transition: 'all 0.15s ease',
+          boxShadow: show ? '0 0 8px rgba(99,102,241,0.6)' : 'none',
+        }}
+      >
+        ?
+      </button>
+
+      {show && typeof document !== 'undefined' && createPortal(
+        <div
+          onMouseEnter={() => setShow(true)}
+          onMouseLeave={() => setShow(false)}
+          style={{
+            position: 'fixed',
+            top: coords.top,
+            left: coords.left,
+            zIndex: 999999,
+            width: 360,
+            maxWidth: 'calc(100vw - 24px)',
+            background: 'rgba(15, 17, 34, 0.98)',
+            backdropFilter: 'blur(16px)',
+            border: '1.5px solid var(--border-brand)',
+            borderRadius: '10px',
+            boxShadow: '0 12px 30px rgba(0, 0, 0, 0.75), 0 0 20px rgba(99, 102, 241, 0.25)',
+            padding: '16px 18px',
+            color: 'var(--text-primary)',
+            fontSize: '12px',
+            animation: 'fadeIn 0.15s ease-out',
+            pointerEvents: 'auto',
+          }}
+        >
+          {/* Header */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--border-subtle)', paddingBottom: '10px', marginBottom: '10px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase' }}>SEBI Code:</span>
+              <span style={{ fontFamily: 'JetBrains Mono', fontWeight: 800, fontSize: '13px', color: 'var(--brand-400)' }}>
+                {info.code}
+              </span>
+            </div>
+            <span className={`badge ${info.typeBadgeCls}`} style={{ fontSize: '10px', padding: '2px 8px' }}>
+              {info.typeKey === 'E' ? 'Essential (Mandatory)' : 'Leadership (Voluntary)'}
+            </span>
+          </div>
+
+          {/* Principle Bar */}
+          <div style={{ background: 'rgba(99, 102, 241, 0.08)', borderRadius: 6, padding: '8px 10px', marginBottom: 10, border: '1px solid rgba(99, 102, 241, 0.2)' }}>
+            <div style={{ fontSize: '11px', fontWeight: 700, color: '#fff', marginBottom: 2 }}>
+              {info.principleName}
+            </div>
+            <div style={{ fontSize: '11px', color: 'var(--text-secondary)', lineHeight: 1.3 }}>
+              {info.principleDesc}
+            </div>
+          </div>
+
+          {/* Code Decomposition */}
+          <div style={{ marginBottom: 10 }}>
+            <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--brand-300)', textTransform: 'uppercase', marginBottom: 4 }}>
+              Code Breakdown:
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6 }}>
+              <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-subtle)', borderRadius: 4, padding: '4px 6px', textAlign: 'center' }}>
+                <div style={{ fontFamily: 'JetBrains Mono', fontWeight: 700, color: 'var(--brand-400)', fontSize: '12px' }}>{info.pKey}</div>
+                <div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Principle {info.pKey.replace('P','')}</div>
+              </div>
+              <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-subtle)', borderRadius: 4, padding: '4px 6px', textAlign: 'center' }}>
+                <div style={{ fontFamily: 'JetBrains Mono', fontWeight: 700, color: info.typeKey === 'E' ? '#fbbf24' : '#a78bfa', fontSize: '12px' }}>
+                  {info.typeKey === 'E' ? 'E (Essential)' : 'L (Leadership)'}
+                </div>
+                <div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Statutory Level</div>
+              </div>
+              <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-subtle)', borderRadius: 4, padding: '4px 6px', textAlign: 'center' }}>
+                <div style={{ fontFamily: 'JetBrains Mono', fontWeight: 700, color: '#34d399', fontSize: '12px' }}>#{info.numKey}</div>
+                <div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Indicator Seq</div>
+              </div>
+            </div>
+          </div>
+
+          {/* What is it? */}
+          <div style={{ marginBottom: 10 }}>
+            <div style={{ fontSize: '11px', fontWeight: 700, color: '#fff', textTransform: 'uppercase', marginBottom: 3 }}>
+              What is this Indicator?
+            </div>
+            <p style={{ margin: 0, fontSize: '11.5px', color: 'var(--text-secondary)', lineHeight: 1.45 }}>
+              {info.meaning}
+            </p>
+          </div>
+
+          {/* Data Type & Evidence */}
+          <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: 8, display: 'flex', flexDirection: 'column', gap: 4, fontSize: '11px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span style={{ color: 'var(--text-muted)' }}>Measurement Unit:</span>
+              <strong style={{ color: '#fff' }}>{info.unit}</strong>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span style={{ color: 'var(--text-muted)' }}>Data Type:</span>
+              <span className="badge badge-gray" style={{ fontSize: '10px', padding: '1px 6px' }}>{info.dataType}</span>
+            </div>
+            <div style={{ marginTop: 2, color: 'var(--text-muted)', fontSize: '10.5px' }}>
+              <strong>Recommended Evidence:</strong> {info.evidence}
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+    </>
+  );
+}
+
+// ── Backend metric code → BRSR form code mapping ─────────────────────────────
+// Backend E1 engine uses semantic codes (ENV-ENERGY-001, ENV-WATER-001)
+// BRSR form uses SEBI statutory codes (P6-E-01, P6-E-06)
+// This map translates between them so OCR results auto-fill the right form fields.
+const METRIC_CODE_MAP = {
+  // Electricity / Energy
+  'ENV-ENERGY-001': 'P6-E-01',   // Total electricity (kWh) → Total Energy Consumed (GJ)
+  'ENV-ENERGY-002': 'P6-E-01',   // Diesel fuel energy → Total Energy Consumed (GJ)
+  // GHG / Emissions
+  'ENV-GHG-001': 'P6-E-03',      // Scope 1 GHG → Direct GHG Emissions
+  'ENV-GHG-002': 'P6-E-04',      // Scope 2 GHG → Indirect GHG Emissions
+  'ENV-GHG-003': 'P6-E-05',      // Total GHG → Total GHG Emissions
+  // Water
+  'ENV-WATER-001': 'P6-E-06',    // Water consumption → Total Water Consumption
+  'ENV-WATER-002': 'P6-E-07',    // Water intensity → Water Intensity
+  // Waste
+  'ENV-WASTE-001': 'P6-E-08',    // Waste → Total Waste Generated
+  // Safety / Social
+  'SOC-SAFE-001': 'P3-E-03',     // LTI incidents → LTIFR
+  'SOC-EMP-001': 'P3-E-01',      // Male employees
+  'SOC-EMP-002': 'P3-E-02',      // Female employees
+  'SOC-SAFE-002': 'P3-E-04',     // Fatalities
+  // Fallback: direct P-code pass-through
+};
+
+/** Resolve a backend metric code to a BRSR form code */
+function resolveMetricCode(backendCode) {
+  if (!backendCode) return null;
+  // Already in BRSR P-code format (P6-E-01 etc.)
+  if (/^P\d+-[EL]-\d+$/.test(backendCode)) return backendCode;
+  return METRIC_CODE_MAP[backendCode] || null;
+}
+
+// ── Energy Density Constants (standardised IPCC / MoPNG values) ─────────────
+const FUEL_ENERGY_DENSITY = {
+  petrol:  { density: 32.0,  unit_in: 'L',       unit_out: 'GJ', formula: 'Petrol Volume (L) × Energy Density (32.0 MJ/L) ÷ 1000',           factor: 0.032  },  // 32 MJ/L → GJ
+  diesel:  { density: 35.8,  unit_in: 'L',       unit_out: 'GJ', formula: 'Diesel Volume (L) × Energy Density (35.8 MJ/L) ÷ 1000',           factor: 0.0358 },  // 35.8 MJ/L (HSD)
+  coal:    { density: 25.0,  unit_in: 'tonnes',  unit_out: 'GJ', formula: 'Coal Mass (tonnes) × Energy Density (25.0 GJ/tonne)',              factor: 25.0   },  // 25 GJ/tonne bituminous avg
+};
+
+/**
+ * Convert backend extracted_fields to BRSR form format,
+ * applying the correct energy-density formula for each fuel sub-type.
+ * @param {Array}  extractedFields - raw fields from E1 pipeline
+ * @param {string} docType         - 'electricity_bill' | 'fuel_receipt' | etc.
+ * @param {string} filename        - original file name (for notes)
+ * @param {string} fuelSubType     - 'petrol' | 'diesel' | 'coal'  (only for fuel_receipt)
+ * @param {string} targetIndicator - BRSR code to target (e.g. 'P6-E-01')
+ */
+function mapBackendFieldsToForm(extractedFields, docType, filename, fuelSubType = 'diesel', targetIndicator = null) {
+  const DOC_TYPE_METRIC_NAMES = {
+    'electricity_bill': { code: 'P6-E-01', name: 'Total Energy Consumed (Grid Electricity)', unit: 'GJ' },
+    'fuel_receipt':     { code: 'P6-E-01', name: 'Total Energy Consumed (Fuel)', unit: 'GJ' },
+    'water_manifest':   { code: 'P6-E-06', name: 'Total Water Consumption', unit: 'KL' },
+    'waste_manifest':   { code: 'P6-E-08', name: 'Total Waste Generated', unit: 'MT' },
+    'safety_log':       { code: 'P3-E-03', name: 'Lost-Time Injury Frequency Rate', unit: 'per million manhours' },
+  };
+
+  const fuelSpec = FUEL_ENERGY_DENSITY[fuelSubType] || FUEL_ENERGY_DENSITY.diesel;
+
+  return (extractedFields || []).map(f => {
+    // Resolve BRSR metric code — prefer user-selected indicator override
+    const defaultCode = DOC_TYPE_METRIC_NAMES[docType]?.code || 'P6-E-01';
+    const brsrCode = targetIndicator || resolveMetricCode(f.metric) || defaultCode;
+
+    let value = parseFloat(f.value) || 0;
+    let unit  = f.unit || 'units';
+    let conversionNote = '';
+
+    const unitLower = unit.toLowerCase().trim();
+
+    if (docType === 'electricity_bill') {
+      // ── Electricity: ALWAYS convert to GJ — OCR unit labels vary (kWh, units, kwhr, k.w.h, KWH, etc.)
+      // We trust that electricity bills always report consumption in kWh.
+      conversionNote = `${value.toFixed(2)} kWh × 0.0036 GJ/kWh`;
+      value = parseFloat((value * 0.0036).toFixed(6));
+      unit  = 'GJ';
+
+    } else if (docType === 'fuel_receipt') {
+      // ── Fuel: ALWAYS apply formula based on user-selected fuelSubType ───────────────────────
+      // We NEVER store raw litres or tonnes. The user has explicitly chosen the fuel type.
+      // OCR unit strings vary widely ("Ltr", "lts", "L", "MT", "Kg") — we must not rely on them.
+
+      if (fuelSubType === 'coal') {
+        // Coal Mass (tonnes) × Energy Density (GJ/tonne)
+        // Handle kg → convert to tonnes first
+        const isKg = /^k\.?g\.?s?$/.test(unitLower);
+        const rawTonnes = isKg ? value / 1000 : value;
+        const massDisplay = isKg
+          ? `${value.toFixed(2)} kg ÷ 1000 = ${rawTonnes.toFixed(6)} tonnes`
+          : `${rawTonnes.toFixed(4)} tonnes`;
+        conversionNote = `Coal Mass (${massDisplay}) × Energy Density (25.0 GJ/tonne)`;
+        value = parseFloat((rawTonnes * fuelSpec.factor).toFixed(6));  // factor = 25.0
+        unit  = 'GJ';
+
+      } else {
+        // Petrol / Diesel: Volume (L) × Energy Density (MJ/L) ÷ 1000
+        // Handle kL → multiply by 1000 to get litres first
+        const isKL = /^k\.?l\.?s?$|^kilolitr/.test(unitLower);
+        const rawLitres = isKL ? value * 1000 : value;
+        const volDisplay = isKL
+          ? `${value.toFixed(3)} kL × 1000 = ${rawLitres.toFixed(2)} L`
+          : `${rawLitres.toFixed(2)} L`;
+        const fuelName = fuelSubType === 'petrol' ? 'Petrol' : 'Diesel';
+        conversionNote = `${fuelName} Volume (${volDisplay}) × Energy Density (${fuelSpec.density} MJ/L) ÷ 1000`;
+        value = parseFloat((rawLitres * fuelSpec.factor).toFixed(6));  // factor = density / 1000
+        unit  = 'GJ';
+      }
+    }
+
+    const fuelLabel = docType === 'fuel_receipt'
+      ? `${fuelSubType.charAt(0).toUpperCase() + fuelSubType.slice(1)} Fuel`
+      : '';
+
+    return {
+      metric:     brsrCode,
+      name:       f.name || DOC_TYPE_METRIC_NAMES[docType]?.name?.replace('Fuel', fuelLabel) || `Indicator ${brsrCode}`,
+      value:      String(value),
+      unit,
+      confidence: f.confidence || 0.90,
+      metadata:   f.metadata || {},
+      conversionNote,
+      fuelSubType: docType === 'fuel_receipt' ? fuelSubType : null,
+    };
+  });
+}
+
 
 export default function DataEntry() {
   const location = useLocation();
@@ -27,19 +588,61 @@ export default function DataEntry() {
   const [showEntityDetails, setShowEntityDetails] = useState(false);
   const [showPeriodDetails, setShowPeriodDetails] = useState(false);
 
-  // Bill Drag-and-Drop and AI Scraping State
+  // Bill Drag-and-Drop, Multi-Bill Accumulation & AI Scraping State
   const [billDragging, setBillDragging] = useState(false);
   const [billUploading, setBillUploading] = useState(false);
+  const [billProgress, setBillProgress] = useState('');
   const [billModalOpen, setBillModalOpen] = useState(false);
   const [billType, setBillType] = useState('electricity_bill'); // user-selected bill type
+  const [fuelSubType, setFuelSubType] = useState('diesel');    // petrol | diesel | coal
+  const [selectedIndicator, setSelectedIndicator] = useState(''); // BRSR code the user targets
   const [scrapedBillFields, setScrapedBillFields] = useState([]);
   const [scrapedBillEvidence, setScrapedBillEvidence] = useState(null);
+  const [accumulatedBills, setAccumulatedBills] = useState([]);
   const billFileRef = useRef();
+
+  // Reset accumulated bills and clear digital form value for the metric
+  const handleResetAccumulatedBills = (targetMetric = null) => {
+    const DOC_TYPE_TO_CODE = {
+      'electricity_bill': 'P6-E-01',
+      'fuel_receipt': 'P6-E-01',
+      'water_manifest': 'P6-E-06',
+      'waste_manifest': 'P6-E-08',
+      'safety_log': 'P3-E-03',
+    };
+    const targetCode = targetMetric || DOC_TYPE_TO_CODE[billType] || 'P6-E-01';
+
+    let initialVal = '';
+    if (formSchema?.sections) {
+      for (const s of formSchema.sections) {
+        const found = s.fields.find(f => f.metric_code === targetCode);
+        if (found && found.current_value !== null && found.current_value !== undefined) {
+          initialVal = found.current_value;
+          break;
+        }
+      }
+    }
+
+    setFormData(prev => ({
+      ...prev,
+      [targetCode]: {
+        ...(prev[targetCode] || { metric_code: targetCode }),
+        value_numeric: initialVal,
+        notes: '',
+        ai_verified: false,
+      },
+    }));
+
+    setAccumulatedBills(prev => prev.filter(b => b.metric !== targetCode));
+    setNotice({
+      type: 'success',
+      text: `🔄 Successfully reset accumulated bills and restored indicator ${targetCode} to initial state.`,
+    });
+  };
 
   // Default entity and period
   useEffect(() => {
     if (!selectedEntity && nodes.length > 0) {
-      // Prioritize user's assigned node, or first subsidiary/project
       const defaultNode = (user?.org_node_id && nodes.find(n => n.id === user.org_node_id)) ||
         nodes.find(n => n.type === 'subsidiary') || nodes[0];
       setSelectedEntity(defaultNode.id);
@@ -123,61 +726,131 @@ export default function DataEntry() {
     }));
   };
 
-  // AI Bill Upload & Scraping Handler
+  // AI Bill Multi-Upload & Scraping Handler — accumulates multiple bills and adds up values
   const handleBillDropOrSelect = async (files) => {
-    const file = files?.[0];
-    if (!file) return;
+    const fileList = Array.from(files || []);
+    if (!fileList.length) return;
 
     setBillUploading(true);
     setNotice(null);
 
-    const fd = new FormData();
-    fd.append('file', file);
-    fd.append('run_ocr', 'true');
-    fd.append('doc_type_hint', billType); // pass user-selected bill type as context
+    let successCount = 0;
+    const errors = [];
+    const newBills = [];
+    let lastMappedFields = [];
+    let lastEvidence = null;
 
-    try {
-      const res = await evidenceApi.upload(fd);
-      const evidence = res.data.evidence;
-      const isRelevant = res.data.is_relevant !== false; // default true
-      const rejectionReason = res.data.rejection_reason;
-      const fields = res.data.extracted_fields || [];
+    for (let i = 0; i < fileList.length; i++) {
+      const file = fileList[i];
+      setBillProgress(`Extracting bill ${i + 1} of ${fileList.length}: ${file.name}...`);
 
-      if (!isRelevant) {
-        // Document rejected — show error and do NOT open modal with fake data
-        setNotice({
-          type: 'error',
-          text: `⛔ Document rejected: ${rejectionReason || 'This file does not appear to be a relevant ESG utility bill.'}`,
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('run_ocr', 'true');
+      fd.append('doc_type_hint', billType);
+
+      try {
+        const res = await evidenceApi.upload(fd);
+        const evidence = res.data.evidence;
+        const isRelevant = res.data.is_relevant !== false;
+        const rejectionReason = res.data.rejection_reason;
+        const rawFields = res.data.extracted_fields || [];
+
+        if (!isRelevant) {
+          errors.push(`"${file.name}": ${rejectionReason || 'Document type mismatch or unrelated document.'}`);
+          continue;
+        }
+
+        // Pass fuelSubType + selectedIndicator for proper formula application
+        const mappedFields = mapBackendFieldsToForm(
+          rawFields,
+          billType,
+          file.name,
+          fuelSubType,
+          selectedIndicator || null
+        );
+        if (mappedFields.length === 0) {
+          errors.push(`"${file.name}": Accepted as ${billType.replace(/_/g, ' ')} but no numeric consumption could be extracted.`);
+          continue;
+        }
+
+        lastMappedFields = mappedFields;
+        lastEvidence = evidence;
+        successCount++;
+
+        mappedFields.forEach(f => {
+          const numVal = parseFloat(f.value);
+          if (!isNaN(numVal) && numVal > 0) {
+            newBills.push({
+              id: evidence?.id || Math.random().toString(),
+              filename: file.name,
+              metric: f.metric,
+              name: f.name,
+              addedValue: numVal,
+              unit: f.unit || 'units',
+              invoiceNumber: f.metadata?.invoice_number || 'N/A',
+              meterId: f.metadata?.meter_id || 'N/A',
+              billingPeriod: f.metadata?.billing_period || 'Current',
+              conversionNote: f.conversionNote || '',
+              fuelSubType: f.fuelSubType || null,
+            });
+          }
         });
-        setBillUploading(false);
-        if (billFileRef.current) billFileRef.current.value = '';
-        return;
+      } catch (err) {
+        console.error(`Bill upload error for ${file.name}:`, err);
+        errors.push(`"${file.name}": ${err.response?.data?.detail || err.message || 'Upload error'}`);
       }
+    }
 
-      setScrapedBillEvidence(evidence);
-      setScrapedBillFields(fields);
+    if (newBills.length > 0) {
+      setFormData(prev => {
+        const updated = { ...prev };
+        newBills.forEach(b => {
+          const existing = parseFloat(updated[b.metric]?.value_numeric) || 0;
+          const totalVal = parseFloat((existing + b.addedValue).toFixed(4));
 
-      if (fields.length === 0) {
-        setNotice({
-          type: 'error',
-          text: `⚠️ Document accepted as ESG bill but no numeric values could be extracted. Please enter data manually.`,
+          const allForMetric = [
+            ...accumulatedBills.filter(item => item.metric === b.metric),
+            ...newBills.filter(item => item.metric === b.metric)
+          ];
+          const summaryNote = `[AI OCR Accumulated (${allForMetric.length} bills)]: ${allForMetric.map(item => `${item.filename} (+${item.addedValue} ${item.unit})`).join(' + ')}`;
+
+          updated[b.metric] = {
+            ...(updated[b.metric] || { metric_code: b.metric }),
+            value_numeric: totalVal,
+            unit: b.unit || 'units',
+            status: 'ACTUAL',
+            notes: summaryNote,
+            ai_verified: true,
+          };
         });
-        setBillUploading(false);
-        if (billFileRef.current) billFileRef.current.value = '';
-        return;
+        return updated;
+      });
+
+      setAccumulatedBills(prev => [...prev, ...newBills]);
+      setScrapedBillEvidence(lastEvidence);
+      setScrapedBillFields(lastMappedFields);
+
+      let successMsg = `✨ AI OCR successfully parsed and accumulated ${successCount} bill(s) into digital form!`;
+      if (errors.length > 0) {
+        successMsg += ` (Note: ${errors.length} file(s) skipped: ${errors.join('; ')})`;
       }
+      setNotice({
+        type: errors.length > 0 && successCount === 0 ? 'error' : 'success',
+        text: successMsg,
+      });
 
       setBillModalOpen(true);
-    } catch (err) {
-      console.error('Bill OCR upload error:', err);
+    } else {
       setNotice({
         type: 'error',
-        text: `Upload failed: ${err.response?.data?.detail || err.message || 'Server error. Please try again.'}`,
+        text: errors.length > 0 ? `Upload failed: ${errors.join(' | ')}` : 'No valid ESG bill data could be extracted.',
       });
-    } finally {
-      setBillUploading(false);
-      if (billFileRef.current) billFileRef.current.value = '';
     }
+
+    setBillUploading(false);
+    setBillProgress('');
+    if (billFileRef.current) billFileRef.current.value = '';
   };
 
   const handleBillFieldChange = (index, key, val) => {
@@ -598,100 +1271,346 @@ export default function DataEntry() {
         </div>
       </div>
 
-      {/* AI Bill Type Selector + Drop Zone */}
-      {/* Bill Type Selector Pill Row */}
+      {/* ═══════════════════════════════════════════════════════════
+           AI OCR Auto-Fill Panel  (E1 Engine)
+           Step 1 → Indicator  |  Step 2 → Bill type
+           Step 3 → Fuel sub-type (if fuel)  |  Step 4 → Upload
+      ═══════════════════════════════════════════════════════════ */}
       <div style={{
         display: 'flex',
         flexDirection: 'column',
-        gap: 12,
-        background: 'rgba(99, 102, 241, 0.04)',
-        border: '1px solid rgba(99, 102, 241, 0.25)',
+        gap: 0,
+        background: 'linear-gradient(145deg, rgba(15,17,34,0.9), rgba(99,102,241,0.06))',
+        border: '1px solid rgba(99, 102, 241, 0.30)',
         borderRadius: 'var(--radius-lg)',
-        padding: '16px 20px',
+        overflow: 'hidden',
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginRight: 4 }}>
-            <div style={{ width: 32, height: 32, borderRadius: '8px', background: 'linear-gradient(135deg, var(--brand-600), var(--brand-400))', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-              <Sparkles size={16} color="#fff" />
-            </div>
-            <div>
-              <div style={{ fontSize: '13px', fontWeight: 700, color: '#fff' }}>AI Bill Auto-Fill (E1 OCR)</div>
-              <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Select bill type, then upload</div>
-            </div>
-          </div>
 
-          {/* Bill Type Pills */}
-          {[
-            { key: 'electricity_bill', label: '⚡ Electricity', color: '#f59e0b' },
-            { key: 'fuel_receipt',     label: '🛢 Fuel / Diesel', color: '#ef4444' },
-            { key: 'water_manifest',   label: '💧 Water', color: '#3b82f6' },
-            { key: 'waste_manifest',   label: '♻️ Waste', color: '#10b981' },
-            { key: 'safety_log',       label: '🦺 Safety Log', color: '#8b5cf6' },
-          ].map(({ key, label, color }) => (
-            <button
-              key={key}
-              type="button"
-              onClick={() => setBillType(key)}
-              style={{
-                padding: '6px 14px',
-                borderRadius: '20px',
-                border: `1.5px solid ${billType === key ? color : 'var(--border-default)'}`,
-                background: billType === key ? `${color}22` : 'transparent',
-                color: billType === key ? color : 'var(--text-secondary)',
-                fontSize: '12px',
-                fontWeight: 600,
-                cursor: 'pointer',
-                transition: 'all 0.15s ease',
-                outline: 'none',
+        {/* ── Header bar ── */}
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 10,
+          padding: '14px 20px',
+          background: 'rgba(99, 102, 241, 0.10)',
+          borderBottom: '1px solid rgba(99,102,241,0.20)',
+        }}>
+          <div style={{ width: 34, height: 34, borderRadius: '9px', background: 'linear-gradient(135deg, var(--brand-600), var(--brand-400))', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <Sparkles size={17} color="#fff" />
+          </div>
+          <div>
+            <div style={{ fontSize: '13px', fontWeight: 700, color: '#fff', letterSpacing: '-0.01em' }}>AI Bill Auto-Fill (E1 OCR Engine)</div>
+            <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Select an indicator → pick bill type → upload bills — values auto-fill &amp; accumulate</div>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14, padding: '18px 20px' }}>
+
+          {/* ── STEP 1: Indicator Disclosure Name ── */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+              <span style={{ width: 20, height: 20, borderRadius: '50%', background: 'var(--brand-500)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: 800, color: '#fff', flexShrink: 0 }}>1</span>
+              <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Indicator Disclosure Name</span>
+              <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>(which BRSR KPI should be filled?)</span>
+            </div>
+            <select
+              value={selectedIndicator}
+              onChange={e => {
+                setSelectedIndicator(e.target.value);
+                // Reset bill type so user picks fresh for the new indicator
+                setBillType('');
+                setFuelSubType('diesel');
               }}
+              className="form-control"
+              style={{ fontSize: '13px', fontWeight: 600, background: 'var(--bg-elevated)', border: '1px solid var(--border-strong)', height: '40px' }}
             >
-              {label}
-            </button>
-          ))}
-        </div>
-
-        {/* Drag & Drop Zone */}
-        <div
-          onDragOver={(e) => { e.preventDefault(); setBillDragging(true); }}
-          onDragLeave={() => setBillDragging(false)}
-          onDrop={(e) => {
-            e.preventDefault();
-            setBillDragging(false);
-            handleBillDropOrSelect(e.dataTransfer.files);
-          }}
-          style={{
-            border: `2px dashed ${billDragging ? 'var(--brand-400)' : 'rgba(99, 102, 241, 0.35)'}`,
-            borderRadius: 'var(--radius-md)',
-            padding: '14px 18px',
-            background: billDragging ? 'rgba(99, 102, 241, 0.10)' : 'rgba(99, 102, 241, 0.02)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: '12px',
-            flexWrap: 'wrap',
-            transition: 'all 0.2s ease',
-            cursor: 'pointer',
-          }}
-          onClick={() => billFileRef.current?.click()}
-        >
-          <div style={{ fontSize: '12px', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 8 }}>
-            <Upload size={15} color="var(--brand-400)" />
-            <span>
-              Drop your <strong style={{ color: '#fff' }}>{
-                { electricity_bill: 'Electricity Bill', fuel_receipt: 'Fuel / Diesel Receipt', water_manifest: 'Water Bill', waste_manifest: 'Waste Manifest', safety_log: 'Safety Log' }[billType]
-              }</strong> here, or click to browse — accepts PDF and image files (JPG, PNG)
-            </span>
+              <option value="">— Select an indicator first —</option>
+              {formSchema?.sections?.length ? (
+                formSchema.sections.map(sec => (
+                  <optgroup key={sec.principle} label={`${sec.principle} · ${sec.principle_name || sec.title}`}>
+                    {sec.fields.map(f => (
+                      <option key={f.metric_code} value={f.metric_code}>
+                        {f.metric_code} · {f.indicator_disclosure_name || f.metric_name || f.label || f.metric_code} ({f.unit || 'units'})
+                      </option>
+                    ))}
+                  </optgroup>
+                ))
+              ) : (
+                <>
+                  <optgroup label="⚡ Energy & Emissions (Principle 6)">
+                    <option value="ENV-ENERGY-001">ENV-ENERGY-001 · Total Electricity Consumption (MWh/GJ)</option>
+                    <option value="ENV-ENERGY-002">ENV-ENERGY-002 · Fuel Consumption - Petrol, Diesel, Coal (GJ)</option>
+                    <option value="P6-E-01">P6-E-01 · Total Energy Consumed (Gross) (GJ)</option>
+                    <option value="ENV-GHG-001">ENV-GHG-001 · Direct Scope 1 GHG Emissions (tCO₂e)</option>
+                    <option value="ENV-GHG-002">ENV-GHG-002 · Indirect Scope 2 GHG Emissions (tCO₂e)</option>
+                  </optgroup>
+                  <optgroup label="💧 Water (Principle 6)">
+                    <option value="ENV-WATER-001">ENV-WATER-001 · Total Water Consumption (KL)</option>
+                    <option value="P6-E-06">P6-E-06 · Total Water Consumption (KL)</option>
+                  </optgroup>
+                  <optgroup label="♻️ Waste (Principle 6)">
+                    <option value="ENV-WASTE-001">ENV-WASTE-001 · Total Waste Generated (MT)</option>
+                    <option value="P6-E-08">P6-E-08 · Total Solid Waste Generated (MT)</option>
+                  </optgroup>
+                  <optgroup label="👷 Safety & Social (Principle 3)">
+                    <option value="SOC-SAFE-001">SOC-SAFE-001 · Lost-Time Injury Frequency Rate (LTIFR)</option>
+                    <option value="SOC-SAFE-002">SOC-SAFE-002 · Work-Related Fatalities (count)</option>
+                    <option value="SOC-EMP-001">SOC-EMP-001 · Total Workforce Headcount (count)</option>
+                    <option value="SOC-WELF-001">SOC-WELF-001 · Training Hours per Employee (hours)</option>
+                  </optgroup>
+                </>
+              )}
+            </select>
           </div>
-          <button
-            type="button"
-            disabled={billUploading}
-            className="btn btn-secondary btn-sm"
-            style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '12px', borderColor: 'var(--brand-400)', color: 'var(--brand-400)', pointerEvents: 'none' }}
-          >
-            {billUploading ? 'Extracting...' : 'Browse & Scrape'}
-          </button>
-        </div>
-      </div>
+
+          {/* ── STEP 2: Bill / Document Type Dropdown (only after indicator selected) ── */}
+          {selectedIndicator && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                <span style={{ width: 20, height: 20, borderRadius: '50%', background: 'var(--brand-500)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: 800, color: '#fff', flexShrink: 0 }}>2</span>
+                <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Bill / Document Type</span>
+                <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>(select the type of supporting document)</span>
+              </div>
+              <select
+                value={billType}
+                onChange={e => {
+                  setBillType(e.target.value);
+                  if (e.target.value !== 'fuel_receipt') setFuelSubType('diesel');
+                }}
+                className="form-control"
+                style={{ fontSize: '13px', fontWeight: 600, background: 'var(--bg-elevated)', border: '1px solid var(--border-strong)', height: '40px' }}
+              >
+                <option value="">— Select bill / document type —</option>
+                <option value="electricity_bill">⚡ Electricity Bill</option>
+                <option value="fuel_receipt">🛢 Fuel Receipt</option>
+                <option value="water_manifest">💧 Water Bill</option>
+                <option value="waste_manifest">♻️ Waste Manifest</option>
+                <option value="safety_log">🦺 Safety Log</option>
+              </select>
+
+              {/* Electricity formula hint */}
+              {billType === 'electricity_bill' && (
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 10,
+                  padding: '9px 14px',
+                  background: 'rgba(245,158,11,0.07)',
+                  border: '1px solid rgba(245,158,11,0.22)',
+                  borderRadius: '8px',
+                  marginTop: 2,
+                }}>
+                  <span style={{ fontSize: '16px' }}>🧮</span>
+                  <div>
+                    <div style={{ fontSize: '11px', fontWeight: 700, color: '#f59e0b' }}>Electricity → GJ Conversion Formula</div>
+                    <div style={{ fontFamily: 'JetBrains Mono', fontSize: '12px', color: '#fff', marginTop: 2 }}>
+                      Energy (GJ) = kWh × 0.0036
+                    </div>
+                    <div style={{ fontSize: '10.5px', color: 'var(--text-muted)', marginTop: 2 }}>
+                      AI extracts kWh from DISCOM/EB bill → auto-converts to GJ (BRSR unit) and accumulates with fuel energy into the digital form
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── STEP 3: Fuel Sub-Type Dropdown (only when fuel_receipt selected) ── */}
+          {billType === 'fuel_receipt' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                <span style={{ width: 20, height: 20, borderRadius: '50%', background: '#ef4444', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: 800, color: '#fff', flexShrink: 0 }}>3</span>
+                <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Type of Fuel</span>
+                <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>(select fuel type for correct energy density formula)</span>
+              </div>
+              <select
+                value={fuelSubType}
+                onChange={e => setFuelSubType(e.target.value)}
+                className="form-control"
+                style={{ fontSize: '13px', fontWeight: 600, background: 'var(--bg-elevated)', border: '1px solid rgba(239,68,68,0.4)', height: '40px', color: '#fff' }}
+              >
+                <option value="diesel">🛢 Diesel (HSD) — 35.8 MJ/L</option>
+                <option value="petrol">⛽ Petrol (MS) — 32.0 MJ/L</option>
+                <option value="coal">⛏ Coal (Bituminous) — 25.0 GJ/tonne</option>
+              </select>
+
+              {/* Formula Preview for selected fuel */}
+              {(() => {
+                const spec = FUEL_ENERGY_DENSITY[fuelSubType];
+                if (!spec) return null;
+                const fmtLabel = { diesel: 'Diesel (HSD)', petrol: 'Petrol (MS)', coal: 'Coal (Bituminous)' }[fuelSubType] || fuelSubType;
+                const fuelColor = { diesel: '#ef4444', petrol: '#f97316', coal: '#a8a29e' }[fuelSubType] || '#ef4444';
+                return (
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 10,
+                    padding: '9px 14px',
+                    background: `rgba(239,68,68,0.07)`,
+                    border: `1px solid rgba(239,68,68,0.25)`,
+                    borderRadius: '8px',
+                    marginTop: 2,
+                  }}>
+                    <span style={{ fontSize: '16px' }}>🧮</span>
+                    <div>
+                      <div style={{ fontSize: '11px', fontWeight: 700, color: fuelColor }}>{fmtLabel} → GJ Conversion Formula</div>
+                      <div style={{ fontFamily: 'JetBrains Mono', fontSize: '12px', color: '#fff', marginTop: 2 }}>
+                        {spec.formula}
+                      </div>
+                      <div style={{ fontSize: '10.5px', color: 'var(--text-muted)', marginTop: 2 }}>
+                        AI extracts raw {spec.unit_in === 'L' ? 'volume in litres' : 'mass in tonnes'} from bill → auto-converts to GJ and accumulates with electricity bills into the digital form
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+          )}
+
+          {/* ── STEP 4: Drop Zone (only after indicator + bill type chosen) ── */}
+          {selectedIndicator && billType && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+              <span style={{ width: 20, height: 20, borderRadius: '50%', background: 'var(--brand-500)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: 800, color: '#fff', flexShrink: 0 }}>{billType === 'fuel_receipt' ? '4' : '3'}</span>
+              <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Upload Bill(s)</span>
+              <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>(multiple files supported — electricity + fuel values accumulate)</span>
+            </div>
+
+            {/* Drag & Drop Zone */}
+            <div
+              onDragOver={(e) => { e.preventDefault(); setBillDragging(true); }}
+              onDragLeave={() => setBillDragging(false)}
+              onDrop={(e) => {
+                e.preventDefault();
+                setBillDragging(false);
+                handleBillDropOrSelect(e.dataTransfer.files);
+              }}
+              style={{
+                border: `2px dashed ${billDragging ? 'var(--brand-400)' : 'rgba(99, 102, 241, 0.35)'}`,
+                borderRadius: 'var(--radius-md)',
+                padding: '14px 18px',
+                background: billDragging ? 'rgba(99, 102, 241, 0.10)' : 'rgba(99, 102, 241, 0.02)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: '12px',
+                flexWrap: 'wrap',
+                transition: 'all 0.2s ease',
+                cursor: 'pointer',
+              }}
+              onClick={() => billFileRef.current?.click()}
+            >
+              <div style={{ fontSize: '12px', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Upload size={15} color="var(--brand-400)" />
+                <span>
+                  Drop your <strong style={{ color: '#fff' }}>{
+                    { electricity_bill: 'Electricity Bill', fuel_receipt: 'Fuel / Diesel Receipt', water_manifest: 'Water Bill', waste_manifest: 'Waste Manifest', safety_log: 'Safety Log' }[billType]
+                  }</strong> here, or click to browse (PDF, JPG, PNG)
+                </span>
+              </div>
+
+              {/* Hidden Multi-File Upload Input */}
+              <input
+                ref={billFileRef}
+                type="file"
+                multiple
+                accept=".pdf, .png, .jpg, .jpeg"
+                onChange={(e) => handleBillDropOrSelect(e.target.files)}
+                style={{ display: 'none' }}
+                disabled={billUploading}
+              />
+
+              <button
+                type="button"
+                disabled={billUploading}
+                className="btn btn-primary btn-sm"
+                style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '12px', flexShrink: 0 }}
+                onClick={(e) => { e.stopPropagation(); billFileRef.current?.click(); }}
+              >
+                <Upload size={13} />
+                <span>{billUploading ? (billProgress || 'Extracting with AI OCR...') : '📂 Browse & Upload Bills'}</span>
+              </button>
+            </div>
+          </div>
+          )}{/* end upload zone conditional */}
+
+          {/* Accumulated Multi-Bill Summary Strip */}
+          {accumulatedBills.length > 0 && (
+            <div style={{
+              background: 'rgba(16, 185, 129, 0.06)',
+              border: '1px solid rgba(16, 185, 129, 0.28)',
+              borderRadius: 'var(--radius-md)',
+              padding: '12px 16px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 10,
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                  <span className="badge badge-emerald" style={{ fontSize: '11px', fontWeight: 700, padding: '3px 8px' }}>
+                    ✅ {accumulatedBills.length} Bill{accumulatedBills.length > 1 ? 's' : ''} Accumulated
+                  </span>
+                  <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                    Combined Total: <strong style={{ color: '#fff', fontSize: '13px', fontFamily: 'JetBrains Mono' }}>
+                      {accumulatedBills.reduce((acc, b) => acc + (parseFloat(b.addedValue) || 0), 0).toFixed(4)} {accumulatedBills[0]?.unit || 'GJ'}
+                    </strong>
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleResetAccumulatedBills()}
+                  className="btn btn-secondary btn-sm"
+                  style={{ padding: '3px 10px', fontSize: '11px', borderColor: 'rgba(239, 68, 68, 0.4)', color: '#ef4444', display: 'flex', alignItems: 'center', gap: 5 }}
+                  title="Reset all accumulated bills and clear digital form values"
+                >
+                  <RotateCcw size={11} />
+                  <span>Reset All Bills</span>
+                </button>
+              </div>
+
+              {/* Individual Bill Chips with conversion note */}
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                {accumulatedBills.map((b, idx) => (
+                  <div
+                    key={idx}
+                    style={{
+                      background: 'rgba(15, 23, 42, 0.85)',
+                      border: '1px solid rgba(99, 102, 241, 0.28)',
+                      borderRadius: '7px',
+                      padding: '5px 11px',
+                      fontSize: '11px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 2,
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span style={{ color: 'var(--text-secondary)' }}>📄 {b.filename}</span>
+                      <span style={{ color: '#34d399', fontWeight: 700, fontFamily: 'JetBrains Mono' }}>
+                        +{b.addedValue} {b.unit}
+                      </span>
+                      {b.fuelSubType && (
+                        <span style={{ fontSize: '10px', color: '#f97316', background: 'rgba(249,115,22,0.12)', border: '1px solid rgba(249,115,22,0.25)', borderRadius: 4, padding: '1px 5px' }}>
+                          {b.fuelSubType}
+                        </span>
+                      )}
+                    </div>
+                    {b.conversionNote && (
+                      <div style={{ fontFamily: 'JetBrains Mono', fontSize: '9.5px', color: 'var(--text-muted)' }}>
+                        = {b.conversionNote} = {b.addedValue} GJ
+                      </div>
+                    )}
+                    {b.invoiceNumber && b.invoiceNumber !== 'N/A' && (
+                      <div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Invoice: {b.invoiceNumber}</div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+        </div>{/* end inner padding wrapper */}
+      </div>{/* end OCR panel */}
 
       {/* Notice Message Banner */}
       {notice && (
@@ -749,11 +1668,16 @@ export default function DataEntry() {
                 <table className="data-table">
                   <thead>
                     <tr>
-                      <th style={{ width: '130px' }}>Code</th>
+                      <th style={{ width: '145px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                          <span>Code</span>
+                          <span style={{ fontSize: '10px', color: 'var(--text-muted)', fontWeight: 'normal' }}>(SEBI Ref)</span>
+                        </div>
+                      </th>
                       <th>Indicator Disclosure Name</th>
                       <th style={{ width: '180px' }}>Measured Value</th>
                       <th style={{ width: '120px' }}>Unit</th>
-                      <th style={{ width: '120px' }}>Data Type</th>
+                      <th style={{ width: '140px' }}>Data Type</th>
                       <th>Notes / Evidence Ref</th>
                     </tr>
                   </thead>
@@ -763,46 +1687,87 @@ export default function DataEntry() {
                       const currentNotes = formData[field.metric_code]?.notes ?? '';
                       const isAiVerified = formData[field.metric_code]?.ai_verified;
 
+                      // Indicator Disclosure Name (supports both live and demo mode)
+                      const disclosureName = field.indicator_disclosure_name || field.metric_name || field.name || field.label || (field.metric_code ? `Indicator ${field.metric_code}` : 'Unnamed Indicator');
+
+                      // Data Type (supports both live and demo mode)
+                      const dataType = field.data_type || field.field_type || (field.unit === '%' ? 'Percentage (%)' : field.unit === 'count' ? 'Integer (Count)' : 'Numeric (Float)');
+
                       return (
                         <tr key={field.metric_code}>
                           <td>
-                            <span style={{ fontFamily: 'JetBrains Mono', fontSize: '11px', color: 'var(--brand-400)', fontWeight: 600 }}>
-                              {field.metric_code}
-                            </span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                              <span style={{ fontFamily: 'JetBrains Mono', fontSize: '11px', color: 'var(--brand-400)', fontWeight: 700 }}>
+                                {field.metric_code}
+                              </span>
+                              <CodeHelpButton code={field.metric_code} field={field} />
+                            </div>
                           </td>
                           <td>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-                              <span style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: '13px' }}>
-                                {field.metric_name}
-                              </span>
-                              {isAiVerified && (
-                                <span className="badge badge-emerald" style={{ fontSize: '10px', padding: '2px 6px', display: 'inline-flex', alignItems: 'center', gap: 3 }}>
-                                  <Sparkles size={10} /> AI Verified
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                                <span style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: '13px' }}>
+                                  {disclosureName}
+                                </span>
+                                {isAiVerified && (
+                                  <span className="badge badge-emerald" style={{ fontSize: '10px', padding: '2px 6px', display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                                    <Sparkles size={10} /> AI Verified
+                                  </span>
+                                )}
+                              </div>
+                              {field.definition && (
+                                <span style={{ fontSize: '11px', color: 'var(--text-secondary)', lineHeight: 1.35 }}>
+                                  {field.definition}
+                                </span>
+                              )}
+                              {field.is_mandatory && (
+                                <span style={{ fontSize: '10px', color: 'var(--amber-400)', fontWeight: 600, display: 'inline-block', marginTop: 2 }}>
+                                  ★ SEBI BRSR Core Mandated
                                 </span>
                               )}
                             </div>
-                            {field.is_mandatory && (
-                              <span style={{ fontSize: '10px', color: 'var(--amber-400)' }}>
-                                SEBI BRSR Core Mandated
-                              </span>
-                            )}
                           </td>
                           <td>
-                            <input
-                              type="number"
-                              step="any"
-                              placeholder="0.00"
-                              className="form-control"
-                              style={{
-                                height: '32px',
-                                fontFamily: 'JetBrains Mono',
-                                fontSize: '12px',
-                                borderColor: isAiVerified ? '#10b981' : undefined,
-                                background: isAiVerified ? 'rgba(16, 185, 129, 0.08)' : undefined
-                              }}
-                              value={currentVal}
-                              onChange={(e) => handleFieldChange(field.metric_code, 'value_numeric', e.target.value)}
-                            />
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                              <input
+                                type="number"
+                                step="any"
+                                placeholder="0.00"
+                                className="form-control"
+                                style={{
+                                  height: '32px',
+                                  fontFamily: 'JetBrains Mono',
+                                  fontSize: '12px',
+                                  borderColor: isAiVerified ? '#10b981' : undefined,
+                                  background: isAiVerified ? 'rgba(16, 185, 129, 0.08)' : undefined
+                                }}
+                                value={currentVal}
+                                onChange={(e) => handleFieldChange(field.metric_code, 'value_numeric', e.target.value)}
+                              />
+                              {isAiVerified && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleResetAccumulatedBills(field.metric_code)}
+                                  className="icon-btn"
+                                  title={`Reset ${field.metric_code} value`}
+                                  style={{
+                                    width: 28,
+                                    height: 28,
+                                    color: '#ef4444',
+                                    borderRadius: '4px',
+                                    border: '1px solid rgba(239, 68, 68, 0.3)',
+                                    background: 'rgba(239, 68, 68, 0.08)',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    cursor: 'pointer',
+                                    flexShrink: 0,
+                                  }}
+                                >
+                                  <RotateCcw size={12} />
+                                </button>
+                              )}
+                            </div>
                           </td>
                           <td>
                             <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
@@ -810,8 +1775,8 @@ export default function DataEntry() {
                             </span>
                           </td>
                           <td>
-                            <span className="badge badge-gray">
-                              {field.data_type}
+                            <span className="badge badge-indigo" style={{ fontSize: '11px', fontFamily: 'JetBrains Mono', letterSpacing: '-0.2px' }}>
+                              {dataType}
                             </span>
                           </td>
                           <td>
@@ -874,9 +1839,12 @@ export default function DataEntry() {
 
       {/* Modal: Dedicated Subsidiary / Facility Details */}
       {showEntityDetails && selectedNodeObj && (
-        <div className="modal-backdrop">
-          <div className="modal-dialog anim-slide" style={{ maxWidth: '640px' }}>
-            <div className="modal-header">
+      <Modal 
+        isOpen={Boolean(showEntityDetails && selectedNodeObj)} 
+        onClose={() => setShowEntityDetails(false)} 
+        maxWidth="640px"
+      >
+        <div className="modal-header">
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <div className="modal-header-icon">
                   <Building2 size={18} color="var(--brand-400)" />
@@ -963,15 +1931,17 @@ export default function DataEntry() {
                 Close Details
               </button>
             </div>
-          </div>
-        </div>
+      </Modal>
       )}
 
       {/* Modal: Dedicated Reporting Period Details */}
       {showPeriodDetails && selectedPeriodObj && (
-        <div className="modal-backdrop">
-          <div className="modal-dialog anim-slide" style={{ maxWidth: '640px' }}>
-            <div className="modal-header">
+      <Modal 
+        isOpen={Boolean(showPeriodDetails && selectedPeriodObj)} 
+        onClose={() => setShowPeriodDetails(false)} 
+        maxWidth="640px"
+      >
+        <div className="modal-header">
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <div className="modal-header-icon">
                   <Calendar size={18} color="var(--brand-400)" />
@@ -1049,15 +2019,17 @@ export default function DataEntry() {
                 Close Details
               </button>
             </div>
-          </div>
-        </div>
+      </Modal>
       )}
 
       {/* Modal: AI Bill Document Scraped — Review & Auto-Fill Form */}
       {billModalOpen && (
-        <div className="modal-backdrop">
-          <div className="modal-dialog anim-slide" style={{ maxWidth: '780px' }}>
-            <div className="modal-header">
+      <Modal 
+        isOpen={Boolean(billModalOpen)} 
+        onClose={() => setBillModalOpen(false)} 
+        maxWidth="780px"
+      >
+        <div className="modal-header">
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <div className="modal-header-icon" style={{ background: 'linear-gradient(135deg, var(--brand-600), var(--brand-400))' }}>
                   <Sparkles size={18} color="#fff" />
@@ -1212,8 +2184,7 @@ export default function DataEntry() {
                 </button>
               </div>
             </div>
-          </div>
-        </div>
+      </Modal>
       )}
     </div>
   );
