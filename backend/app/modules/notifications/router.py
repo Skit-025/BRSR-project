@@ -44,3 +44,11 @@ def mark_notification_read(notification_id: str, db: Session = Depends(get_db)):
         return service.mark_as_read(notification_id)
     except Exception as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+
+
+@router.post("/user/{user_id}/mark-all-read")
+def mark_all_notifications_read(user_id: str, db: Session = Depends(get_db)):
+    """Marks ALL notifications for a user as read (Spec §32)."""
+    service = NotificationService(db)
+    updated = service.mark_all_read_for_user(user_id)
+    return {"marked_read": updated}

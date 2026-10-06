@@ -222,10 +222,55 @@ def build_scoped_digital_form(
     is_checker = user_role in [Role.CHECKER.value, Role.SYSTEM_ADMIN.value, Role.ESG_MANAGER.value]
     is_auditor = user_role in [Role.AUDITOR.value, Role.SYSTEM_ADMIN.value]
 
+    # Determine the entity's node type for gating and entry_level filtering
+    entity_node_type = (entity.type if entity else "group").lower()
+    # Normalize legacy aliases
+    if entity_node_type in ("subsidiary", "company"):
+        entity_node_type = "company"
+    elif entity_node_type == "site":
+        entity_node_type = "project"
+
+    # Allowed entry_levels for this entity type
+    # Each level can only enter metrics at its own level.
+    ENTRY_LEVEL_MAP = {
+        "project":       ["project"],
+        "business_unit": ["business_unit"],
+        "company":       ["subsidiary"],
+        "group":         ["group", "project", "business_unit", "subsidiary"],  # Group admins see all
+    }
+    allowed_entry_levels = ENTRY_LEVEL_MAP.get(entity_node_type, ["project"])
+
+    # Scope badge helper
+    def _scope_badge(code: str) -> str | None:
+        if code.startswith("ENV-GHG-001"):
+            return "SCOPE 1"
+        if code.startswith("ENV-GHG-002"):
+            return "SCOPE 2"
+        if code.startswith("ENV-GHG-003"):
+            return "SCOPE 3"
+        if code.startswith("ENV-ENERGY"):
+            return "ENERGY"
+        if code.startswith("ENV-WATER"):
+            return "WATER"
+        if code.startswith("ENV-WASTE"):
+            return "WASTE"
+        return None
+
     sections_dict: Dict[str, List[FormField]] = {}
     for m in all_metrics:
-        # If node is not Group level and has specific applicability evaluated, filter to applicable metrics
-        if entity and entity.type != "group" and applicable_metric_codes:
+        # ── GATE 1: Section A/B — only visible at Company/Group level ────────
+        # Project and BU users should never see Section A (corporate info) or Section B (governance).
+        metric_section = getattr(m, 'section', 'Section C') or 'Section C'
+        if entity_node_type in ("project", "business_unit") and metric_section.strip() in ("Section A", "Section B"):
+            continue
+
+        # ── GATE 2: Entry Level — only show metrics this entity is responsible for ─
+        metric_entry_level = getattr(m, 'entry_level', 'project') or 'project'
+        if entity_node_type != "group" and metric_entry_level not in allowed_entry_levels:
+            continue
+
+        # ── GATE 3: Applicability rules (project type / flags) ───────────────
+        if entity and entity_node_type not in ("group", "company") and applicable_metric_codes:
             if m.code not in applicable_metric_codes:
                 continue
 
@@ -250,7 +295,15 @@ def build_scoped_digital_form(
             read_only=False,
             current_value=current_values.get(m.code),
             notes=current_notes.get(m.code),
-            formula_ref=m.calc_formula_code
+            formula_ref=m.calc_formula_code,
+            # ── New fields ──────────────────────────────────────────────────
+            entry_level=metric_entry_level,
+            guidance_text=getattr(m, 'guidance_text', None),
+            why_needed=getattr(m, 'why_needed', None),
+            document_hint=getattr(m, 'document_hint', None),
+            scope_badge=_scope_badge(m.code),
+            is_brsr_core=bool(m.brsr_core),
+            evidence_rule=getattr(m, 'evidence_rule', 'mandatory') or 'mandatory',
         )
         sections_dict.setdefault(p, []).append(field)
 
@@ -278,6 +331,10 @@ def build_scoped_digital_form(
         entity_id=str(entity.id) if entity else user_entity_id,
         entity_code=entity_code,
         entity_name=entity_name,
+        entity_type=entity_node_type,
+        project_description=getattr(entity, 'project_description', None) if entity else None,
+        project_type=getattr(entity, 'project_type', None) if entity else None,
+        entity_state=getattr(entity, 'location_state', None) if entity else None,
         role=user_role,
         period_id=period_id,
         period_code=period_code,

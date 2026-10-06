@@ -1,5 +1,5 @@
 import enum
-from sqlalchemy import Column, String, Numeric, Boolean, Integer, Date, ForeignKey, Index
+from sqlalchemy import Column, String, Numeric, Boolean, Integer, Date, ForeignKey, Index, Text
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID, JSONB
 from sqlalchemy.types import UserDefinedType
 from sqlalchemy.orm import relationship
@@ -23,13 +23,17 @@ class LtreeType(UserDefinedType):
 
 
 class NodeType(str, enum.Enum):
-    GROUP = "group"
-    SUBSIDIARY = "subsidiary"
+    # ── 4 Primary Hierarchy Levels (MEIL Director's Requirement) ──
+    GROUP = "group"                    # Level 1: Group Root (e.g. MEIL)
+    COMPANY = "company"                # Level 2: Operating Companies
+    BUSINESS_UNIT = "business_unit"    # Level 3: Business Units (Hydro, Solar, Roads)
+    PROJECT = "project"                # Level 4: Project sites (Daily Data Entry)
+
+    # ── Legacy / Backwards Compatibility Aliases ──
+    SUBSIDIARY = "subsidiary"          # Legacy alias for Company
     ASSOCIATE = "associate"
     JV = "jv"
-    BUSINESS_UNIT = "business_unit"
-    PROJECT = "project"
-    SITE = "site"
+    SITE = "site"                      # Legacy alias for Project
 
 
 class ControlType(str, enum.Enum):
@@ -91,6 +95,8 @@ class OrgNode(Base, UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin):
 
     # Project profile facts for applicability derivation
     project_type = Column(String(50), default=ProjectType.CORPORATE.value, nullable=False, index=True)
+    project_description = Column(Text, nullable=True)  # Plain-language description shown to site engineers
+    enabled_activity_categories = Column(JSONB, default=list, nullable=False)  # e.g. ["ENV-GHG-001A","ENV-GHG-001B","ENV-GHG-002A"]
     location_state = Column(String(100), nullable=True)
     location_country = Column(String(100), default="India", nullable=False)
     is_listed = Column(Boolean, default=False, nullable=False)

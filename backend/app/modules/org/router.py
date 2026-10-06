@@ -46,41 +46,16 @@ def list_nodes(
 
 @router.post("/nodes", response_model=OrgNodeRead, status_code=status.HTTP_201_CREATED)
 def create_node(node_in: OrgNodeCreate, db: Session = Depends(get_db)):
-    """Creates a new node in the hierarchy, computes path, and triggers applicability evaluation."""
-    existing = db.query(OrgNode).filter(OrgNode.code == node_in.code).first()
-    if existing:
+    """Creates a new node in the hierarchy, validates 4-level parent-child rules, computes path, and triggers applicability evaluation."""
+    from app.modules.org.service import OrgService
+    service = OrgService(db)
+    try:
+        return service.create_node(node_in)
+    except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Node with code '{node_in.code}' already exists."
+            detail=str(e)
         )
-
-    path = build_materialized_path(db, node_in.parent_id, node_in.code)
-    
-    node = OrgNode(
-        code=node_in.code,
-        name=node_in.name,
-        type=node_in.type.value,
-        parent_id=node_in.parent_id,
-        path=path,
-        ownership_pct=node_in.ownership_pct,
-        control_type=node_in.control_type.value,
-        boundary=node_in.boundary,
-        project_type=node_in.project_type.value,
-        location_state=node_in.location_state,
-        location_country=node_in.location_country,
-        is_listed=node_in.is_listed,
-        is_water_stressed=node_in.is_water_stressed,
-        is_pat_designated=node_in.is_pat_designated,
-        has_land_acquisition=node_in.has_land_acquisition
-    )
-    db.add(node)
-    db.commit()
-    db.refresh(node)
-
-    # Trigger automatic applicability evaluation
-    evaluate_applicability_for_node(node, db)
-
-    return node
 
 @router.get("/nodes/{node_id}", response_model=OrgNodeRead)
 def get_node(node_id: str, db: Session = Depends(get_db)):

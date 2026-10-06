@@ -1,195 +1,395 @@
-import React from 'react';
+import React, { useState, useMemo } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import {
-  LayoutDashboard, Building2, BookOpen, FileText,
-  GitBranch, BarChart3, FileBarChart, Leaf,
-  UserCheck, LogOut, ShieldCheck, Eye, ClipboardCheck,
-  FolderOpen, Layers, Settings2
+  LayoutDashboard, Building2, BookOpen, Layers,
+  ChevronDown, Bell, LogOut, BarChart3,
+  ChevronRight, Shield, GitMerge, PenLine,
+  FolderKanban, AlertTriangle, ClipboardList,
+  Globe, FileSpreadsheet, ClipboardCheck,
+  PanelLeftClose, Settings, Command, CheckCircle2,
+  HardHat, Factory, Truck, RefreshCw
 } from 'lucide-react';
-import { useAuth, ROLE_META } from '../context/AuthContext';
-
-/*
- * NAV CONFIG — Each item declares which permissions are needed to see it.
- * If `perms` is empty/undefined the item is visible to all authenticated users.
- * Section labels get `section: true`.
- */
-const NAV_CONFIG = [
-  // ── Dashboard ─────────────────────────────────────────────────
-  {
-    label: 'Overview',
-    icon: LayoutDashboard,
-    to: '/dashboard',
-    perms: [],  // everyone sees the dashboard
-  },
-
-  // ── ADMINISTRATION ────────────────────────────────────────────
-  { section: true, label: 'ADMINISTRATION', perms: ['user:manage'] },
-  {
-    label: 'User Provisioning',
-    icon: UserCheck,
-    to: '/admin/users',
-    perms: ['user:manage'],
-  },
-
-  // ── ORG & METRICS ─────────────────────────────────────────────
-  { section: true, label: 'CONFIGURATION', perms: ['org:read'] },
-  {
-    label: 'Org Hierarchy',
-    icon: Building2,
-    to: '/org',
-    perms: ['org:read'],
-  },
-  {
-    label: 'Metric Catalogue',
-    icon: BookOpen,
-    to: '/metrics',
-    perms: ['metric:read'],
-  },
-
-  // ── DATA COLLECTION ───────────────────────────────────────────
-  { section: true, label: 'DATA COLLECTION', perms: ['submission:create', 'submission:read'] },
-  {
-    label: 'Data Entry',
-    icon: FileText,
-    to: '/collection',
-    perms: ['form:submit', 'submission:create'],
-  },
-  {
-    label: 'Evidence Vault',
-    icon: FolderOpen,
-    to: '/evidence',
-    perms: ['evidence:read'],
-  },
-
-  // ── ASSURANCE / WORKFLOW ──────────────────────────────────────
-  { section: true, label: 'ASSURANCE', perms: ['submission:review', 'form:review', 'audit:read', 'assurance:write'] },
-  {
-    label: 'Workflow & Approvals',
-    icon: GitBranch,
-    to: '/workflow',
-    perms: ['submission:review', 'form:review', 'submission:read'],
-  },
-
-  // ── REPORTING ─────────────────────────────────────────────────
-  { section: true, label: 'REPORTING', perms: ['report:read'] },
-  {
-    label: 'Consolidation',
-    icon: Layers,
-    to: '/consolidation',
-    perms: ['consolidation:read'],
-  },
-  {
-    label: 'BRSR Report',
-    icon: FileBarChart,
-    to: '/reporting',
-    perms: ['report:read'],
-  },
-];
-
-function userCanSee(item, hasPermission) {
-  if (!item.perms || item.perms.length === 0) return true;
-  return item.perms.some((p) => hasPermission(p));
-}
-
-function getInitials(name) {
-  if (!name) return 'U';
-  const parts = name.trim().split(' ');
-  if (parts.length >= 2) return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
-  return name.substring(0, 2).toUpperCase();
-}
+import { useAuth } from '../context/AuthContext';
+import { useOrgPeriods, useOrgNodes, useWorkflowQueue } from '../hooks/useApi';
 
 export default function Sidebar() {
   const navigate = useNavigate();
-  const { user, logout, hasPermission, role, roleMeta } = useAuth();
+  const { user, logout, role, hasPermission } = useAuth();
+  const { data: nodes = [] } = useOrgNodes();
+  const { data: wfQueue = [] } = useWorkflowQueue();
+
+  // Live entity list: derive meaningful display names from org nodes
+  const entityOptions = useMemo(() => {
+    const ordered = [];
+    const grouped = { group: [], company: [], subsidiary: [], business_unit: [], bu: [], project: [], site: [] };
+    nodes.forEach(n => { if (grouped[n.type]) grouped[n.type].push(n); });
+    [...grouped.group, ...grouped.company, ...grouped.subsidiary,
+     ...grouped.business_unit, ...grouped.bu,
+     ...grouped.project, ...grouped.site
+    ].forEach(n => ordered.push({ id: n.id, label: n.name, type: n.type }));
+    return ordered.slice(0, 12); // max 12 in dropdown
+  }, [nodes]);
+
+  const [selectedEntity, setSelectedEntity] = useState('');
+  const [entityMenuOpen, setEntityMenuOpen] = useState(false);
+
+  // Pending reviews count from live queue
+  const pendingReviewsCount = useMemo(() => {
+    return wfQueue.filter(item => ['SUBMITTED', 'UNDER_BU_REVIEW'].includes(item.status)).length;
+  }, [wfQueue]);
 
   const handleLogout = () => {
     logout();
     navigate('/landing');
   };
 
-  // Build a filtered list based on current user's permissions
-  const visibleItems = NAV_CONFIG.filter((item) => userCanSee(item, hasPermission));
-
-  // Remove orphan section labels (section with no visible items below it)
-  const cleanedItems = visibleItems.filter((item, idx) => {
-    if (!item.section) return true;
-    // Look ahead — is there at least one non-section item before the next section?
-    const rest = visibleItems.slice(idx + 1);
-    const nextSectionIdx = rest.findIndex((x) => x.section);
-    const itemsBetween = nextSectionIdx === -1 ? rest : rest.slice(0, nextSectionIdx);
-    return itemsBetween.length > 0;
-  });
+  // Role-filtered navigation
+  const navGroups = useMemo(() => {
+    const groups = [
+      {
+        section: 'OVERVIEW',
+        items: [
+          { to: '/dashboard', label: 'Group Overview', icon: LayoutDashboard, perm: null }
+        ]
+      },
+      {
+        section: 'ORGANIZATION',
+        items: [
+          hasPermission('subsidiary_disclosure:read') && { to: '/disclosure/subsidiary', label: 'Subsidiaries', icon: Building2 },
+          hasPermission('bu_disclosure:read') && { to: '/disclosure/bu', label: 'Business Units', icon: Factory },
+          { to: '/projects', label: 'Projects', icon: HardHat },
+        ].filter(Boolean)
+      },
+      {
+        section: 'ESG WORKSPACE',
+        items: [
+          hasPermission('form:submit') && { to: '/collection', label: 'Data Collection', icon: PenLine },
+          { to: '/metrics', label: 'Parameters', icon: BookOpen },
+          hasPermission('evidence:read') && { to: '/evidence', label: 'Evidence Repository', icon: ClipboardList },
+          hasPermission('report:read') && { to: '/valuechain', label: 'Value Chain (75%)', icon: Truck },
+        ].filter(Boolean)
+      },
+      hasPermission('submission:review') && {
+        section: 'WORKFLOW',
+        items: [
+          { to: '/workflow', label: 'Reviews', icon: GitMerge, badge: pendingReviewsCount > 0 ? String(pendingReviewsCount) : null },
+          hasPermission('consolidation:read') && { to: '/consolidation', label: 'Calculation Pipeline', icon: Layers },
+          { to: '/data-quality', label: 'Data Quality & Desk', icon: AlertTriangle },
+        ].filter(Boolean)
+      },
+      hasPermission('report:read') && {
+        section: 'REPORTING',
+        items: [
+          { to: '/reporting', label: 'BRSR Disclosures', icon: FileSpreadsheet },
+          hasPermission('group_disclosure:read') && { to: '/disclosure/group', label: 'Consolidated Reports', icon: BarChart3 },
+          hasPermission('audit:read') && { to: '/assurance', label: 'Reasonable Assurance', icon: ClipboardCheck },
+          hasPermission('audit:read') && { to: '/audit', label: 'Audit Trail', icon: Shield },
+        ].filter(Boolean)
+      },
+      (hasPermission('user:manage') || hasPermission('consolidation:read')) && {
+        section: 'ADMINISTRATION',
+        items: [
+          hasPermission('user:manage') && { to: '/admin/users', label: 'User Governance', icon: Settings },
+          hasPermission('consolidation:read') && { to: '/admin/jobs', label: 'Pipeline Tasks', icon: RefreshCw },
+        ].filter(Boolean)
+      },
+    ].filter(Boolean);
+    return groups.filter(g => g.items && g.items.length > 0);
+  }, [hasPermission, pendingReviewsCount]);
 
   return (
-    <aside className="sidebar anim-slide">
-      {/* Logo */}
-      <div className="sidebar-logo">
-        <div className="sidebar-logo-icon">
-          <Leaf size={18} color="#fff" />
-        </div>
-        <div className="sidebar-logo-text">
-          <span className="sidebar-logo-title">MEIL ESG Portal</span>
-          <span className="sidebar-logo-sub">BRSR · FY 2024-25</span>
-        </div>
-      </div>
-
-      {/* Role Badge */}
-      {roleMeta && (
-        <div className="sidebar-role-badge" style={{ borderColor: roleMeta.color + '55' }}>
-          <span className="sidebar-role-icon">{roleMeta.icon}</span>
-          <span className="sidebar-role-label" style={{ color: roleMeta.color }}>
-            {roleMeta.label}
+    <aside style={{
+      width: 240,
+      flexShrink: 0,
+      background: '#FAFAFA',
+      borderRight: '1px solid #E5E7EB',
+      display: 'flex',
+      flexDirection: 'column',
+      height: '100vh',
+      userSelect: 'none',
+      fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+    }}>
+      {/* ── Brand Logo Bar ── */}
+      <div style={{
+        padding: '16px 14px 12px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        borderBottom: '1px solid #F1F5F9'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+          {/* Abstract geometric logo */}
+          <div style={{
+            width: 26,
+            height: 26,
+            borderRadius: 6,
+            background: '#09090B',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: '#FFFFFF',
+            fontWeight: 900,
+            fontSize: 13,
+            letterSpacing: '-0.05em'
+          }}>
+            E
+          </div>
+          <span style={{
+            fontSize: 13.5,
+            fontWeight: 800,
+            letterSpacing: '0.04em',
+            color: '#09090B',
+            fontFamily: 'Inter, sans-serif'
+          }}>
+            AETHER ESG
           </span>
         </div>
-      )}
 
-      {/* Nav */}
-      <nav className="sidebar-nav">
-        {cleanedItems.map((item, i) => {
-          if (item.section) {
-            return (
-              <span key={`sec-${i}`} className="nav-section-label">
-                {item.label}
-              </span>
-            );
-          }
-          const Icon = item.icon;
-          return (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              end={item.to === '/dashboard'}
-              className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`}
-            >
-              <Icon size={15} className="nav-item-icon" />
-              {item.label}
-            </NavLink>
-          );
-        })}
+        <button
+          style={{
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            color: '#94A3B8',
+            padding: 2,
+            display: 'flex',
+            alignItems: 'center'
+          }}
+          title="Toggle Sidebar"
+        >
+          <PanelLeftClose size={15} />
+        </button>
+      </div>
+
+      {/* ── Entity Selection Pill ── */}
+      <div style={{ padding: '10px 12px 6px', position: 'relative' }}>
+        <button
+          onClick={() => setEntityMenuOpen(p => !p)}
+          style={{
+            width: '100%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '7px 10px',
+            background: '#FFFFFF',
+            border: '1px solid #E2E8F0',
+            borderRadius: 7,
+            fontSize: 12,
+            fontWeight: 600,
+            color: '#0F172A',
+            cursor: 'pointer',
+            boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 7, overflow: 'hidden' }}>
+            <Building2 size={13} color="#64748B" />
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {selectedEntity
+                ? (entityOptions.find(e => e.id === selectedEntity)?.label || selectedEntity)
+                : (user?.full_name?.split(' ')[0] + "'s View" || 'Select Entity')}
+            </span>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', color: '#94A3B8' }}>
+            <ChevronDown size={11} />
+          </div>
+        </button>
+
+        {entityMenuOpen && (
+          <div style={{
+            position: 'absolute',
+            top: 46,
+            left: 12,
+            right: 12,
+            background: '#FFFFFF',
+            border: '1px solid #E2E8F0',
+            borderRadius: 8,
+            boxShadow: '0 8px 16px -4px rgba(0,0,0,0.1)',
+            zIndex: 100,
+            padding: '4px',
+            fontSize: 12,
+            maxHeight: 220,
+            overflowY: 'auto'
+          }}>
+            {entityOptions.length > 0 ? entityOptions.map((e) => (
+              <div
+                key={e.id}
+                onClick={() => { setSelectedEntity(e.id); setEntityMenuOpen(false); }}
+                style={{
+                  padding: '7px 10px',
+                  borderRadius: 5,
+                  cursor: 'pointer',
+                  color: selectedEntity === e.id ? '#09090B' : '#475569',
+                  background: selectedEntity === e.id ? '#F1F5F9' : 'transparent',
+                  fontWeight: selectedEntity === e.id ? 700 : 500
+                }}
+              >
+                {e.label}
+              </div>
+            )) : (
+              <div style={{ padding: '7px 10px', color: '#94A3B8', fontSize: 11 }}>Loading entities...</div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* ── Navigation Tree ── */}
+      <nav style={{
+        flex: 1,
+        overflowY: 'auto',
+        padding: '6px 10px',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 2
+      }}>
+        {navGroups.map((grp) => (
+          <div key={grp.section} style={{ marginBottom: 6 }}>
+            <div style={{
+              fontSize: 10,
+              fontWeight: 700,
+              letterSpacing: '0.06em',
+              color: '#94A3B8',
+              padding: '6px 8px 3px',
+              textTransform: 'uppercase'
+            }}>
+              {grp.section}
+            </div>
+            {grp.items.map((item) => {
+              const Icon = item.icon;
+              return (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`}
+                  style={({ isActive }) => ({
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    padding: '6px 9px',
+                    borderRadius: 6,
+                    fontSize: 12.5,
+                    fontWeight: isActive ? 600 : 500,
+                    color: isActive ? '#FFFFFF' : '#475569',
+                    background: isActive ? '#18181B' : 'transparent',
+                    textDecoration: 'none',
+                    marginBottom: 1,
+                    transition: 'all 120ms ease'
+                  })}
+                >
+                  {({ isActive }) => (
+                    <>
+                      <Icon size={14} color={isActive ? '#FFFFFF' : '#64748B'} style={{ flexShrink: 0 }} />
+                      <span style={{ flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {item.label}
+                      </span>
+                      {item.badge && (
+                        <span style={{
+                          background: '#DCFCE7',
+                          color: '#15803D',
+                          fontSize: 10.5,
+                          fontWeight: 700,
+                          padding: '1px 6px',
+                          borderRadius: 9999,
+                          border: '1px solid #BBF7D0'
+                        }}>
+                          {item.badge}
+                        </span>
+                      )}
+                    </>
+                  )}
+                </NavLink>
+              );
+            })}
+          </div>
+        ))}
       </nav>
 
-      {/* Footer user card & Sign Out */}
-      <div className="sidebar-footer">
-        <div className="user-card">
-          <div className="user-avatar">
-            {getInitials(user?.full_name || user?.email)}
+      {/* ── Bottom Section: Data Quality & Settings ── */}
+      <div style={{
+        padding: '10px 12px',
+        borderTop: '1px solid #E5E7EB',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 8,
+        background: '#FAFAFA'
+      }}>
+        {/* Data Quality Card */}
+        <div style={{
+          background: '#FFFFFF',
+          border: '1px solid #E5E7EB',
+          borderRadius: 8,
+          padding: '10px 12px',
+          boxShadow: '0 1px 2px rgba(0,0,0,0.02)'
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+            <span style={{ fontSize: 11, fontWeight: 700, color: '#09090B' }}>Data Quality</span>
+            <span style={{ fontSize: 11, fontWeight: 800, color: '#15803D' }}>94.2%</span>
           </div>
-          <div className="user-info">
-            <div className="user-name truncate" title={user?.full_name || user?.email}>
-              {user?.full_name || user?.email || 'Authenticated User'}
-            </div>
-            <div className="user-role" style={{ textTransform: 'capitalize', color: roleMeta?.color }}>
-              {roleMeta?.label || (user?.role?.replace(/_/g, ' ')) || 'Employee'}
-            </div>
+          {/* Progress bar */}
+          <div style={{ height: 4, width: '100%', background: '#E2E8F0', borderRadius: 99, overflow: 'hidden', marginBottom: 6 }}>
+            <div style={{ height: '100%', width: '94.2%', background: '#10B981', borderRadius: 99 }} />
           </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#94A3B8' }}>
+            <span>Target: 96%</span>
+            <span>Audited</span>
+          </div>
+        </div>
+
+        {/* Settings & Command Menu items */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
           <button
-            className="icon-btn text-rose"
-            onClick={handleLogout}
-            title="Sign Out of Portal"
-            style={{ marginLeft: 'auto' }}
+            onClick={() => navigate('/admin/users')}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              padding: '6px 8px',
+              borderRadius: 6,
+              background: 'none',
+              border: 'none',
+              fontSize: 12,
+              fontWeight: 500,
+              color: '#475569',
+              cursor: 'pointer',
+              width: '100%',
+              textAlign: 'left'
+            }}
           >
-            <LogOut size={15} />
+            <Settings size={13} color="#64748B" />
+            <span>Settings</span>
           </button>
+
+          <div
+            onClick={() => {
+              const event = new KeyboardEvent('keydown', { key: 'k', ctrlKey: true, bubbles: true });
+              window.dispatchEvent(event);
+            }}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '6px 8px',
+              borderRadius: 6,
+              fontSize: 12,
+              fontWeight: 500,
+              color: '#475569',
+              cursor: 'pointer'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Command size={13} color="#64748B" />
+              <span>Command Menu</span>
+            </div>
+            <span style={{
+              fontSize: 10,
+              color: '#94A3B8',
+              background: '#F1F5F9',
+              padding: '1px 5px',
+              borderRadius: 4,
+              fontFamily: 'monospace'
+            }}>
+              ⌘K
+            </span>
+          </div>
         </div>
       </div>
     </aside>

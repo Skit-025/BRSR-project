@@ -1,113 +1,213 @@
-import React, { useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
-import { Search, Bell, RefreshCw, LogOut, User, Shield, FlaskConical } from 'lucide-react';
-import { useQueryClient } from '@tanstack/react-query';
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import {
+  Search, Bell, HelpCircle, User, ChevronDown, CheckCircle2,
+  ExternalLink, Command
+} from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-
-const LABELS = {
-  '/':            ['Dashboard'],
-  '/admin/users': ['Administration', 'User Provisioning'],
-  '/org':         ['Org Hierarchy'],
-  '/metrics':     ['Metric Catalogue'],
-  '/collection':  ['Data Entry'],
-  '/evidence':    ['Evidence Vault'],
-  '/workflow':    ['Workflow & Approvals'],
-  '/consolidation':['Consolidation Engine'],
-  '/reporting':   ['BRSR Report'],
-};
+import CommandPalette from './CommandPalette';
 
 export default function Header() {
-  const { pathname } = useLocation();
   const navigate = useNavigate();
-  const qc = useQueryClient();
-  const { user, logout, mockMode, exitMockMode } = useAuth();
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const crumbs = LABELS[pathname] || [pathname.replace('/', '')];
+  const { user, logout } = useAuth();
+  const [isPaletteOpen, setIsPaletteOpen] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
 
-  const handleLogout = () => {
-    logout();
-    navigate('/landing');
-  };
+  // Global Ctrl+K / Cmd+K listener
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        setIsPaletteOpen(prev => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
-  const handleRefresh = async () => {
-    try {
-      setIsRefreshing(true);
-      await qc.invalidateQueries();
-    } finally {
-      setTimeout(() => setIsRefreshing(false), 750);
-    }
-  };
+  const userName = user?.full_name || 'Aditya S.';
+  const userRole = user?.role === 'system_admin' || user?.role === 'group_esg_manager'
+    ? 'ESG Director'
+    : (user?.role ? user.role.replace(/_/g, ' ') : 'ESG Lead');
 
   return (
-    <header className="header">
-      {/* Breadcrumb */}
-      <div className="header-breadcrumb">
-        <span className="crumb">MEIL ESG</span>
-        <span className="crumb-sep">
-          <svg width="12" height="12" viewBox="0 0 12 12">
-            <path d="M4 2l4 4-4 4" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round"/>
-          </svg>
-        </span>
-        {crumbs.map((c, i) => (
-          <span key={i} className={i === crumbs.length - 1 ? 'crumb-current' : 'crumb'}>{c}</span>
-        ))}
+    <header style={{
+      height: 52,
+      background: '#FFFFFF',
+      borderBottom: '1px solid #E5E7EB',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      padding: '0 20px',
+      flexShrink: 0,
+      userSelect: 'none',
+      fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+    }}>
+      {/* ── Left: Search Box ── */}
+      <div style={{ display: 'flex', alignItems: 'center', width: 340 }}>
+        <button
+          type="button"
+          onClick={() => setIsPaletteOpen(true)}
+          style={{
+            width: '100%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '6px 12px',
+            background: '#F8FAFC',
+            border: '1px solid #E2E8F0',
+            borderRadius: 7,
+            cursor: 'pointer',
+            color: '#64748B',
+            fontSize: 12.5,
+            transition: 'border-color 120ms ease'
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Search size={13.5} color="#94A3B8" />
+            <span style={{ color: '#64748B' }}>Search or type ⌘K</span>
+          </div>
+          <span style={{
+            fontSize: 10.5,
+            fontFamily: 'monospace',
+            color: '#94A3B8',
+            background: '#FFFFFF',
+            border: '1px solid #E2E8F0',
+            padding: '1px 5px',
+            borderRadius: 4
+          }}>
+            ⌘K
+          </span>
+        </button>
       </div>
 
-      <div className="header-spacer" />
+      {/* ── Right Controls: Methodology pill, Help, Bell, User ── */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+        {/* Methodology badge */}
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 6,
+          background: '#DCFCE7',
+          color: '#15803D',
+          border: '1px solid #BBF7D0',
+          padding: '3px 10px',
+          borderRadius: 9999,
+          fontSize: 11.5,
+          fontWeight: 600,
+          cursor: 'pointer'
+        }}>
+          <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#10B981' }} />
+          <span>Methodology v2.1</span>
+        </div>
 
-      {/* Mock Mode Alert Banner */}
-      {mockMode && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'rgba(245, 158, 11, 0.15)', border: '1px solid rgba(245, 158, 11, 0.35)', padding: '4px 10px', borderRadius: '6px', fontSize: '12px', color: '#f59e0b' }}>
-          <FlaskConical size={13} />
-          <span style={{ fontWeight: 600 }}>Demo / Mock Mode</span>
-          <button 
-            type="button"
-            className="btn btn-secondary btn-sm"
-            onClick={() => {
-              exitMockMode();
-              navigate('/login');
+        {/* Help icon */}
+        <button
+          title="Regulatory & Documentation Help"
+          style={{
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            color: '#64748B',
+            padding: 4,
+            display: 'flex',
+            alignItems: 'center',
+            borderRadius: '50%'
+          }}
+        >
+          <HelpCircle size={16} />
+        </button>
+
+        {/* Notification Bell */}
+        <div style={{ position: 'relative' }}>
+          <button
+            onClick={() => setShowNotifications(p => !p)}
+            title="Notifications"
+            style={{
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              color: '#64748B',
+              padding: 4,
+              display: 'flex',
+              alignItems: 'center',
+              position: 'relative'
             }}
-            style={{ padding: '2px 8px', fontSize: '11px', height: '22px', border: '1px solid rgba(245, 158, 11, 0.4)' }}
           >
-            Exit to Live Mode
+            <Bell size={16} />
+            {/* Red alert dot */}
+            <span style={{
+              position: 'absolute',
+              top: 3,
+              right: 3,
+              width: 7,
+              height: 7,
+              borderRadius: '50%',
+              background: '#EF4444',
+              border: '1.5px solid #FFFFFF'
+            }} />
           </button>
-        </div>
-      )}
 
-      {/* User profile pill */}
-      {user && (
-        <div className="header-user-pill">
-          <div className="header-user-role-badge">
-            {user.role === 'system_admin' ? (
-              <Shield size={12} color="var(--rose-400)" />
-            ) : (
-              <User size={12} color="var(--brand-400)" />
-            )}
-            <span>{user.role?.replace('_', ' ').toUpperCase()}</span>
+          {showNotifications && (
+            <div style={{
+              position: 'absolute',
+              right: 0,
+              top: 32,
+              width: 320,
+              background: '#FFFFFF',
+              border: '1px solid #E2E8F0',
+              borderRadius: 8,
+              boxShadow: '0 10px 25px -5px rgba(0,0,0,0.1)',
+              zIndex: 100,
+              padding: '12px'
+            }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: '#09090B', marginBottom: 8 }}>
+                Notifications
+              </div>
+              <div style={{ fontSize: 11.5, color: '#475569', lineHeight: 1.5, padding: '8px 0', borderBottom: '1px solid #F1F5F9' }}>
+                <strong>Project P-103 Highway</strong> submitted Q2 diesel logs awaiting review.
+              </div>
+              <div style={{ fontSize: 11.5, color: '#475569', lineHeight: 1.5, padding: '8px 0' }}>
+                <strong>Manufacturing BU</strong> has 4 flagged variances exceeding 5% standard deviation.
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* User Profile */}
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 10,
+          paddingLeft: 6,
+          borderLeft: '1px solid #E5E7EB'
+        }}>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', lineHeight: 1.2 }}>
+            <span style={{ fontSize: 12.5, fontWeight: 700, color: '#09090B' }}>
+              {userName}
+            </span>
+            <span style={{ fontSize: 11, color: '#64748B' }}>
+              {userRole}
+            </span>
           </div>
-          <span className="header-user-id" title={user.email}>
-            {user.email}
-          </span>
+
+          {/* User circular avatar */}
+          <div style={{
+            width: 28,
+            height: 28,
+            borderRadius: '50%',
+            background: '#09090B',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: '#FFFFFF'
+          }}>
+            <User size={15} />
+          </div>
         </div>
-      )}
+      </div>
 
-      {/* Refresh */}
-      <button 
-        className="icon-btn" 
-        onClick={handleRefresh} 
-        disabled={isRefreshing}
-        title="Refresh all data across workspace"
-      >
-        <RefreshCw size={14} className={isRefreshing ? 'spin' : ''} />
-      </button>
-
-      {/* Logout button */}
-      <button className="icon-btn text-rose" onClick={handleLogout} title="Sign Out">
-        <LogOut size={14} />
-      </button>
-
-      {/* API status */}
-      <div className="status-dot" title="Backend connected" />
+      <CommandPalette isOpen={isPaletteOpen} onClose={() => setIsPaletteOpen(false)} />
     </header>
   );
 }

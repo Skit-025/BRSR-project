@@ -10,7 +10,14 @@ import {
   workflowApi,
   consolidationApi,
   reportingApi,
-  aiApi
+  aiApi,
+  valuechainApi,
+  assuranceApi,
+  snapshotsApi,
+  exceptionsApi,
+  jobsApi,
+  calcApi,
+  auditApi,
 } from '../api/client';
 
 // ── Mock API (only imported/used in Mock Mode) ───────────────────────────────
@@ -295,4 +302,186 @@ export const useAiDraftNarrative = () => {
 export const useAiCheckPolicy = () => {
   if (isMock()) return MockApi.useMockAiCheckPolicy();
   return useMutation({ mutationFn: (data) => aiApi.checkPolicy(data) });
+};
+
+// ── SEBI Value Chain Disclosures (75% Rule) ──
+export const useValueChainPartners = (inBoundaryOnly = false, opts) => {
+  return useQuery({
+    queryKey: ['valuechain-partners', inBoundaryOnly],
+    queryFn: () => valuechainApi.listPartners(inBoundaryOnly).then(r => r.data),
+    ...opts,
+  });
+};
+
+export const useCreatePartner = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data) => valuechainApi.createPartner(data).then(r => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['valuechain-partners'] }),
+  });
+};
+
+export const useRecordAssessment = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data) => valuechainApi.recordAssessment(data).then(r => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['valuechain-partners'] }),
+  });
+};
+
+// ── Independent Reasonable Assurance & Audit ──
+export const useAssuranceEngagements = (periodId, opts) => {
+  return useQuery({
+    queryKey: ['assurance-engagements', periodId],
+    queryFn: () => assuranceApi.listEngagements(periodId).then(r => r.data),
+    ...opts,
+  });
+};
+
+export const useCreateEngagement = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data) => assuranceApi.createEngagement(data).then(r => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['assurance-engagements'] }),
+  });
+};
+
+export const useEngagementDetails = (engagementId, opts) => {
+  return useQuery({
+    queryKey: ['assurance-engagement', engagementId],
+    queryFn: () => assuranceApi.getEngagement(engagementId).then(r => r.data),
+    enabled: Boolean(engagementId),
+    ...opts,
+  });
+};
+
+export const useLogFinding = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data) => assuranceApi.logFinding(data).then(r => r.data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['assurance-engagement'] });
+      qc.invalidateQueries({ queryKey: ['assurance-engagements'] });
+    },
+  });
+};
+
+export const useRespondFinding = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ findingId, response }) =>
+      assuranceApi.respondToFinding(findingId, { management_response: response }).then(r => r.data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['assurance-engagement'] });
+    },
+  });
+};
+
+export const useRunSampling = () => {
+  return useMutation({
+    mutationFn: (data) => assuranceApi.runSampling(data).then(r => r.data),
+  });
+};
+
+// ── Reporting Snapshots, Sealing & Restatements ──
+export const useSnapshots = (params, opts) => {
+  return useQuery({
+    queryKey: ['snapshots-list', params],
+    queryFn: () => snapshotsApi.list(params).then(r => r.data),
+    ...opts,
+  });
+};
+
+export const useSnapshot = (id, opts) => {
+  return useQuery({
+    queryKey: ['snapshot', id],
+    queryFn: () => snapshotsApi.get(id).then(r => r.data),
+    enabled: Boolean(id),
+    ...opts,
+  });
+};
+
+export const useCreateSnapshot = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data) => snapshotsApi.create(data).then(r => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['snapshots-list'] }),
+  });
+};
+
+export const useSealSnapshot = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, data }) => snapshotsApi.seal(id, data).then(r => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['snapshots-list'] }),
+  });
+};
+
+export const useSnapshotDiff = (baseId, targetId, opts) => {
+  return useQuery({
+    queryKey: ['snapshot-diff', baseId, targetId],
+    queryFn: () => snapshotsApi.diff(baseId, targetId).then(r => r.data),
+    enabled: Boolean(baseId && targetId),
+    ...opts,
+  });
+};
+
+export const useRestateSnapshot = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data) => snapshotsApi.restate(data).then(r => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['snapshots-list'] }),
+  });
+};
+
+// ── Validation Exceptions ──
+export const useValidationExceptions = (params, opts) => {
+  return useQuery({
+    queryKey: ['validation-exceptions', params],
+    queryFn: () => exceptionsApi.list(params).then(r => r.data),
+    ...opts,
+  });
+};
+
+export const useResolveException = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, data }) => exceptionsApi.resolve(id, data).then(r => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['validation-exceptions'] }),
+  });
+};
+
+// ── Background Jobs Monitor ──
+export const useBackgroundJobs = (params, opts) => {
+  return useQuery({
+    queryKey: ['background-jobs', params],
+    queryFn: () => jobsApi.list(params).then(r => r.data),
+    refetchInterval: 10_000,
+    ...opts,
+  });
+};
+
+// ── Dynamic Fuel Catalog ──
+export const useFuelCatalog = (opts) => {
+  return useQuery({
+    queryKey: ['fuel-catalog'],
+    queryFn: () => calcApi.fuelCatalog().then(r => r.data?.fuel_catalog || []),
+    staleTime: 60 * 60 * 1000,
+    ...opts,
+  });
+};
+
+// ── Audit Log ──
+export const useAuditLogs = (params, opts) => {
+  return useQuery({
+    queryKey: ['audit-logs', params],
+    queryFn: () => auditApi.getLogs(params).then(r => r.data),
+    ...opts,
+  });
+};
+
+export const useVerifyAuditChain = () => {
+  return useMutation({
+    mutationFn: () => auditApi.verifyChain().then(r => r.data),
+  });
 };

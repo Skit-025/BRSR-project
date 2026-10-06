@@ -163,3 +163,76 @@ def calculate_scope1_fugitive_emissions(
             "source": factor_meta["source"],
         },
     }
+
+
+def calculate_scope1_mobile_diesel(
+    quantity: Decimal,
+    input_unit: str = "litres",
+    vehicle_category: str = "heavy_construction_fleet",
+) -> Dict[str, Any]:
+    """
+    Computes Scope 1 mobile emissions for High-Speed Diesel (HSD) fleet/vehicles.
+    Formula: Quantity (L) × EF (0.00268 tCO2e/L)
+    Source: BEE PAT Manual 2023 / MoPNG PPAC
+    """
+    res = calculate_scope1_mobile_combustion("hsd", quantity, input_unit, vehicle_category)
+    res["formula_code"] = "CALC-GHG-SCOPE1-MOBILE-DIESEL"
+    return res
+
+
+def calculate_scope1_mobile_petrol(
+    quantity: Decimal,
+    input_unit: str = "litres",
+    vehicle_category: str = "passenger_fleet",
+) -> Dict[str, Any]:
+    """
+    Computes Scope 1 mobile emissions for Petrol/Motor Spirit (MS) fleet/vehicles.
+    Formula: Quantity (L) × EF (0.00231 tCO2e/L)
+    Source: BEE PAT Manual 2023 / MoPNG PPAC
+    """
+    res = calculate_scope1_mobile_combustion("petrol", quantity, input_unit, vehicle_category)
+    res["formula_code"] = "CALC-GHG-SCOPE1-MOBILE-PETROL"
+    return res
+
+
+def calculate_scope1_mobile_cng(
+    quantity: Decimal,
+    input_unit: str = "kg",
+    vehicle_category: str = "cng_commercial_fleet",
+) -> Dict[str, Any]:
+    """
+    Computes Scope 1 mobile emissions for Compressed Natural Gas (CNG) vehicles.
+    Formula: Quantity (kg) × EF (0.00221 tCO2e/kg)
+    Source: MoPNG PPAC 2023 / MoEFCC
+    """
+    res = calculate_scope1_mobile_combustion("cng", quantity, input_unit, vehicle_category)
+    res["formula_code"] = "CALC-GHG-SCOPE1-MOBILE-CNG"
+    return res
+
+
+def calculate_scope1_refrigerant_leakage(
+    refrigerant_type: str,
+    quantity_kg: Decimal,
+) -> Dict[str, Any]:
+    """
+    Computes Scope 1 fugitive emissions from HVAC/AC refrigerant top-up/leakage (HCFC-22, HFC-32, HFC-410A).
+    Formula: Quantity (kg) × GWP (tCO2e/kg)
+    Source: IPCC AR4 GWP 100yr / MoEFCC India
+    """
+    res = calculate_scope1_fugitive_emissions(refrigerant_type, quantity_kg)
+    res["formula_code"] = "CALC-GHG-SCOPE1-FUGITIVE-REFRIGERANT"
+    return res
+
+
+def calculate_scope1_sf6_leakage(
+    quantity_kg: Decimal,
+) -> Dict[str, Any]:
+    """
+    Computes Scope 1 fugitive emissions from SF6 gas leakage in Gas-Insulated Switchgear (GIS).
+    Formula: Quantity (kg) × GWP (22.800 tCO2e/kg)
+    Source: IPCC AR4 GWP 100yr (22,800) / MoEFCC India
+    """
+    res = calculate_scope1_fugitive_emissions("sf6", quantity_kg)
+    res["formula_code"] = "CALC-GHG-SCOPE1-FUGITIVE-SF6"
+    return res
+

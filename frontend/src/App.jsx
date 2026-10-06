@@ -63,10 +63,56 @@ import UserManagement from './pages/UserManagement';
 import OrgHierarchy   from './pages/OrgHierarchy';
 import MetricCatalogue from './pages/MetricCatalogue';
 import DataEntry      from './pages/DataEntry';
-import EvidenceVault  from './pages/EvidenceVault';
 import Workflow       from './pages/Workflow';
 import Consolidation  from './pages/Consolidation';
 import Reporting      from './pages/Reporting';
+import EvidenceVault  from './pages/EvidenceVault';
+import ProjectSummary from './pages/ProjectSummary';
+import Projects       from './pages/Projects';
+import ProjectDetail  from './pages/ProjectDetail';
+import ProjectWizard  from './pages/ProjectWizard';
+import DataQuality    from './pages/DataQuality';
+import AuditLog       from './pages/AuditLog';
+import ValueChain     from './pages/ValueChain';
+import Assurance      from './pages/Assurance';
+import BackgroundJobs from './pages/BackgroundJobs';
+
+// ── Disclosure pages (Type 3 forms — spec §46) ────────────────────────────────
+// BU Disclosures: targets, initiatives, BU-specific data (spec §23)
+// Subsidiary Disclosures: Section A/B/C, org info (spec §29-32)
+// Group Disclosures: policies, governance, assurance (spec §36)
+// These pages are loaded lazily and will be built progressively.
+const BUDisclosure         = React.lazy(() => import('./pages/BUDisclosure').catch(() => ({ default: () => <DisclosurePlaceholder level="BU" /> })));
+const SubsidiaryDisclosure = React.lazy(() => import('./pages/SubsidiaryDisclosure').catch(() => ({ default: () => <DisclosurePlaceholder level="Subsidiary" /> })));
+const GroupDisclosure      = React.lazy(() => import('./pages/GroupDisclosure').catch(() => ({ default: () => <DisclosurePlaceholder level="Group" /> })));
+
+function DisclosurePlaceholder({ level }) {
+  return (
+    <div style={{
+      padding: '48px 40px', maxWidth: 600, margin: '0 auto',
+      display: 'flex', flexDirection: 'column', gap: 16,
+    }}>
+      <div style={{ fontSize: 40 }}>📋</div>
+      <h2 style={{ color: 'var(--text-primary)', margin: 0 }}>{level} Disclosure Form</h2>
+      <p style={{ color: 'var(--text-secondary)', margin: 0, lineHeight: 1.6 }}>
+        This form allows you to enter information that genuinely belongs to the <strong>{level} level</strong>
+        — separate from project operational data (Collection forms) and review decisions (Review forms).
+      </p>
+      <div style={{
+        padding: '16px', borderRadius: 10, background: 'var(--bg-elevated)',
+        border: '1px solid var(--border-default)', fontSize: 13, color: 'var(--text-secondary)',
+      }}>
+        <strong style={{ color: 'var(--text-primary)' }}>🚧 Coming Soon</strong>
+        <br />
+        The {level} Disclosure form is being implemented. This page will contain structured
+        {level === 'Subsidiary' ? ' Section A, B, and C disclosures.' :
+         level === 'BU' ? ' BU-level targets, initiatives, and governance information.' :
+         ' Group-level policies, governance, and assurance information.'}
+      </div>
+    </div>
+  );
+}
+
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -193,36 +239,119 @@ export default function App() {
                   </PermissionGuard>
                 } />
 
-                {/* Data Collection — makers & esg_managers */}
+                {/* Data Collection — project-level users */}
                 <Route path="/collection" element={
                   <PermissionGuard perms={['form:submit', 'submission:create']}>
                     <DataEntry />
                   </PermissionGuard>
                 } />
-                <Route path="/evidence" element={
-                  <PermissionGuard perms={['evidence:read']}>
-                    <EvidenceVault />
-                  </PermissionGuard>
-                } />
 
-                {/* Assurance — checkers, auditors, esg_managers, admins */}
+                {/* Workflow — reviewers at all levels */}
                 <Route path="/workflow" element={
                   <PermissionGuard perms={['submission:review', 'form:review', 'submission:read']}>
                     <Workflow />
                   </PermissionGuard>
                 } />
 
-                {/* Reporting — all with report:read */}
+                {/* Consolidation — BU Admin and above */}
                 <Route path="/consolidation" element={
                   <PermissionGuard perms={['consolidation:read']}>
                     <Consolidation />
                   </PermissionGuard>
                 } />
+
+                {/* Reporting — all with report:read */}
                 <Route path="/reporting" element={
                   <PermissionGuard perms={['report:read']}>
                     <Reporting />
                   </PermissionGuard>
                 } />
+
+                {/* Evidence Vault — evidence:read */}
+                <Route path="/evidence" element={
+                  <PermissionGuard perms={['evidence:read']}>
+                    <EvidenceVault />
+                  </PermissionGuard>
+                } />
+
+                {/* Level-Specific Disclosures (Type 3 Forms - spec §46) */}
+                <Route path="/disclosure/bu" element={
+                  <PermissionGuard perms={['bu_disclosure:read']}>
+                    <React.Suspense fallback={<div style={{ padding: 40, color: 'var(--text-secondary)' }}>Loading BU Disclosures...</div>}>
+                      <BUDisclosure />
+                    </React.Suspense>
+                  </PermissionGuard>
+                } />
+                <Route path="/disclosure/subsidiary" element={
+                  <PermissionGuard perms={['subsidiary_disclosure:read']}>
+                    <React.Suspense fallback={<div style={{ padding: 40, color: 'var(--text-secondary)' }}>Loading Subsidiary Disclosures...</div>}>
+                      <SubsidiaryDisclosure />
+                    </React.Suspense>
+                  </PermissionGuard>
+                } />
+                <Route path="/disclosure/group" element={
+                  <PermissionGuard perms={['group_disclosure:read']}>
+                    <React.Suspense fallback={<div style={{ padding: 40, color: 'var(--text-secondary)' }}>Loading Group Disclosures...</div>}>
+                      <GroupDisclosure />
+                    </React.Suspense>
+                  </PermissionGuard>
+                } />
+
+                {/* Project Summary — Project users read-model (spec §19, §50) */}
+                <Route path="/project-summary" element={<ProjectSummary />} />
+
+                {/* Projects — project list + detail + wizard */}
+                <Route path="/projects" element={
+                  <PermissionGuard perms={['org:read', 'form:submit', 'submission:read']}>
+                    <Projects />
+                  </PermissionGuard>
+                } />
+                <Route path="/projects/new" element={
+                  <PermissionGuard perms={['org:read']}>
+                    <ProjectWizard />
+                  </PermissionGuard>
+                } />
+                <Route path="/projects/:projectId" element={
+                  <PermissionGuard perms={['org:read', 'form:submit', 'submission:read']}>
+                    <ProjectDetail />
+                  </PermissionGuard>
+                } />
+
+                {/* Data Quality */}
+                <Route path="/data-quality" element={
+                  <PermissionGuard perms={['submission:read', 'consolidation:read']}>
+                    <DataQuality />
+                  </PermissionGuard>
+                } />
+
+                {/* Audit Log */}
+                <Route path="/audit" element={
+                  <PermissionGuard perms={['user:manage', 'org:read']}>
+                    <AuditLog />
+                  </PermissionGuard>
+                } />
+
+                {/* SEBI Value Chain (75% Rule) */}
+                <Route path="/valuechain" element={
+                  <PermissionGuard perms={['report:read', 'consolidation:read', 'org:read']}>
+                    <ValueChain />
+                  </PermissionGuard>
+                } />
+
+                {/* Independent Reasonable Assurance & Audit */}
+                <Route path="/assurance" element={
+                  <PermissionGuard perms={['report:read', 'audit:read', 'assurance:write', 'user:manage']}>
+                    <Assurance />
+                  </PermissionGuard>
+                } />
+
+                {/* Background Task Pipelines */}
+                <Route path="/admin/jobs" element={
+                  <PermissionGuard perms={['user:manage', 'consolidation:read']}>
+                    <BackgroundJobs />
+                  </PermissionGuard>
+                } />
+
               </Route>
 
               {/* Catch-all redirect */}

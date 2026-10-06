@@ -83,14 +83,25 @@ APPLICABILITY_RULES = [
 ]
 
 def evaluate_applicability_for_node(
-    node: OrgNode,
-    db: Session,
+    node: Any,
+    db: Any,
     period_id: Optional[str] = None
 ) -> List[MetricApplicability]:
     """
     Evaluates rule catalogue against node facts and updates/creates MetricApplicability records.
     Preserves manual approved exceptions.
     """
+    # Normalize argument order if caller passed (db, node) instead of (node, db)
+    if hasattr(node, "query") and not hasattr(db, "query"):
+        db, node = node, db
+
+    # Resolve node object if caller passed a UUID string or node ID
+    if isinstance(node, str):
+        from app.modules.org.models import OrgNode
+        node = db.query(OrgNode).filter(OrgNode.id == node).first()
+        if not node:
+            return []
+
     records: List[MetricApplicability] = []
 
     for rule in APPLICABILITY_RULES:

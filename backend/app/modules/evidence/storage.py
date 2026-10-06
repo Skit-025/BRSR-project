@@ -16,18 +16,29 @@ class StorageService:
     """
     def __init__(self):
         self.s3_client = None
-        # Attempt MinIO/S3 connection if configured
+        self.minio_client = None
+        self._checked_minio = False
+
+    def _ensure_client(self):
+        """Lazily initialize MinIO client if reachable, otherwise fall back to local disk vault."""
+        if self._checked_minio:
+            return
+        self._checked_minio = True
         try:
+            import urllib3
             from minio import Minio
-            self.minio_client = Minio(
+            # 1-second connect timeout to avoid blocking server boot when MinIO is not running
+            http_client = urllib3.PoolManager(timeout=urllib3.Timeout(connect=1.0, read=2.0))
+            client = Minio(
                 endpoint=settings.S3_ENDPOINT.replace("http://", "").replace("https://", ""),
                 access_key=settings.S3_ACCESS_KEY,
                 secret_key=settings.S3_SECRET_KEY,
-                secure=False
+                secure=False,
+                http_client=http_client
             )
-            # Check bucket existence
-            if not self.minio_client.bucket_exists(settings.S3_BUCKET_NAME):
-                self.minio_client.make_bucket(settings.S3_BUCKET_NAME)
+            if not client.bucket_exists(settings.S3_BUCKET_NAME):
+                client.make_bucket(settings.S3_BUCKET_NAME)
+            self.minio_client = client
             logger.info("StorageService connected to MinIO successfully.")
         except Exception as e:
             logger.info(f"MinIO not available ({e}). Using local persistent vault at {LOCAL_VAULT_DIR}")
@@ -35,6 +46,7 @@ class StorageService:
 
     def store_file(self, data: bytes, filename: str, mime_type: str) -> str:
         """Stores file content and returns unique storage_key."""
+        self._ensure_client()
         ext = os.path.splitext(filename)[1]
         unique_id = uuid.uuid4().hex
         storage_key = f"evidence/{unique_id}{ext}"
@@ -61,6 +73,7 @@ class StorageService:
 
     def get_file_bytes(self, storage_key: str) -> Optional[bytes]:
         """Retrieves raw file bytes given storage_key."""
+        self._ensure_client()
         if self.minio_client:
             try:
                 response = self.minio_client.get_object(settings.S3_BUCKET_NAME, storage_key)
@@ -78,6 +91,7 @@ class StorageService:
 
     def delete_file(self, storage_key: str) -> bool:
         """Deletes raw file from vault given storage_key."""
+        self._ensure_client()
         if self.minio_client:
             try:
                 self.minio_client.remove_object(settings.S3_BUCKET_NAME, storage_key)

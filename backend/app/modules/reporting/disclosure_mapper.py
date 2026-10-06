@@ -32,6 +32,18 @@ def compile_brsr_report(
     if not node:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Entity not found.")
 
+    # Guard: SEBI BRSR reports can only be generated at Group or Company level
+    allowed_report_types = ["group", "company", "subsidiary"]
+    if node.type.lower() not in allowed_report_types:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"Statutory SEBI BRSR reports can only be compiled at the Group or Company level. "
+                f"Entity '{node.name}' is of type '{node.type}'. "
+                "Data entry takes place at the Project level, while reporting compiles at Group/Company."
+            )
+        )
+
     period = db.query(ReportingPeriod).filter(ReportingPeriod.id == period_id).first()
     if not period:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Reporting period not found.")
@@ -44,6 +56,23 @@ def compile_brsr_report(
 
     cons_map = {c.metric_code: c for c in cons_values}
     metrics = {m.code: m for m in db.query(Metric).filter(Metric.is_deleted == False).all()}
+
+    # Calculate Scope 1, 2, 3 statutory emission totals
+    scope1_sub_codes = ["ENV-GHG-001A", "ENV-GHG-001B", "ENV-GHG-001C", "ENV-GHG-001D"]
+    scope1_sum = sum(cons_map[c].value for c in scope1_sub_codes if c in cons_map and cons_map[c].value)
+    scope1_flat = cons_map["ENV-GHG-001"].value if "ENV-GHG-001" in cons_map else 0.0
+    total_scope_1 = float(scope1_sum if scope1_sum > 0 else scope1_flat)
+
+    scope2_sub_codes = ["ENV-GHG-002A", "ENV-GHG-002B", "ENV-GHG-002C"]
+    scope2_sum = sum(cons_map[c].value for c in scope2_sub_codes if c in cons_map and cons_map[c].value)
+    scope2_flat = cons_map["ENV-GHG-002"].value if "ENV-GHG-002" in cons_map else 0.0
+    total_scope_2 = float(scope2_sum if scope2_sum > 0 else scope2_flat)
+
+    scope3_codes = ["ENV-GHG-003A", "ENV-GHG-003B", "ENV-GHG-003C", "ENV-GHG-003D", "ENV-GHG-003E", "ENV-GHG-003F"]
+    scope3_sum = sum(cons_map[c].value for c in scope3_codes if c in cons_map and cons_map[c].value)
+    total_scope_3 = float(scope3_sum)
+
+    total_ghg = round(total_scope_1 + total_scope_2 + total_scope_3, 4)
 
     # 2. Compile Section C (Principle-wise performance)
     section_c: List[PrincipleIndicatorDisclosure] = []
@@ -99,7 +128,11 @@ def compile_brsr_report(
         "entity": node.code,
         "period": period.code,
         "section_a": section_a.model_dump(),
-        "section_c": [d.model_dump() for d in section_c]
+        "section_c": [d.model_dump() for d in section_c],
+        "total_scope_1_tco2e": total_scope_1,
+        "total_scope_2_tco2e": total_scope_2,
+        "total_scope_3_tco2e": total_scope_3,
+        "total_ghg_emissions_tco2e": total_ghg,
     }
     snapshot_hash = hashlib.sha256(json.dumps(report_dict, sort_keys=True).encode("utf-8")).hexdigest()
 
@@ -128,5 +161,9 @@ def compile_brsr_report(
         generated_at=datetime.now(timezone.utc),
         section_a=section_a,
         section_b=section_b,
-        section_c=section_c
+        section_c=section_c,
+        total_scope_1_tco2e=total_scope_1,
+        total_scope_2_tco2e=total_scope_2,
+        total_scope_3_tco2e=total_scope_3,
+        total_ghg_emissions_tco2e=total_ghg,
     )

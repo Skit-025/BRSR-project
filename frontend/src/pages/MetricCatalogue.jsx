@@ -30,41 +30,55 @@ export default function MetricCatalogue() {
   });
 
   return (
-    <div className="page-content anim-fade">
+    <div className="page-content anim-fade" style={{ background: '#f8fafc' }}>
+      {/* ── Status Ticker ── */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 16, marginBottom: 8,
+        fontSize: 11, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+        fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#64748b'
+      }}>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: '#15803d' }}>
+          <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#15803d', display: 'inline-block' }}></span>
+          SEBI STATUTORY INDICATORS
+        </span>
+        <span style={{ color: '#cbd5e1' }}>/</span>
+        <span>SINGLE SOURCE OF TRUTH (SSOT) CATALOGUE</span>
+      </div>
+
       {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>
         <div>
-          <h1 style={{ fontSize: '24px', fontWeight: '700', color: 'var(--text-primary)', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <BookOpen size={24} color="var(--brand-400)" />
-            Statutory Metric Catalogue (Single Source of Truth)
+          <h1 style={{ fontSize: '26px', fontWeight: 700, color: '#09090b', margin: 0, letterSpacing: '-0.02em', display: 'flex', alignItems: 'center', gap: 10 }}>
+            <BookOpen size={24} color="#09090b" />
+            Statutory Metric Catalogue
           </h1>
-          <p style={{ color: 'var(--text-secondary)', fontSize: '13px', margin: '4px 0 0 0' }}>
+          <p style={{ color: '#64748b', fontSize: '13px', margin: '4px 0 0 0' }}>
             Official SEBI BRSR Core and Leadership indicator definitions, units, and aggregation rules.
           </p>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <button className="btn btn-secondary" onClick={() => refetch()} disabled={isRefetching}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <button className="btn btn-secondary" style={{ borderRadius: 6, border: '1px solid #e2e8f0', background: '#fff', color: '#09090b', fontWeight: 600 }} onClick={() => refetch()} disabled={isRefetching}>
             <RefreshCw size={13} className={isRefetching ? 'spin' : ''} />
             <span>Refresh</span>
           </button>
-          <span style={{ fontSize: '13px', fontWeight: '700', padding: '6px 14px', borderRadius: '20px', background: 'var(--bg-elevated)', border: '1px solid var(--border-default)' }}>
+          <span style={{ fontSize: '12px', fontWeight: 600, padding: '5px 12px', borderRadius: 99, background: '#ffffff', border: '1px solid #e2e8f0', color: '#09090b', fontFamily: 'ui-monospace, monospace' }}>
             {filteredMetrics.length} Indicators Active
           </span>
         </div>
       </div>
 
       {/* Filter Toolbar */}
-      <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginBottom: '20px', padding: '14px', background: 'var(--bg-card)', borderRadius: '10px', border: '1px solid var(--border-default)' }}>
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 20, padding: 14, background: '#ffffff', borderRadius: 8, border: '1px solid #e2e8f0', boxShadow: '0 1px 2px rgba(0,0,0,0.02)' }}>
         {/* Search */}
         <div style={{ flex: '1 1 240px', position: 'relative' }}>
-          <Search size={14} style={{ position: 'absolute', left: '10px', top: '10px', color: 'var(--text-muted)' }} />
+          <Search size={14} style={{ position: 'absolute', left: 12, top: 11, color: '#94a3b8' }} />
           <input
             type="text"
             placeholder="Search metric code, name, or definition..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            style={{ width: '100%', padding: '7px 10px 7px 32px', borderRadius: '6px', background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', color: 'var(--text-primary)', fontSize: '13px' }}
+            style={{ width: '100%', padding: '7px 10px 7px 34px', borderRadius: 6, background: '#f8fafc', border: '1px solid #e2e8f0', color: '#09090b', fontSize: 13 }}
           />
         </div>
 
@@ -72,7 +86,7 @@ export default function MetricCatalogue() {
         <select
           value={categoryFilter}
           onChange={(e) => setCategoryFilter(e.target.value)}
-          style={{ padding: '7px 12px', borderRadius: '6px', background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', color: 'var(--text-primary)', fontSize: '13px' }}
+          style={{ padding: '7px 12px', borderRadius: 6, background: '#fff', border: '1px solid #e2e8f0', color: '#09090b', fontSize: 13, cursor: 'pointer', fontWeight: 500 }}
         >
           <option value="All">All Categories (E, S, G)</option>
           <option value="Environmental">Environmental (E)</option>
@@ -84,7 +98,7 @@ export default function MetricCatalogue() {
         <select
           value={principleFilter}
           onChange={(e) => setPrincipleFilter(e.target.value)}
-          style={{ padding: '7px 12px', borderRadius: '6px', background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', color: 'var(--text-primary)', fontSize: '13px' }}
+          style={{ padding: '7px 12px', borderRadius: 6, background: '#fff', border: '1px solid #e2e8f0', color: '#09090b', fontSize: 13, cursor: 'pointer', fontWeight: 500 }}
         >
           <option value="All">All Principles (1 - 9)</option>
           {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(p => (
@@ -97,17 +111,18 @@ export default function MetricCatalogue() {
           onClick={() => setCoreOnly(!coreOnly)}
           style={{
             padding: '7px 14px',
-            borderRadius: '6px',
+            borderRadius: 6,
             border: '1px solid',
-            borderColor: coreOnly ? 'var(--brand-400)' : 'var(--border-default)',
-            background: coreOnly ? 'rgba(99, 102, 241, 0.15)' : 'var(--bg-elevated)',
-            color: coreOnly ? 'var(--brand-400)' : 'var(--text-secondary)',
-            fontSize: '13px',
+            borderColor: coreOnly ? '#18181b' : '#e2e8f0',
+            background: coreOnly ? '#18181b' : '#fff',
+            color: coreOnly ? '#fff' : '#09090b',
+            fontSize: 13,
             fontWeight: 600,
             cursor: 'pointer',
             display: 'flex',
             alignItems: 'center',
-            gap: '6px',
+            gap: 6,
+            transition: 'all 0.15s ease'
           }}
         >
           <Award size={14} />

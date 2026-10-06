@@ -24,6 +24,10 @@ from app.modules.auth.schemas import (
     AdminDeleteUserRequest,
     AdminVerifyPasswordRequest,
     AdminUpdateUserRequest,
+    UserInvitationRequest,
+    UserInvitationRead,
+    AdminDeactivateUserRequest,
+    AdminAuditEntryRead,
 )
 from app.modules.auth.service import (
     authenticate_user,
@@ -34,6 +38,13 @@ from app.modules.auth.service import (
     change_user_password,
     refresh_access_token,
     bootstrap_system_admin,
+    create_invitation_by_admin,
+    list_invitations_for_admin,
+    resend_invitation,
+    revoke_invitation,
+    deactivate_user_scoped,
+    list_users_for_admin_scoped,
+    get_admin_audit_log,
 )
 from app.security.jwt import create_access_token, create_refresh_token, decode_access_token
 from app.security.rbac import Role
@@ -344,4 +355,137 @@ def admin_update_user(
         return updated_user
     except (ValueError, PermissionError) as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+# ── Hierarchical Admin Delegation & Invitation Endpoints ───────────────
+
+@router.get(
+    "/admin/scoped-users",
+    response_model=List[UserRead],
+    status_code=status.HTTP_200_OK,
+    summary="List users within calling administrator's authorized hierarchy branch"
+)
+def get_scoped_users(
+    admin_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Returns users belonging to the administrator's authorized organizational branch.
+    Enforces scope isolation across Group, Subsidiary, BU, and Project levels.
+    """
+    return list_users_for_admin_scoped(db=db, admin_user=admin_user)
+
+
+@router.post(
+    "/admin/invite",
+    response_model=UserInvitationRead,
+    status_code=status.HTTP_201_CREATED,
+    summary="Invite a new administrator or user (enforces strict level & scope hierarchy)"
+)
+def invite_user(
+    payload: UserInvitationRequest,
+    admin_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Enforces the core hierarchical rule:
+    Admins can only create users for their own organizational level or exactly one level below.
+    The organizational scope must be within their authorized subtree.
+    """
+    try:
+        invitation = create_invitation_by_admin(db=db, admin_user=admin_user, req=payload)
+        return invitation
+    except (ValueError, PermissionError) as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.get(
+    "/admin/invitations",
+    response_model=List[UserInvitationRead],
+    status_code=status.HTTP_200_OK,
+    summary="List pending invitations within calling administrator's scope"
+)
+def get_invitations(
+    admin_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Returns invitations created by this admin or within their organizational scope.
+    """
+    return list_invitations_for_admin(db=db, admin_user=admin_user)
+
+
+@router.post(
+    "/admin/invitations/{invitation_id}/resend",
+    response_model=UserInvitationRead,
+    status_code=status.HTTP_200_OK,
+    summary="Resend an invitation with refreshed expiration token"
+)
+def resend_invitation_endpoint(
+    invitation_id: str,
+    admin_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    try:
+        return resend_invitation(db=db, admin_user=admin_user, invitation_id=invitation_id)
+    except (ValueError, PermissionError) as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post(
+    "/admin/invitations/{invitation_id}/revoke",
+    response_model=UserInvitationRead,
+    status_code=status.HTTP_200_OK,
+    summary="Revoke a pending user invitation"
+)
+def revoke_invitation_endpoint(
+    invitation_id: str,
+    admin_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    try:
+        return revoke_invitation(db=db, admin_user=admin_user, invitation_id=invitation_id)
+    except (ValueError, PermissionError) as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post(
+    "/admin/users/{user_id}/deactivate",
+    response_model=UserRead,
+    status_code=status.HTTP_200_OK,
+    summary="Deactivate a user within authorized scope (preserves historical ESG records)"
+)
+def deactivate_user_endpoint(
+    user_id: str,
+    payload: AdminDeactivateUserRequest,
+    admin_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Deactivates user account while strictly preserving submitted data, reviews, and audit trails.
+    """
+    try:
+        return deactivate_user_scoped(
+            db=db,
+            admin_user=admin_user,
+            target_user_id=user_id,
+            reason=payload.reason or "Deactivated by Administrator"
+        )
+    except (ValueError, PermissionError) as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.get(
+    "/admin/audit-log",
+    response_model=List[AdminAuditEntryRead],
+    status_code=status.HTTP_200_OK,
+    summary="Fetch administrative actions audit log"
+)
+def get_audit_log_endpoint(
+    limit: int = 50,
+    admin_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    return get_admin_audit_log(db=db, admin_user=admin_user, limit=limit)
+
 

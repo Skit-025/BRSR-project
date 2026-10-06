@@ -709,23 +709,37 @@ export default function EvidenceVault() {
   }, [evidenceList, deletedIds]);
 
   return (
-    <div className="page-content anim-fade">
+    <div className="page-content anim-fade" style={{ background: '#f8fafc' }}>
+      {/* ── Status Ticker ── */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 16, marginBottom: 8,
+        fontSize: 11, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+        fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#64748b'
+      }}>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: '#15803d' }}>
+          <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#15803d', display: 'inline-block' }}></span>
+          EVIDENCE VAULT &amp; VERIFICATION
+        </span>
+        <span style={{ color: '#cbd5e1' }}>/</span>
+        <span>SHA-256 AUDIT-SEALED VOUCHERS</span>
+      </div>
+
       {/* Page Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '24px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px' }}>
         <div>
-          <h1 style={{ fontSize: '24px', fontWeight: '700', color: 'var(--text-primary)', margin: 0, display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <Shield size={24} color="var(--brand-400)" />
+          <h1 style={{ fontSize: '26px', fontWeight: 700, color: '#09090b', margin: 0, letterSpacing: '-0.02em', display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <Shield size={24} color="#09090b" />
             Evidence Vault &amp; Bill Verification
           </h1>
-          <p style={{ color: 'var(--text-secondary)', fontSize: '13px', margin: '4px 0 0 0' }}>
-            Immutable SHA-256 evidence repository. Select project &amp; bill type, upload bill images, and calculate statutory consumption.
+          <p style={{ color: '#64748b', fontSize: '13px', margin: '4px 0 0 0' }}>
+            Immutable SHA-256 evidence repository. Select project &amp; bill type, upload vouchers, and verify statutory consumption.
           </p>
         </div>
         <button
           onClick={() => refetch()}
           disabled={isRefetching}
           className="btn btn-secondary"
-          style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '7px 14px', borderRadius: '6px', fontSize: '13px' }}
+          style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '7px 14px', borderRadius: '6px', fontSize: '13px', border: '1px solid #e2e8f0', background: '#fff', color: '#09090b', fontWeight: 600 }}
         >
           <RefreshCw size={13} className={isRefetching ? 'spin' : ''} />
           Refresh Vault
@@ -737,11 +751,12 @@ export default function EvidenceVault() {
         display: 'flex',
         flexDirection: 'column',
         gap: '16px',
-        border: '1px solid rgba(99, 102, 241, 0.25)',
-        borderRadius: '12px',
+        border: '1px solid #e2e8f0',
+        borderRadius: '8px',
         padding: '20px 24px',
-        background: 'var(--bg-card)',
+        background: '#ffffff',
         marginBottom: '24px',
+        boxShadow: '0 1px 2px rgba(0,0,0,0.02)'
       }}>
         {/* Row 1: Project Selector and Bill Type Selector */}
         <div style={{ display: 'grid', gridTemplateColumns: 'minmax(280px, 1.2fr) minmax(360px, 2fr)', gap: '20px', alignItems: 'flex-start' }}>

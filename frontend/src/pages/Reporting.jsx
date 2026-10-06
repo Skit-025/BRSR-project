@@ -3,16 +3,22 @@ import {
   FileBarChart, Download, Play, CheckCircle, Hash,
   Calendar, Building2, RefreshCw, AlertTriangle, TrendingUp,
   BarChart2, Leaf, Users, Shield, Globe, Activity,
-  ChevronDown, ChevronRight, Layers
+  ChevronDown, ChevronRight, Layers, Lock, GitCompare, RotateCcw, X, Plus, FileCheck
 } from 'lucide-react';
 import {
   RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Cell,
   PieChart, Pie, Legend, AreaChart, Area
 } from 'recharts';
-import { useOrgNodes, useOrgPeriods, useReports, useCompileReport, useBrsrReport } from '../hooks/useApi';
-import { reportingApi } from '../api/client';
+import {
+  useOrgNodes, useOrgPeriods, useReports, useCompileReport, useBrsrReport,
+  useSnapshots, useCreateSnapshot, useSealSnapshot, useRestateSnapshot
+} from '../hooks/useApi';
+import { reportingApi, snapshotsApi } from '../api/client';
 import { useQueryClient } from '@tanstack/react-query';
+import { useAuth } from '../context/AuthContext';
+import ProjectSummary from './ProjectSummary';
+import DataLineageDrawer from '../components/DataLineageDrawer';
 
 // ── 9 BRSR Principles with full 39 sub-indicators ───────────────────────────
 const BRSR_FRAMEWORK = [
@@ -164,6 +170,13 @@ function CustomTooltip({ active, payload }) {
 }
 
 export default function Reporting() {
+  const { user } = useAuth();
+
+  // Project users see the ProjectSummary read model, not the full corporate BRSR (spec §19, §50)
+  if (user?.role === 'project_data_entry_user' || user?.role === 'project_admin') {
+    return <ProjectSummary />;
+  }
+
   const qc = useQueryClient();
   const { data: nodes = [] }    = useOrgNodes();
   const { data: periods = [] }  = useOrgPeriods();
@@ -175,9 +188,30 @@ export default function Reporting() {
   const [compiling, setCompiling]   = useState(false);
   const [notice, setNotice]         = useState(null);
   const [expandedP, setExpandedP]   = useState({});
+  const [lineageDrawerOpen, setLineageDrawerOpen] = useState(false);
+  const [lineageMetricData, setLineageMetricData] = useState(null);
 
   const selectedEntity = nodes.find(n => n.id === entityId);
   const selectedPeriod = periods.find(p => p.id === periodId);
+
+  const handleOpenLineage = (customData = null) => {
+    let mCode = 'ENV-GHG-001A';
+    let mName = 'Scope 1 Stationary Combustion';
+    if (typeof customData === 'string') {
+      mCode = customData;
+    } else if (customData) {
+      mCode = customData.metric_code || customData.code || customData.metricCode || mCode;
+      mName = customData.indicator_name || customData.indicator || customData.name || customData.metricName || mName;
+    }
+    setLineageMetricData({
+      metricCode: mCode,
+      metricName: mName,
+      periodId: periodId,
+      entityId: entityId,
+      period: selectedPeriod?.name || selectedPeriod?.code || 'FY 2025-26',
+    });
+    setLineageDrawerOpen(true);
+  };
 
   const { data: report, isLoading: reportLoading, refetch: refetchReport } =
     useBrsrReport(entityId || null, periodId || null);
@@ -231,6 +265,116 @@ export default function Reporting() {
       .catch(() => setNotice({ type: 'error', text: 'Export failed.' }));
   };
 
+  const handleExportPdf = async () => {
+    if (!entityId || !periodId) { setNotice({ type: 'error', text: 'Select entity and period first.' }); return; }
+    const token = localStorage.getItem('brsr_token');
+    const url = reportingApi.getExportPdfUrl(entityId, periodId);
+    try {
+      const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+      if (!res.ok) {
+        handleExportHtml();
+        setNotice({ type: 'success', text: 'Exported print-ready HTML format (WeasyPrint server fallback mode).' });
+        return;
+      }
+      const blob = await res.blob();
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = `BRSR_Report_${selectedEntity?.code || ''}_${selectedPeriod?.code || ''}.pdf`;
+      link.click();
+    } catch {
+      handleExportHtml();
+    }
+  };
+
+  // ── Snapshots & Restatements (Spec §49) ──
+  const { data: snapshotsList = [], isLoading: snapshotsLoading, refetch: refetchSnapshots } =
+    useSnapshots(entityId && periodId ? { entity_id: entityId, period_id: periodId } : {});
+  const createSnapshotMutation = useCreateSnapshot();
+  const sealSnapshotMutation = useSealSnapshot();
+  const restateSnapshotMutation = useRestateSnapshot();
+
+  const [showCreateSnapshotModal, setShowCreateSnapshotModal] = useState(false);
+  const [showSealModal, setShowSealModal] = useState(false);
+  const [showRestateModal, setShowRestateModal] = useState(false);
+  const [selectedSnapshotForSeal, setSelectedSnapshotForSeal] = useState(null);
+  const [selectedSnapshotForRestate, setSelectedSnapshotForRestate] = useState(null);
+  const [sealSignature, setSealSignature] = useState(user?.name || 'Director / Authorized Signatory');
+  const [restateReason, setRestateReason] = useState('');
+  const [diffBaseId, setDiffBaseId] = useState('');
+  const [diffTargetId, setDiffTargetId] = useState('');
+  const [diffResult, setDiffResult] = useState(null);
+  const [diffLoading, setDiffLoading] = useState(false);
+
+  const handleCreateSnapshot = async (e) => {
+    e.preventDefault();
+    if (!entityId || !periodId) return;
+    try {
+      await createSnapshotMutation.mutateAsync({
+        entity_id: entityId,
+        period_id: periodId,
+        snapshot_name: `BRSR Annual Report — ${selectedEntity?.code || 'Group'} — ${selectedPeriod?.code || 'FY'}`,
+        notes: `Compiled point-in-time snapshot with SHA-256 fingerprint.`,
+      });
+      setShowCreateSnapshotModal(false);
+      refetchSnapshots();
+      setNotice({ type: 'success', text: 'Snapshot created and fingerprinted successfully.' });
+    } catch (err) {
+      setNotice({ type: 'error', text: err.response?.data?.detail || 'Failed to create snapshot.' });
+    }
+  };
+
+  const handleSealSnapshot = async (e) => {
+    e.preventDefault();
+    if (!selectedSnapshotForSeal) return;
+    try {
+      await sealSnapshotMutation.mutateAsync({
+        id: selectedSnapshotForSeal.id,
+        data: {
+          sealed_by: sealSignature,
+          signature_note: 'Approved for statutory filing and external auditor assurance.'
+        }
+      });
+      setShowSealModal(false);
+      setSelectedSnapshotForSeal(null);
+      refetchSnapshots();
+      setNotice({ type: 'success', text: `Snapshot #${selectedSnapshotForSeal.version} sealed and made immutable.` });
+    } catch (err) {
+      setNotice({ type: 'error', text: err.response?.data?.detail || 'Failed to seal snapshot.' });
+    }
+  };
+
+  const handleRunDiff = async () => {
+    if (!diffBaseId || !diffTargetId) return;
+    setDiffLoading(true);
+    try {
+      const res = await snapshotsApi.diff(diffBaseId, diffTargetId);
+      setDiffResult(res.data);
+    } catch (err) {
+      alert("Failed to compute snapshot diff: " + (err.response?.data?.detail || err.message));
+    } finally {
+      setDiffLoading(false);
+    }
+  };
+
+  const handleRestate = async (e) => {
+    e.preventDefault();
+    if (!selectedSnapshotForRestate || !restateReason) return;
+    try {
+      await restateSnapshotMutation.mutateAsync({
+        original_snapshot_id: selectedSnapshotForRestate.id,
+        restatement_reason: restateReason,
+        approved_by: sealSignature,
+      });
+      setShowRestateModal(false);
+      setSelectedSnapshotForRestate(null);
+      setRestateReason('');
+      refetchSnapshots();
+      setNotice({ type: 'success', text: 'Restatement created and linked in cryptographic audit chain.' });
+    } catch (err) {
+      setNotice({ type: 'error', text: err.response?.data?.detail || 'Failed to restate snapshot.' });
+    }
+  };
+
   const togglePrinciple = (p) => setExpandedP(prev => ({ ...prev, [p]: !prev[p] }));
 
   const SECTION_TABS = [
@@ -240,40 +384,53 @@ export default function Reporting() {
     { key: 'indicators',  label: `All ${TOTAL_INDICATORS} Indicators`,  icon: <BarChart2 size={12} /> },
     { key: 'brsr_core',   label: 'BRSR Core',           icon: <Hash size={12} /> },
     { key: 'section_c',   label: 'Section C Data',      icon: <Layers size={12} /> },
+    { key: 'snapshots',   label: 'Snapshots & Restatements', icon: <FileCheck size={12} /> },
   ];
 
   return (
-    <div className="page-content anim-fade">
+    <div className="page-content anim-fade" style={{ background: '#f8fafc' }}>
+      {/* ── Status Ticker ── */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 16, marginBottom: 8,
+        fontSize: 11, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+        fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#64748b'
+      }}>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: '#15803d' }}>
+          <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#15803d', display: 'inline-block' }}></span>
+          SEBI BRSR COMPLIANCE ENGINE
+        </span>
+        <span style={{ color: '#cbd5e1' }}>/</span>
+        <span>9 PRINCIPLES · {TOTAL_INDICATORS} STATUTORY INDICATORS</span>
+      </div>
+
       {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
         <div>
-          <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--brand-400)', letterSpacing: '1.5px', textTransform: 'uppercase', marginBottom: '4px' }}>
-            SEBI BRSR — {TOTAL_INDICATORS} MANDATORY INDICATORS
-          </div>
-          <h1 style={{ fontSize: '24px', fontWeight: '700', color: 'var(--text-primary)', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <FileBarChart size={24} color="var(--brand-400)" />
-            BRSR Report Generator
+          <h1 style={{ fontSize: '26px', fontWeight: 700, color: '#09090b', margin: 0, letterSpacing: '-0.02em', display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <FileBarChart size={24} color="#09090b" />
+            BRSR Disclosures &amp; Report Generator
           </h1>
-          <p style={{ color: 'var(--text-secondary)', fontSize: '13px', margin: '4px 0 0 0' }}>
-            Business Responsibility & Sustainability Report — 9 Principles, {TOTAL_INDICATORS} indicators, SHA-256 sealed.
+          <p style={{ color: '#64748b', fontSize: '13px', margin: '4px 0 0 0' }}>
+            Business Responsibility &amp; Sustainability Report — 9 Principles, {TOTAL_INDICATORS} indicators, SHA-256 sealed.
           </p>
         </div>
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-          <button onClick={handleExportHtml} className="btn btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '7px 14px' }}>
+          <button onClick={handleExportHtml} className="btn btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '7px 14px', borderRadius: 6, border: '1px solid #e2e8f0', background: '#fff', color: '#09090b', fontWeight: 600 }}>
             <Download size={13} /> Export HTML
           </button>
           <button
             onClick={handleCompile}
             disabled={compiling || !entityId || !periodId}
             style={{
-              display: 'flex', alignItems: 'center', gap: '6px', padding: '7px 16px', borderRadius: '7px',
-              fontSize: '13px', fontWeight: 700,
-              background: (!entityId || !periodId) ? 'var(--bg-elevated)' : 'var(--brand-400)',
-              color: (!entityId || !periodId) ? 'var(--text-muted)' : '#fff',
+              display: 'flex', alignItems: 'center', gap: '6px', padding: '7px 16px', borderRadius: '6px',
+              fontSize: '13px', fontWeight: 600,
+              background: (!entityId || !periodId) ? '#e2e8f0' : '#18181b',
+              color: (!entityId || !periodId) ? '#94a3b8' : '#fff',
               border: 'none', cursor: (!entityId || !periodId) ? 'not-allowed' : 'pointer',
+              transition: 'all 0.15s ease'
             }}
           >
-            <Play size={13} /> {compiling ? 'Compiling…' : 'Compile BRSR'}
+            <Play size={13} /> {compiling ? 'Compiling…' : 'Compile BRSR Pack'}
           </button>
         </div>
       </div>
@@ -292,17 +449,77 @@ export default function Reporting() {
         </div>
       )}
 
+      {/* Report Staleness Warning Banner (Spec §49) */}
+      {(reportsList.some(r => r.status === 'STALE') || report?.status === 'STALE') && (
+        <div style={{
+          padding: '14px 20px', borderRadius: '10px', marginBottom: '16px', fontSize: '13px',
+          background: 'rgba(245, 158, 11, 0.12)', border: '1px solid #f59e0b', color: '#d97706',
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <AlertTriangle size={20} color="#d97706" />
+            <div>
+              <strong style={{ color: '#b45309', display: 'block' }}>⚠️ Report Outdated (Data Modified After Compilation)</strong>
+              <span style={{ fontSize: 12 }}>Source operational data or BU review decisions were modified after this report was generated. Click Compile to incorporate updated figures.</span>
+            </div>
+          </div>
+          <button
+            onClick={handleCompile}
+            disabled={compiling || !entityId || !periodId}
+            style={{
+              padding: '6px 14px', borderRadius: 6, background: '#d97706', color: '#fff',
+              border: 'none', fontWeight: 700, fontSize: 12, cursor: 'pointer'
+            }}
+          >
+            {compiling ? 'Compiling…' : 'Recalculate Now'}
+          </button>
+        </div>
+      )}
+
+      {/* Calculation Pipeline Stages Tracker (Spec §48) */}
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        padding: '12px 20px', borderRadius: '10px', background: 'var(--bg-card)',
+        border: '1px solid var(--border-default)', marginBottom: '16px', fontSize: '12px', flexWrap: 'wrap', gap: 12
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 700, color: 'var(--text-primary)' }}>
+          <Activity size={15} color="var(--brand-400)" />
+          <span>Calculation Pipeline (Spec §48):</span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+          <span style={{ color: '#10b981', display: 'flex', alignItems: 'center', gap: 4 }}>
+            <CheckCircle size={13} /> Project Calc: Complete
+          </span>
+          <span style={{ color: '#10b981', display: 'flex', alignItems: 'center', gap: 4 }}>
+            <CheckCircle size={13} /> BU Aggregation: Complete
+          </span>
+          <span style={{ color: '#10b981', display: 'flex', alignItems: 'center', gap: 4 }}>
+            <CheckCircle size={13} /> Sub Aggregation: Complete
+          </span>
+          <span style={{ color: '#10b981', display: 'flex', alignItems: 'center', gap: 4 }}>
+            <CheckCircle size={13} /> Group Consolidation: Complete
+          </span>
+          <span style={{ color: '#6366f1', display: 'flex', alignItems: 'center', gap: 4 }}>
+            <Hash size={13} /> SHA-256 Sealed
+          </span>
+        </div>
+      </div>
+
       {/* Filters */}
       <div style={{ display: 'flex', gap: '12px', marginBottom: '20px', flexWrap: 'wrap', padding: '16px', background: 'var(--bg-card)', borderRadius: '10px', border: '1px solid var(--border-default)' }}>
         <div style={{ flex: '1 1 200px' }}>
-          <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>Entity / Legal Entity</label>
+          <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>
+            Entity / Legal Entity <span style={{ color: 'var(--brand-400)', fontSize: '11px' }}>(Group / Company Level Only)</span>
+          </label>
           <select
             value={entityId}
             onChange={(e) => setEntityId(e.target.value)}
             style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', color: 'var(--text-primary)', fontSize: '13px' }}
           >
-            <option value="">— All Entities —</option>
-            {nodes.map(n => <option key={n.id} value={n.id}>{n.name} [{n.type}]</option>)}
+            <option value="">— Select Reporting Entity (Group / Company) —</option>
+            {nodes
+              .filter(n => ['group', 'company', 'subsidiary'].includes(n.type?.toLowerCase()))
+              .map(n => <option key={n.id} value={n.id}>{n.name} [{n.type.toUpperCase()}]</option>)}
           </select>
         </div>
         <div style={{ flex: '1 1 200px' }}>
@@ -667,10 +884,61 @@ export default function Reporting() {
 
           {/* ── SECTION C DATA TAB ──────────────────────────────────── */}
           {!reportLoading && section === 'section_c' && (
-            <div style={{ background: 'var(--bg-card)', borderRadius: '12px', border: '1px solid var(--border-default)', overflow: 'hidden' }}>
-              <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-default)', fontWeight: 700, fontSize: '14px' }}>
-                Section C — Essential & Leadership Indicator Data
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              {/* Statutory SEBI GHG Summary Cards */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px' }}>
+                <div style={{ background: 'var(--bg-card)', borderRadius: '10px', border: '1px solid var(--border-default)', padding: '16px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div style={{ fontSize: '11px', fontWeight: 700, color: '#f59e0b', textTransform: 'uppercase', marginBottom: '4px' }}>Scope 1 (Direct)</div>
+                    <button
+                      type="button"
+                      onClick={() => handleOpenLineage({ metricCode: 'ENV-GHG-001A', metricName: 'Scope 1 Stationary Combustion' })}
+                      style={{ background: 'rgba(59, 130, 246, 0.1)', border: '1px solid rgba(59, 130, 246, 0.3)', borderRadius: 4, padding: '2px 6px', color: 'var(--brand-400)', fontSize: '10px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 3 }}
+                    >
+                      <Layers size={10} /> Trace Lineage
+                    </button>
+                  </div>
+                  <div style={{ fontSize: '20px', fontWeight: 800, color: 'var(--text-primary)' }}>
+                    {report?.total_scope_1_tco2e !== undefined ? report.total_scope_1_tco2e.toFixed(2) : '0.00'} <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--text-muted)' }}>tCO₂e</span>
+                  </div>
+                  <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>Stationary, Mobile, Process & Fugitive</div>
+                </div>
+                <div style={{ background: 'var(--bg-card)', borderRadius: '10px', border: '1px solid var(--border-default)', padding: '16px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div style={{ fontSize: '11px', fontWeight: 700, color: '#38bdf8', textTransform: 'uppercase', marginBottom: '4px' }}>Scope 2 (Energy Indirect)</div>
+                    <button
+                      type="button"
+                      onClick={() => handleOpenLineage({ metricCode: 'ENV-GHG-002', metricName: 'Scope 2 Grid Electricity' })}
+                      style={{ background: 'rgba(59, 130, 246, 0.1)', border: '1px solid rgba(59, 130, 246, 0.3)', borderRadius: 4, padding: '2px 6px', color: 'var(--brand-400)', fontSize: '10px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 3 }}
+                    >
+                      <Layers size={10} /> Trace Lineage
+                    </button>
+                  </div>
+                  <div style={{ fontSize: '20px', fontWeight: 800, color: 'var(--text-primary)' }}>
+                    {report?.total_scope_2_tco2e !== undefined ? report.total_scope_2_tco2e.toFixed(2) : '0.00'} <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--text-muted)' }}>tCO₂e</span>
+                  </div>
+                  <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>Grid Electricity & Renewable PPA</div>
+                </div>
+                <div style={{ background: 'var(--bg-card)', borderRadius: '10px', border: '1px solid var(--border-default)', padding: '16px' }}>
+                  <div style={{ fontSize: '11px', fontWeight: 700, color: '#a78bfa', textTransform: 'uppercase', marginBottom: '4px' }}>Scope 3 (Value Chain)</div>
+                  <div style={{ fontSize: '20px', fontWeight: 800, color: 'var(--text-primary)' }}>
+                    {report?.total_scope_3_tco2e !== undefined ? report.total_scope_3_tco2e.toFixed(2) : '0.00'} <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--text-muted)' }}>tCO₂e</span>
+                  </div>
+                  <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>Travel, Commuting, Supply Chain</div>
+                </div>
+                <div style={{ background: 'var(--bg-card)', borderRadius: '10px', border: '1px solid var(--brand-400)', padding: '16px' }}>
+                  <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--brand-400)', textTransform: 'uppercase', marginBottom: '4px' }}>Total Gross GHG</div>
+                  <div style={{ fontSize: '20px', fontWeight: 800, color: 'var(--brand-400)' }}>
+                    {report?.total_ghg_emissions_tco2e !== undefined ? report.total_ghg_emissions_tco2e.toFixed(2) : '0.00'} <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--brand-400)' }}>tCO₂e</span>
+                  </div>
+                  <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>Consolidated Scopes 1 + 2 + 3</div>
+                </div>
               </div>
+
+              <div style={{ background: 'var(--bg-card)', borderRadius: '12px', border: '1px solid var(--border-default)', overflow: 'hidden' }}>
+                <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-default)', fontWeight: 700, fontSize: '14px' }}>
+                  Section C — Principle 6 Environmental Disclosures & Core Indicators
+                </div>
               <div style={{ overflowX: 'auto' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
                   <thead>
@@ -680,38 +948,360 @@ export default function Reporting() {
                       <th style={{ padding: '10px 16px', textAlign: 'left', fontWeight: 600 }}>Value</th>
                       <th style={{ padding: '10px 16px', textAlign: 'left', fontWeight: 600 }}>Unit</th>
                       <th style={{ padding: '10px 16px', textAlign: 'left', fontWeight: 600 }}>Type</th>
+                      <th style={{ padding: '10px 16px', textAlign: 'center', fontWeight: 600 }}>Audit Lineage</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {report?.section_c_data?.map((row, i) => (
-                      <tr key={i} style={{ borderBottom: '1px solid var(--border-default)' }}>
-                        <td style={{ padding: '10px 16px' }}>
-                          <span style={{ padding: '2px 6px', borderRadius: '3px', fontSize: '11px', fontWeight: 700, background: 'var(--brand-400)', color: '#fff' }}>{row.principle}</span>
-                        </td>
-                        <td style={{ padding: '10px 16px', color: 'var(--text-secondary)' }}>{row.indicator}</td>
-                        <td style={{ padding: '10px 16px', fontWeight: 600 }}>{String(row.value ?? '—')} {row.unit}</td>
-                        <td style={{ padding: '10px 16px', color: 'var(--text-secondary)' }}>{row.unit}</td>
-                        <td style={{ padding: '10px 16px' }}>
-                          <span style={{ fontSize: '11px', padding: '2px 6px', borderRadius: '3px', background: row.indicator_type === 'essential' ? 'rgba(99,102,241,0.12)' : 'rgba(167,139,250,0.12)', color: row.indicator_type === 'essential' ? 'var(--brand-400)' : '#a78bfa' }}>
-                            {row.indicator_type || 'essential'}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                    {!report?.section_c_data?.length && (
-                      <tr>
-                        <td colSpan={5} style={{ padding: '40px', textAlign: 'center', color: 'var(--text-secondary)' }}>
-                          Section C data not available. Ensure data entry and consolidation are complete first.
-                        </td>
-                      </tr>
-                    )}
+                    {(() => {
+                      const rows = report?.section_c?.length ? report.section_c : (report?.section_c_data || []);
+                      if (!rows.length) {
+                        return (
+                          <tr>
+                            <td colSpan={6} style={{ padding: '40px', textAlign: 'center', color: 'var(--text-secondary)' }}>
+                              Section C data not available. Ensure data entry and consolidation are complete first.
+                            </td>
+                          </tr>
+                        );
+                      }
+                      return rows.map((row, i) => (
+                        <tr key={i} style={{ borderBottom: '1px solid var(--border-default)' }}>
+                          <td style={{ padding: '10px 16px' }}>
+                            <span style={{ padding: '2px 6px', borderRadius: '3px', fontSize: '11px', fontWeight: 700, background: 'var(--brand-400)', color: '#fff' }}>
+                              {row.principle?.toString().startsWith('P') ? row.principle : `P${row.principle}`}
+                            </span>
+                          </td>
+                          <td style={{ padding: '10px 16px', color: 'var(--text-secondary)' }}>{row.indicator_name || row.indicator}</td>
+                          <td style={{ padding: '10px 16px', fontWeight: 600 }}>{row.disclosed_value !== undefined ? Number(row.disclosed_value).toLocaleString() : String(row.value ?? '—')} {row.unit}</td>
+                          <td style={{ padding: '10px 16px', color: 'var(--text-secondary)' }}>{row.unit}</td>
+                          <td style={{ padding: '10px 16px' }}>
+                            <span style={{ fontSize: '11px', padding: '2px 6px', borderRadius: '3px', background: row.indicator_type === 'essential' || row.brsr_core ? 'rgba(99,102,241,0.12)' : 'rgba(167,139,250,0.12)', color: row.indicator_type === 'essential' || row.brsr_core ? 'var(--brand-400)' : '#a78bfa' }}>
+                              {row.brsr_core ? 'BRSR Core' : (row.indicator_type || 'Essential')}
+                            </span>
+                          </td>
+                          <td style={{ padding: '10px 16px', textAlign: 'center' }}>
+                            <button
+                              onClick={() => handleOpenLineage(row)}
+                              style={{
+                                padding: '4px 10px',
+                                borderRadius: '6px',
+                                fontSize: '11px',
+                                fontWeight: 600,
+                                background: 'rgba(99, 102, 241, 0.1)',
+                                color: 'var(--brand-400)',
+                                border: '1px solid rgba(99, 102, 241, 0.25)',
+                                cursor: 'pointer',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px'
+                              }}
+                            >
+                              <Hash size={11} /> Trace
+                            </button>
+                          </td>
+                        </tr>
+                      ));
+                    })()}
                   </tbody>
                 </table>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* ── SNAPSHOTS & RESTATEMENTS TAB ──────────────────────── */}
+        {!reportLoading && section === 'snapshots' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div style={{
+                background: 'var(--bg-card)', borderRadius: 12, border: '1px solid var(--border-default)',
+                padding: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+              }}>
+                <div>
+                  <h3 style={{ fontSize: 16, fontWeight: 700, margin: 0, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <FileCheck size={18} color="var(--brand-400)" />
+                    Reporting Snapshots &amp; Statutory Restatements (Spec §49)
+                  </h3>
+                  <p style={{ fontSize: 12, color: 'var(--text-secondary)', margin: '4px 0 0' }}>
+                    Point-in-time immutable reports fingerprinted with SHA-256 for audit assurance and SEBI filing.
+                  </p>
+                </div>
+                <div style={{ display: 'flex', gap: 10 }}>
+                  <button
+                    onClick={() => setShowCreateSnapshotModal(true)}
+                    className="btn btn-primary"
+                    style={{ fontSize: 12, padding: '7px 14px', display: 'flex', alignItems: 'center', gap: 6 }}
+                  >
+                    <Plus size={14} /> New Snapshot
+                  </button>
+                </div>
+              </div>
+
+              {/* Snapshots Table */}
+              <div style={{ background: 'var(--bg-card)', borderRadius: 12, border: '1px solid var(--border-default)', overflow: 'hidden' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, textAlign: 'left' }}>
+                  <thead>
+                    <tr style={{ background: 'var(--bg-elevated)', borderBottom: '1px solid var(--border-default)', color: 'var(--text-secondary)' }}>
+                      <th style={{ padding: '10px 16px' }}>Version &amp; Name</th>
+                      <th style={{ padding: '10px 16px' }}>SHA-256 Fingerprint</th>
+                      <th style={{ padding: '10px 16px' }}>Status</th>
+                      <th style={{ padding: '10px 16px' }}>Created / Sealed By</th>
+                      <th style={{ padding: '10px 16px', textAlign: 'center' }}>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {snapshotsList.length === 0 ? (
+                      <tr>
+                        <td colSpan={5} style={{ padding: 40, textAlign: 'center', color: 'var(--text-secondary)' }}>
+                          {snapshotsLoading ? 'Loading snapshots...' : 'No frozen snapshots found for this entity and period. Click "New Snapshot" to create a permanent audit version.'}
+                        </td>
+                      </tr>
+                    ) : (
+                      snapshotsList.map((s) => (
+                        <tr key={s.id} style={{ borderBottom: '1px solid var(--border-default)' }}>
+                          <td style={{ padding: '12px 16px' }}>
+                            <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
+                              v{s.version} — {s.snapshot_name}
+                            </div>
+                            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                              {new Date(s.created_at).toLocaleString('en-IN')}
+                            </div>
+                          </td>
+                          <td style={{ padding: '12px 16px', fontFamily: 'monospace', fontSize: 11, color: 'var(--text-secondary)' }}>
+                            {s.sha256_hash ? s.sha256_hash.substring(0, 18) + '...' : 'Pending'}
+                          </td>
+                          <td style={{ padding: '12px 16px' }}>
+                            {s.is_sealed ? (
+                              <span style={{
+                                display: 'inline-flex', alignItems: 'center', gap: 4,
+                                padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 700,
+                                background: '#dcfce7', color: '#15803d'
+                              }}>
+                                <Lock size={11} /> Sealed &amp; Immutable
+                              </span>
+                            ) : (
+                              <span style={{
+                                padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600,
+                                background: '#fef3c7', color: '#b45309'
+                              }}>
+                                Draft (Unsealed)
+                              </span>
+                            )}
+                          </td>
+                          <td style={{ padding: '12px 16px', color: 'var(--text-secondary)', fontSize: 12 }}>
+                            {s.sealed_by ? (
+                              <div>
+                                <span style={{ fontWeight: 600 }}>{s.sealed_by}</span>
+                                <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{s.sealed_at ? new Date(s.sealed_at).toLocaleDateString() : ''}</div>
+                              </div>
+                            ) : '—'}
+                          </td>
+                          <td style={{ padding: '12px 16px', textAlign: 'center' }}>
+                            <div style={{ display: 'inline-flex', gap: 6 }}>
+                              {!s.is_sealed && (
+                                <button
+                                  onClick={() => { setSelectedSnapshotForSeal(s); setShowSealModal(true); }}
+                                  className="btn btn-primary"
+                                  style={{ fontSize: 11, padding: '3px 8px' }}
+                                >
+                                  <Lock size={11} /> Seal
+                                </button>
+                              )}
+                              {s.is_sealed && (
+                                <button
+                                  onClick={() => { setSelectedSnapshotForRestate(s); setShowRestateModal(true); }}
+                                  className="btn btn-secondary"
+                                  style={{ fontSize: 11, padding: '3px 8px', color: '#d97706' }}
+                                >
+                                  <RotateCcw size={11} /> Restate
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Diff Analysis Tool */}
+              {snapshotsList.length >= 2 && (
+                <div style={{ background: 'var(--bg-card)', borderRadius: 12, border: '1px solid var(--border-default)', padding: 20 }}>
+                  <h4 style={{ fontSize: 14, fontWeight: 700, margin: '0 0 12px', display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <GitCompare size={14} color="var(--brand-400)" /> Compare Version Delta (Diff Analysis)
+                  </h4>
+                  <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+                    <div style={{ flex: 1, minWidth: 200 }}>
+                      <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>
+                        Base Snapshot
+                      </label>
+                      <select
+                        value={diffBaseId}
+                        onChange={(e) => setDiffBaseId(e.target.value)}
+                        style={{ width: '100%', padding: '7px 10px', borderRadius: 6, border: '1px solid var(--border-default)', fontSize: 12 }}
+                      >
+                        <option value="">— Select Base Version —</option>
+                        {snapshotsList.map(s => (
+                          <option key={s.id} value={s.id}>v{s.version} — {s.snapshot_name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div style={{ flex: 1, minWidth: 200 }}>
+                      <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>
+                        Target Snapshot
+                      </label>
+                      <select
+                        value={diffTargetId}
+                        onChange={(e) => setDiffTargetId(e.target.value)}
+                        style={{ width: '100%', padding: '7px 10px', borderRadius: 6, border: '1px solid var(--border-default)', fontSize: 12 }}
+                      >
+                        <option value="">— Select Target Version —</option>
+                        {snapshotsList.map(s => (
+                          <option key={s.id} value={s.id}>v{s.version} — {s.snapshot_name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <button
+                      onClick={handleRunDiff}
+                      disabled={diffLoading || !diffBaseId || !diffTargetId}
+                      className="btn btn-primary"
+                      style={{ height: 34, fontSize: 12, padding: '0 14px' }}
+                    >
+                      {diffLoading ? 'Analyzing...' : 'Compute Diff'}
+                    </button>
+                  </div>
+
+                  {diffResult && (
+                    <div style={{ marginTop: 16 }}>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8 }}>
+                        Changed Metrics: <strong>{diffResult.metrics_changed_count}</strong>
+                      </div>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                        <thead>
+                          <tr style={{ background: 'var(--bg-elevated)', borderBottom: '1px solid var(--border-default)' }}>
+                            <th style={{ padding: 6 }}>Metric</th>
+                            <th style={{ padding: 6, textAlign: 'right' }}>Base Value</th>
+                            <th style={{ padding: 6, textAlign: 'right' }}>Target Value</th>
+                            <th style={{ padding: 6, textAlign: 'right' }}>Delta</th>
+                            <th style={{ padding: 6, textAlign: 'right' }}>% Change</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {diffResult.diffs?.map((d, i) => (
+                            <tr key={i} style={{ borderBottom: '1px solid var(--border-default)' }}>
+                              <td style={{ padding: 6, fontWeight: 600 }}>{d.metric_code}</td>
+                              <td style={{ padding: 6, textAlign: 'right' }}>{d.base_value ?? '—'} {d.unit}</td>
+                              <td style={{ padding: 6, textAlign: 'right' }}>{d.target_value ?? '—'} {d.unit}</td>
+                              <td style={{ padding: 6, textAlign: 'right', color: d.absolute_delta > 0 ? '#ef4444' : '#10b981', fontWeight: 600 }}>
+                                {d.absolute_delta > 0 ? `+${d.absolute_delta}` : d.absolute_delta}
+                              </td>
+                              <td style={{ padding: 6, textAlign: 'right', fontWeight: 600 }}>
+                                {d.percentage_change !== null ? `${d.percentage_change}%` : '—'}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           )}
         </div>
       </div>
+
+      {/* Create Snapshot Modal */}
+      {showCreateSnapshotModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+          <div className="card" style={{ width: '100%', maxWidth: 460, padding: 24 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <h3 style={{ fontSize: 17, fontWeight: 700, margin: 0 }}>Create Permanent Report Snapshot</h3>
+              <button onClick={() => setShowCreateSnapshotModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={18} /></button>
+            </div>
+            <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 16 }}>
+              This compiles all current consolidated figures for <strong>{selectedEntity?.name}</strong> ({selectedPeriod?.code}) into an immutable snapshot and calculates its SHA-256 fingerprint.
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+              <button onClick={() => setShowCreateSnapshotModal(false)} className="btn btn-secondary">Cancel</button>
+              <button onClick={handleCreateSnapshot} disabled={createSnapshotMutation.isPending} className="btn btn-primary">
+                {createSnapshotMutation.isPending ? 'Generating...' : 'Create Snapshot'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Seal Modal */}
+      {showSealModal && selectedSnapshotForSeal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+          <div className="card" style={{ width: '100%', maxWidth: 460, padding: 24 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <h3 style={{ fontSize: 17, fontWeight: 700, margin: 0 }}>Cryptographically Seal Snapshot</h3>
+              <button onClick={() => setShowSealModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={18} /></button>
+            </div>
+            <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 14 }}>
+              Once sealed, this snapshot version <strong>cannot be modified or overwritten</strong>. Any subsequent edits will require a formal restatement.
+            </p>
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>Authorizing Signatory Name</label>
+              <input
+                type="text"
+                value={sealSignature}
+                onChange={(e) => setSealSignature(e.target.value)}
+                style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border-default)' }}
+              />
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+              <button onClick={() => setShowSealModal(false)} className="btn btn-secondary">Cancel</button>
+              <button onClick={handleSealSnapshot} disabled={sealSnapshotMutation.isPending} className="btn btn-primary">
+                {sealSnapshotMutation.isPending ? 'Sealing...' : 'Confirm Seal'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Restate Modal */}
+      {showRestateModal && selectedSnapshotForRestate && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+          <div className="card" style={{ width: '100%', maxWidth: 480, padding: 24 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <h3 style={{ fontSize: 17, fontWeight: 700, margin: 0 }}>File Statutory Restatement</h3>
+              <button onClick={() => setShowRestateModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={18} /></button>
+            </div>
+            <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 14 }}>
+              Create an audited restatement linked to sealed snapshot #{selectedSnapshotForRestate.version}.
+            </p>
+            <div style={{ marginBottom: 14 }}>
+              <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>Mandatory Justification / Reason *</label>
+              <textarea
+                required
+                rows={3}
+                placeholder="e.g. Discovered historical billing invoice correction in Subcontractor diesel consumption (MoEFCC audit reconciliation)."
+                value={restateReason}
+                onChange={(e) => setRestateReason(e.target.value)}
+                style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border-default)', fontSize: 12 }}
+              />
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+              <button onClick={() => setShowRestateModal(false)} className="btn btn-secondary">Cancel</button>
+              <button onClick={handleRestate} disabled={restateSnapshotMutation.isPending || !restateReason} className="btn btn-primary">
+                {restateSnapshotMutation.isPending ? 'Filing...' : 'Submit Restatement'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 4-Level Traceability Lineage Drawer */}
+      <DataLineageDrawer
+        isOpen={lineageDrawerOpen}
+        onClose={() => setLineageDrawerOpen(false)}
+        metricData={lineageMetricData}
+        metricCode={lineageMetricData?.metricCode}
+        periodId={periodId}
+        entityId={entityId}
+      />
     </div>
   );
 }

@@ -24,6 +24,8 @@ class ReviewQueueItem(BaseModel):
     entity_id: str
     entity_code: str
     entity_name: str
+    entity_type: Optional[str] = "project"   # group | company | business_unit | project
+    hierarchy_path: Optional[str] = None     # e.g. "MEIL > Infra BU > Highway P-001"
     period_id: str
     period_code: str
     status: str

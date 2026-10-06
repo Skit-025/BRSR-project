@@ -9,6 +9,8 @@ class SubmissionStatus(str, enum.Enum):
     SUBMITTED = "SUBMITTED"
     UNDER_BU_REVIEW = "UNDER_BU_REVIEW"
     BU_APPROVED = "BU_APPROVED"
+    CALCULATION_PENDING = "CALCULATION_PENDING"   # Spec §22: after BU approval, calc engine queued
+    CALCULATED = "CALCULATED"                      # Spec §22: calc engine has derived GHG/emissions
     SUBSIDIARY_APPROVED = "SUBSIDIARY_APPROVED"
     CONSOLIDATED = "CONSOLIDATED"
     LOCKED = "LOCKED"

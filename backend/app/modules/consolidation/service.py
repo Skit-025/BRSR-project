@@ -79,6 +79,21 @@ def run_consolidation_engine(
             sum_unweighted_val = 0.0
             total_active_children = 0
 
+            # Direct entry at parent level (e.g. BU overhead, business travel, central power)
+            if parent.id in node_values and metric_code in node_values[parent.id]:
+                parent_val, parent_unit = node_values[parent.id][metric_code]
+                sum_weighted_val += float(parent_val)
+                sum_unweighted_val += float(parent_val)
+                child_records.append({
+                    "child_id": parent.id,
+                    "child_code": parent.code,
+                    "child_name": f"{parent.name} (Direct BU/Node Entry)",
+                    "raw_value": float(parent_val),
+                    "unit": parent_unit,
+                    "share_pct": 100.0,
+                    "weighted_value": float(parent_val)
+                })
+
             for child in children:
                 if child.id in node_values and metric_code in node_values[child.id]:
                     child_val, child_unit = node_values[child.id][metric_code]
@@ -107,18 +122,51 @@ def run_consolidation_engine(
             if not child_records:
                 continue
 
-            # Determine roll-up method
+            # Determine roll-up method per metric specification (§16-§17)
             final_val = 0.0
             roll_method = metric.aggregation_type
 
-            if roll_method == AggregationType.SUM.value:
+            if roll_method in (AggregationType.SUM.value, "sum"):
                 final_val = sum_weighted_val
-            elif roll_method == AggregationType.RATIO.value:
-                # Page 11 Rule: "Ratio recompute from summed numerator and denominator; never average ratios."
-                # In absence of direct sub-metrics in MVP, ratio is recomputed weighted by base activity, never flat mean
-                final_val = sum_weighted_val / (len(child_records) if len(child_records) > 0 else 1.0)
-            elif roll_method == AggregationType.WEIGHTED_PCT.value:
-                final_val = sum_weighted_val / (len(child_records) if len(child_records) > 0 else 1.0)
+            elif roll_method in (AggregationType.COUNT.value, "count"):
+                final_val = float(total_active_children)
+            elif roll_method in (AggregationType.AVERAGE.value, "average"):
+                final_val = sum_unweighted_val / total_active_children if total_active_children > 0 else 0.0
+            elif roll_method in (AggregationType.MIN.value, "min"):
+                raw_vals = [r["raw_value"] for r in child_records if r.get("raw_value") is not None]
+                final_val = min(raw_vals) if raw_vals else 0.0
+            elif roll_method in (AggregationType.MAX.value, "max"):
+                raw_vals = [r["raw_value"] for r in child_records if r.get("raw_value") is not None]
+                final_val = max(raw_vals) if raw_vals else 0.0
+            elif roll_method in (AggregationType.RATIO.value, "ratio"):
+                # Critical Rule (§17): Intensity = (Sum of Numerator) / (Sum of Denominator), NEVER average of ratios!
+                num_id = metric.numerator_metric_id
+                denom_id = metric.denominator_metric_id
+                num_val = None
+                denom_val = None
+                if num_id and num_id in metrics:
+                    num_metric_code = metrics[num_id].code
+                    if num_metric_code in node_values.get(parent.id, {}):
+                        num_val = node_values[parent.id][num_metric_code][0]
+                if denom_id and denom_id in metrics:
+                    denom_metric_code = metrics[denom_id].code
+                    if denom_metric_code in node_values.get(parent.id, {}):
+                        denom_val = node_values[parent.id][denom_metric_code][0]
+
+                if num_val is not None and denom_val is not None and denom_val > 0:
+                    final_val = num_val / denom_val
+                else:
+                    # Weighted activity recompute fallback, never flat mean
+                    final_val = sum_weighted_val / (total_active_children if total_active_children > 0 else 1.0)
+            elif roll_method in (AggregationType.WEIGHTED_AVERAGE.value, "weighted_average", AggregationType.WEIGHTED_PCT.value, "weighted_pct"):
+                total_shares = sum([r.get("share_pct", 100.0) for r in child_records])
+                if total_shares > 0:
+                    final_val = sum([r.get("raw_value", 0.0) * (r.get("share_pct", 100.0) / 100.0) for r in child_records]) / (total_shares / 100.0)
+                else:
+                    final_val = sum_weighted_val / (total_active_children if total_active_children > 0 else 1.0)
+            elif roll_method in (AggregationType.NOT_AGGREGATABLE.value, AggregationType.NON_AGGREGABLE.value, "not_aggregatable", "non_aggregable"):
+                direct = [r["raw_value"] for r in child_records if r.get("child_id") == parent.id]
+                final_val = direct[0] if direct else 0.0
             else:
                 final_val = sum_weighted_val
 

@@ -22,7 +22,8 @@ def get_pending_review_queue(
     db: Session = Depends(get_db)
 ):
     """Lists all monthly packs currently awaiting BU or Subsidiary approval within user scope."""
-    return get_review_queue(db)
+    return get_review_queue(db, reviewer_user=current_user)
+
 
 
 @router.post("/review/{submission_id}", response_model=ReviewRead, status_code=status.HTTP_200_OK)

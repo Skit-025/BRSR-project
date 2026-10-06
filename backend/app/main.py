@@ -8,9 +8,16 @@ from app.api import api_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: initialize database tables and seed system admins
+    # Startup: initialize database tables, seed system admins & statutory emission factors
     init_db()
     seed_system_admins()
+    from app.db.session import SessionLocal
+    from app.modules.calc.service import seed_emission_factors
+    _db = SessionLocal()
+    try:
+        seed_emission_factors(_db)
+    finally:
+        _db.close()
     yield
 
 app = FastAPI(

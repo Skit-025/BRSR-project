@@ -31,7 +31,7 @@ def list_reports(
                 "id": str(r.id),
                 "entity_id": str(r.entity_id),
                 "period_id": str(r.period_id),
-                "status": "compiled",
+                "status": getattr(r, "status", "READY"),
                 "sha256_seal": r.snapshot_hash,
                 "generated_at": str(r.generated_at) if r.generated_at else None,
                 "report_type": r.report_type,

@@ -24,6 +24,7 @@ class EvidenceFileRead(BaseModel):
     sha256: str
     uploader_id: Optional[str] = None
     uploaded_at: datetime
+    doc_type: str = "OTHER"
     page_ref: Optional[str] = None
     doc_date: Optional[date] = None
     version: int

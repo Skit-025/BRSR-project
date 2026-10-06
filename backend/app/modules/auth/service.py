@@ -318,3 +318,267 @@ def bootstrap_system_admin(db: Session, req: BootstrapAdminRequest) -> User:
     db.commit()
     db.refresh(admin)
     return admin
+
+
+# ─── Hierarchical Admin Delegation (Spec §1-§3, §16-§18, §26) ────────────────
+
+HIERARCHICAL_DELEGATION_RULES = {
+    # System / Super Admin: unrestricted
+    "system_admin": None,
+    "super_admin": None,
+
+    # Group Admin: can create own level + exactly 1 level below (Subsidiary Admin)
+    "group_admin": {
+        "allowed_roles": ["group_admin", "group_esg_manager", "subsidiary_admin", "subsidiary_esg_manager"],
+        "allowed_levels": ["group", "company", "subsidiary"],
+    },
+    "group_esg_manager": {
+        "allowed_roles": ["group_esg_manager", "subsidiary_esg_manager"],
+        "allowed_levels": ["group", "company", "subsidiary"],
+    },
+
+    # Subsidiary Admin: can create own level + exactly 1 level below (BU Admin)
+    "subsidiary_admin": {
+        "allowed_roles": ["subsidiary_admin", "subsidiary_esg_manager", "bu_admin", "bu_esg_manager", "bu_reviewer"],
+        "allowed_levels": ["company", "subsidiary", "business_unit", "bu"],
+    },
+    "subsidiary_esg_manager": {
+        "allowed_roles": ["subsidiary_esg_manager", "bu_esg_manager", "bu_reviewer"],
+        "allowed_levels": ["company", "subsidiary", "business_unit", "bu"],
+    },
+
+    # BU Admin: can create own level + exactly 1 level below (Project Admin)
+    "bu_admin": {
+        "allowed_roles": ["bu_admin", "bu_esg_manager", "bu_reviewer", "project_admin", "project_data_entry_user", "maker"],
+        "allowed_levels": ["business_unit", "bu", "project", "site"],
+    },
+    "bu_esg_manager": {
+        "allowed_roles": ["bu_esg_manager", "bu_reviewer", "project_admin", "project_data_entry_user", "maker"],
+        "allowed_levels": ["business_unit", "bu", "project", "site"],
+    },
+
+    # Project Admin: can create project-level operational users
+    "project_admin": {
+        "allowed_roles": ["project_admin", "project_data_entry_user", "maker", "checker"],
+        "allowed_levels": ["project", "site"],
+    },
+}
+
+
+def is_node_descendant(db: Session, ancestor_id: str, descendant_id: str) -> bool:
+    """Verifies that descendant_id is equal to or a sub-node under ancestor_id."""
+    if str(ancestor_id) == str(descendant_id):
+        return True
+    from app.modules.org.models import OrgNode
+    curr = db.query(OrgNode).filter(OrgNode.id == descendant_id).first()
+    while curr and curr.parent_id:
+        if str(curr.parent_id) == str(ancestor_id):
+            return True
+        curr = db.query(OrgNode).filter(OrgNode.id == curr.parent_id).first()
+    return False
+
+
+def validate_admin_delegation(db: Session, creator_user: User, requested_role: str, target_org_node_id: Optional[str]) -> bool:
+    """
+    Validates hierarchical admin delegation (Spec §1-§3, §16-§18):
+    1. Caller must have an admin role
+    2. Requested role must be for creator's level OR exactly one level below
+    3. Target org_node must be within creator's subtree
+    """
+    if creator_user.role in ("system_admin", "super_admin"):
+        return True
+
+    delegation_rule = HIERARCHICAL_DELEGATION_RULES.get(creator_user.role)
+    if not delegation_rule:
+        raise PermissionError(f"Role '{creator_user.role}' is not authorized to create or invite users.")
+
+    if requested_role not in delegation_rule["allowed_roles"]:
+        raise PermissionError(
+            f"Admins with role '{creator_user.role}' cannot assign role '{requested_role}'. "
+            f"Permitted roles: {', '.join(delegation_rule['allowed_roles'])}."
+        )
+
+    from app.modules.org.models import OrgNode
+    if target_org_node_id:
+        target_node = db.query(OrgNode).filter(OrgNode.id == target_org_node_id).first()
+        if not target_node:
+            raise ValueError(f"Organization node '{target_org_node_id}' not found.")
+
+        if target_node.type not in delegation_rule["allowed_levels"]:
+            raise PermissionError(
+                f"Target node '{target_node.name}' ({target_node.type}) is outside allowed "
+                f"levels for '{creator_user.role}'."
+            )
+
+        if creator_user.org_node_id:
+            if not is_node_descendant(db, str(creator_user.org_node_id), str(target_node.id)):
+                raise PermissionError(
+                    f"Organization node '{target_node.name}' is outside your authorized organizational scope branch."
+                )
+    return True
+
+
+def log_admin_audit(
+    db: Session,
+    actor: User,
+    action: str,
+    target_user_id: Optional[str] = None,
+    target_name: Optional[str] = None,
+    target_role: Optional[str] = None,
+    target_scope_id: Optional[str] = None,
+    details: Optional[dict] = None
+):
+    from app.modules.auth.models import AdminAuditEntry
+    entry = AdminAuditEntry(
+        actor_id=actor.id,
+        actor_name=actor.full_name,
+        actor_role=actor.role,
+        action=action,
+        target_user_id=target_user_id,
+        target_name=target_name,
+        target_role=target_role,
+        target_scope_id=target_scope_id,
+        details=details or {}
+    )
+    db.add(entry)
+    db.commit()
+
+
+def create_invitation_by_admin(db: Session, admin_user: User, req) -> "UserInvitation":
+    from app.modules.auth.models import UserInvitation
+    validate_admin_delegation(db, admin_user, req.role, req.org_node_id)
+
+    # Check if active user already exists
+    existing_user = db.query(User).filter(User.email == req.email.lower().strip(), User.is_deleted == False).first()
+    if existing_user:
+        raise ValueError(f"An active user with email '{req.email}' already exists.")
+
+    invitation_token = secrets.token_urlsafe(32)
+    invitation = UserInvitation(
+        email=req.email.lower().strip(),
+        full_name=req.full_name.strip(),
+        role=req.role,
+        org_node_id=req.org_node_id,
+        invited_by_id=admin_user.id,
+        status="PENDING",
+        invitation_token=invitation_token,
+        expires_at=datetime.now(timezone.utc) + timedelta(days=7)
+    )
+    db.add(invitation)
+    db.commit()
+    db.refresh(invitation)
+
+    log_admin_audit(
+        db, actor=admin_user, action="USER_INVITED",
+        target_name=req.full_name, target_role=req.role,
+        target_scope_id=req.org_node_id,
+        details={"email": req.email, "invitation_id": str(invitation.id)}
+    )
+    return invitation
+
+
+def list_invitations_for_admin(db: Session, admin_user: User) -> List["UserInvitation"]:
+    from app.modules.auth.models import UserInvitation
+    if admin_user.role in ("system_admin", "super_admin"):
+        return db.query(UserInvitation).filter(UserInvitation.is_deleted == False).order_by(UserInvitation.created_at.desc()).all()
+
+    q = db.query(UserInvitation).filter(UserInvitation.is_deleted == False)
+    if admin_user.org_node_id:
+        # Filter invitations to this admin or their descendants
+        from app.modules.org.models import OrgNode
+        invs = q.order_by(UserInvitation.created_at.desc()).all()
+        return [i for i in invs if not i.org_node_id or is_node_descendant(db, str(admin_user.org_node_id), str(i.org_node_id))]
+    return q.filter(UserInvitation.invited_by_id == admin_user.id).all()
+
+
+def resend_invitation(db: Session, admin_user: User, invitation_id: str) -> "UserInvitation":
+    from app.modules.auth.models import UserInvitation
+    inv = db.query(UserInvitation).filter(UserInvitation.id == invitation_id, UserInvitation.is_deleted == False).first()
+    if not inv:
+        raise ValueError("Invitation not found.")
+    inv.invitation_token = secrets.token_urlsafe(32)
+    inv.expires_at = datetime.now(timezone.utc) + timedelta(days=7)
+    inv.status = "PENDING"
+    db.commit()
+    db.refresh(inv)
+
+    log_admin_audit(
+        db, actor=admin_user, action="INVITATION_RESENT",
+        target_name=inv.full_name, target_role=inv.role,
+        details={"invitation_id": str(inv.id), "email": inv.email}
+    )
+    return inv
+
+
+def revoke_invitation(db: Session, admin_user: User, invitation_id: str) -> "UserInvitation":
+    from app.modules.auth.models import UserInvitation
+    inv = db.query(UserInvitation).filter(UserInvitation.id == invitation_id, UserInvitation.is_deleted == False).first()
+    if not inv:
+        raise ValueError("Invitation not found.")
+    inv.status = "REVOKED"
+    inv.is_deleted = True
+    db.commit()
+    db.refresh(inv)
+
+    log_admin_audit(
+        db, actor=admin_user, action="INVITATION_REVOKED",
+        target_name=inv.full_name, target_role=inv.role,
+        details={"invitation_id": str(inv.id), "email": inv.email}
+    )
+    return inv
+
+
+def deactivate_user_scoped(db: Session, admin_user: User, target_user_id: str, reason: str = "Deactivated by Administrator") -> User:
+    target_user = db.query(User).filter(User.id == target_user_id, User.is_deleted == False).first()
+    if not target_user:
+        raise ValueError("User not found.")
+
+    if str(target_user.id) == str(admin_user.id):
+        raise ValueError("You cannot deactivate your own account.")
+
+    # Scope check
+    if admin_user.role not in ("system_admin", "super_admin"):
+        if admin_user.org_node_id and target_user.org_node_id:
+            if not is_node_descendant(db, str(admin_user.org_node_id), str(target_user.org_node_id)):
+                raise PermissionError("You cannot deactivate a user outside your organizational scope.")
+
+    target_user.is_active = False
+    db.commit()
+    db.refresh(target_user)
+
+    log_admin_audit(
+        db, actor=admin_user, action="USER_DEACTIVATED",
+        target_user_id=str(target_user.id), target_name=target_user.full_name,
+        target_role=target_user.role, target_scope_id=str(target_user.org_node_id) if target_user.org_node_id else None,
+        details={"reason": reason, "preserves_records": True}
+    )
+    return target_user
+
+
+def list_users_for_admin_scoped(db: Session, admin_user: User) -> List[User]:
+    """Lists users visible within the calling admin's authorized hierarchy branch."""
+    if admin_user.role in ("system_admin", "super_admin"):
+        return db.query(User).filter(User.is_deleted == False).order_by(User.created_at.desc()).all()
+
+    if not admin_user.org_node_id:
+        return db.query(User).filter(User.is_deleted == False).order_by(User.created_at.desc()).all()
+
+    all_users = db.query(User).filter(User.is_deleted == False).order_by(User.created_at.desc()).all()
+    scoped_users = []
+    for u in all_users:
+        if not u.org_node_id:
+            # Group or system level
+            if admin_user.role in ("group_admin", "group_esg_manager"):
+                scoped_users.append(u)
+        elif is_node_descendant(db, str(admin_user.org_node_id), str(u.org_node_id)):
+            scoped_users.append(u)
+    return scoped_users
+
+
+def get_admin_audit_log(db: Session, admin_user: User, limit: int = 50):
+    from app.modules.auth.models import AdminAuditEntry
+    q = db.query(AdminAuditEntry)
+    if admin_user.role not in ("system_admin", "super_admin"):
+        q = q.filter(AdminAuditEntry.actor_id == admin_user.id)
+    return q.order_by(AdminAuditEntry.created_at.desc()).limit(limit).all()
+

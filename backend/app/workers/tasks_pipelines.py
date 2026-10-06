@@ -91,7 +91,7 @@ def trigger_incremental_aggregation_all() -> Dict[str, Any]:
             text("""
                 SELECT DISTINCT rp.id::text, e.id::text AS root_entity_id
                 FROM reporting_periods rp
-                JOIN entities e ON e.is_root = TRUE
+                JOIN org_nodes e ON e.is_root = TRUE
                 WHERE rp.status = 'OPEN'
             """)
         ).fetchall()

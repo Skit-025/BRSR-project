@@ -53,3 +53,17 @@ class NotificationService:
         self.db.commit()
         self.db.refresh(notif)
         return notif
+
+    def mark_all_read_for_user(self, user_id: str) -> int:
+        """Bulk-mark all unread notifications for a user as read (Spec §32)."""
+        result = (
+            self.db.query(Notification)
+            .filter(Notification.recipient_user_id == user_id, Notification.is_read == False)
+            .all()
+        )
+        now = datetime.now(timezone.utc)
+        for notif in result:
+            notif.is_read = True
+            notif.read_at = now
+        self.db.commit()
+        return len(result)

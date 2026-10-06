@@ -55,7 +55,25 @@ def save_draft_submission(
             detail=f"Reporting period '{period.code}' is LOCKED. No modifications permitted."
         )
 
-    # 2. Get or initialize submission
+    # 2. Check entity node level (Project & BU-level entry rule)
+    entity = db.query(OrgNode).filter(OrgNode.id == save_req.entity_id).first()
+    if entity and entity.type not in (
+        NodeType.PROJECT.value,
+        NodeType.SITE.value,
+        NodeType.BUSINESS_UNIT.value,
+        "business_unit",
+        "bu"
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"Data entry is permitted at Project, Site, and Business Unit levels. "
+                f"Node '{entity.name}' is of type '{entity.type}'. "
+                "Consolidation happens automatically at Company and Group level."
+            )
+        )
+
+    # 3. Get or initialize submission
     submission = get_or_create_submission(db, save_req.entity_id, save_req.period_id, user_id)
 
     # 3. Check submission workflow state
@@ -172,19 +190,21 @@ def submit_submission_pack(
             detail=f"Cannot submit: pack is already in '{submission.status}' status."
         )
 
-    # ── P0 Guard 1: Only Project-level nodes may submit data packs ────────
+    # ── P0 Guard 1: Project, Site, and Business Unit level nodes may submit data packs ────────
     entity = db.query(OrgNode).filter(OrgNode.id == submission.entity_id).first()
     if entity and entity.type not in (
         NodeType.PROJECT.value,
         NodeType.SITE.value,
+        NodeType.BUSINESS_UNIT.value,
+        "business_unit",
+        "bu",
     ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=(
-                f"Data entry is only permitted at the Project or Site level. "
+                f"Data entry is permitted at Project, Site, and Business Unit levels. "
                 f"Node '{entity.name}' is of type '{entity.type}'. "
-                "Please submit data from the individual project nodes; "
-                "consolidation happens automatically at BU and Group level."
+                "Consolidation happens automatically at Company and Group level."
             )
         )
 

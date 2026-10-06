@@ -7,6 +7,11 @@ from app.modules.calc.formulas.scope1 import (
     calculate_scope1_mobile_combustion,
     calculate_scope1_process_emissions,
     calculate_scope1_fugitive_emissions,
+    calculate_scope1_mobile_diesel,
+    calculate_scope1_mobile_petrol,
+    calculate_scope1_mobile_cng,
+    calculate_scope1_refrigerant_leakage,
+    calculate_scope1_sf6_leakage,
 )
 from app.modules.calc.formulas.scope2 import calculate_scope2_electricity
 from app.modules.calc.formulas.scope3 import (

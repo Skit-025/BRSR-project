@@ -25,6 +25,7 @@ from app.modules.assurance.router import router as assurance_router
 from app.modules.valuechain.router import router as valuechain_router
 from app.modules.admin.router import router as admin_router
 from app.modules.notifications.router import router as notifications_router
+from app.modules.disclosures.router import router as disclosures_router
 
 api_router = APIRouter()
 
@@ -37,6 +38,9 @@ api_router.include_router(org_router)
 # Metric Catalogue & Dynamic Forms
 api_router.include_router(metrics_router)
 api_router.include_router(forms_router)
+
+# Type 3 Org-Level Disclosures (BU, Subsidiary, Group)
+api_router.include_router(disclosures_router)
 
 
 # Data Collection & Monthly Submissions

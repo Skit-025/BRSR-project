@@ -38,3 +38,8 @@ class BRSRFullReportResponse(BaseModel):
     section_a: SectionAData
     section_b: SectionBData
     section_c: List[PrincipleIndicatorDisclosure] = []
+    total_scope_1_tco2e: float = 0.0
+    total_scope_2_tco2e: float = 0.0
+    total_scope_3_tco2e: float = 0.0
+    total_ghg_emissions_tco2e: float = 0.0
+    ghg_intensity_turnover: Optional[float] = None
