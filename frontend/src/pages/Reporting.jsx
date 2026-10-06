@@ -1,717 +1,273 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
-  FileBarChart, Download, Play, CheckCircle, Hash,
-  Calendar, Building2, RefreshCw, AlertTriangle, TrendingUp,
-  BarChart2, Leaf, Users, Shield, Globe, Activity,
-  ChevronDown, ChevronRight, Layers
+  FileBarChart, Download, FileText, CheckCircle2, ChevronRight,
+  Database, Info, ExternalLink, Calendar, Plus, ShieldCheck, Printer
 } from 'lucide-react';
-import {
-  RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
-  ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Cell,
-  PieChart, Pie, Legend, AreaChart, Area
-} from 'recharts';
-import { useOrgNodes, useOrgPeriods, useReports, useCompileReport, useBrsrReport } from '../hooks/useApi';
-import { reportingApi } from '../api/client';
-import { useQueryClient } from '@tanstack/react-query';
+import CalculationLineageModal from '../components/CalculationLineageModal';
 
-// ── 9 BRSR Principles with full 39 sub-indicators ───────────────────────────
-const BRSR_FRAMEWORK = [
-  {
-    principle: 'P1', icon: <Shield size={14} />, color: '#6366f1',
-    label: 'Business Ethics & Transparency',
-    pillar: 'Governance',
-    indicators: [
-      { code: 'P1-E1', type: 'Essential', name: 'Percentage of board members trained on business ethics & anti-corruption policies' },
-      { code: 'P1-E2', type: 'Essential', name: 'Number of legal actions on corruption, bribery, anti-competitive practices' },
-      { code: 'P1-E3', type: 'Essential', name: 'Number of complaints received on ethical issues, resolved vs pending' },
-      { code: 'P1-L1', type: 'Leadership', name: 'Monetary & non-monetary benefits to board members and KMPs' },
-    ],
-  },
-  {
-    principle: 'P2', icon: <Leaf size={14} />, color: '#10b981',
-    label: 'Sustainable Products & Services',
-    pillar: 'Environment',
-    indicators: [
-      { code: 'P2-E1', type: 'Essential', name: 'R&D and capex investments in sustainable products & processes (₹ lakhs)' },
-      { code: 'P2-E2', type: 'Essential', name: 'Products with environmental/social labels (EPD, Ecomark) — number and %' },
-      { code: 'P2-E3', type: 'Essential', name: 'Waste recycled or reused from total waste generated (%)' },
-      { code: 'P2-L1', type: 'Leadership', name: 'Products reclaimed and channelled for material recovery (%)' },
-    ],
-  },
-  {
-    principle: 'P3', icon: <Users size={14} />, color: '#f59e0b',
-    label: 'Employee Wellbeing',
-    pillar: 'Social',
-    indicators: [
-      { code: 'P3-E1', type: 'Essential', name: 'Total number of employees — permanent, contract, other workers' },
-      { code: 'P3-E2', type: 'Essential', name: 'Benefits coverage — health insurance, maternity/paternity leave, PF, gratuity (%)' },
-      { code: 'P3-E3', type: 'Essential', name: 'Median salary comparison — female to male employees (ratio)' },
-      { code: 'P3-E4', type: 'Essential', name: 'Return-to-work rate after parental leave (%)' },
-      { code: 'P3-L1', type: 'Leadership', name: 'Transition assistance programmes for employees at retirement or termination' },
-    ],
-  },
-  {
-    principle: 'P4', icon: <Users size={14} />, color: '#38bdf8',
-    label: 'Stakeholder Engagement',
-    pillar: 'Social',
-    indicators: [
-      { code: 'P4-E1', type: 'Essential', name: 'Channels for stakeholder consultation and engagement (processes)' },
-      { code: 'P4-E2', type: 'Essential', name: 'Number of grievances from vulnerable groups received and resolved' },
-      { code: 'P4-L1', type: 'Leadership', name: 'Percentage of input material sourced from local and small suppliers' },
-    ],
-  },
-  {
-    principle: 'P5', icon: <Shield size={14} />, color: '#a78bfa',
-    label: 'Human Rights',
-    pillar: 'Social',
-    indicators: [
-      { code: 'P5-E1', type: 'Essential', name: 'Training on human rights policies — employees and value chain covered (%)' },
-      { code: 'P5-E2', type: 'Essential', name: 'Minimum wages vs statutory minimum — all worker categories (%)' },
-      { code: 'P5-E3', type: 'Essential', name: 'Complaints on human rights violations — sexual harassment, child labour, etc.' },
-      { code: 'P5-L1', type: 'Leadership', name: 'Third-party human rights assessment of value chain partners (%)' },
-    ],
-  },
-  {
-    principle: 'P6', icon: <Globe size={14} />, color: '#34d399',
-    label: 'Environment',
-    pillar: 'Environment',
-    indicators: [
-      { code: 'P6-E1', type: 'Essential', name: 'Energy consumption — total (GJ), renewable vs non-renewable breakdown' },
-      { code: 'P6-E2', type: 'Essential', name: 'GHG Scope 1 & Scope 2 emissions (tCO₂e), intensity per unit output' },
-      { code: 'P6-E3', type: 'Essential', name: 'Water withdrawal, consumption and discharge by source (kilolitres)' },
-      { code: 'P6-E4', type: 'Essential', name: 'Waste generated by type — hazardous, non-hazardous; disposal method (MT)' },
-      { code: 'P6-E5', type: 'Essential', name: 'Air emissions — NOx, SOx, PM2.5, VOC (metric tonnes)' },
-      { code: 'P6-L1', type: 'Leadership', name: 'Scope 3 GHG emissions across 15 categories (tCO₂e)' },
-      { code: 'P6-L2', type: 'Leadership', name: 'Environmental impact assessment for all operations' },
-    ],
-  },
-  {
-    principle: 'P7', icon: <Activity size={14} />, color: '#fb923c',
-    label: 'Policy Advocacy',
-    pillar: 'Governance',
-    indicators: [
-      { code: 'P7-E1', type: 'Essential', name: 'Memberships in trade associations and industry chambers (list)' },
-      { code: 'P7-L1', type: 'Leadership', name: 'Corrective actions taken on anti-competitive conduct identified by regulators' },
-    ],
-  },
-  {
-    principle: 'P8', icon: <Users size={14} />, color: '#e879f9',
-    label: 'Inclusive Growth (CSR)',
-    pillar: 'Social',
-    indicators: [
-      { code: 'P8-E1', type: 'Essential', name: 'Social impact assessment conducted for at least 3 years' },
-      { code: 'P8-E2', type: 'Essential', name: 'CSR & social responsibility investments and projects (₹ lakhs, beneficiaries)' },
-      { code: 'P8-E3', type: 'Essential', name: 'Percentage of input material sourced from MSMEs / local suppliers (%)' },
-      { code: 'P8-L1', type: 'Leadership', name: 'Net promoter score or customer satisfaction survey outcomes' },
-    ],
-  },
-  {
-    principle: 'P9', icon: <TrendingUp size={14} />, color: '#67e8f9',
-    label: 'Customer Value & Safety',
-    pillar: 'Social',
-    indicators: [
-      { code: 'P9-E1', type: 'Essential', name: 'Product-related recalls, incidents of non-compliance — safety' },
-      { code: 'P9-E2', type: 'Essential', name: 'Customer complaints on data privacy and cybersecurity — resolved (%)' },
-      { code: 'P9-L1', type: 'Leadership', name: 'Lifecycle assessment (LCA) for top 3 products (% of revenue covered)' },
-    ],
-  },
+const BRSR_SECTIONS = [
+  { key: 'sec_a', label: 'Section A: General Disclosures' },
+  { key: 'sec_b', label: 'Section B: Management & Process' },
+  { key: 'p1',    label: 'Principle 1: Ethics & Integrity' },
+  { key: 'p2',    label: 'Principle 2: Sustainable Products' },
+  { key: 'p3',    label: 'Principle 3: Employee Wellbeing' },
+  { key: 'p4',    label: 'Principle 4: Stakeholder Engagement' },
+  { key: 'p5',    label: 'Principle 5: Human Rights' },
+  { key: 'p6',    label: 'Principle 6: Environment & Climate' },
+  { key: 'p7',    label: 'Principle 7: Policy Advocacy' },
+  { key: 'p8',    label: 'Principle 8: Inclusive Growth' },
+  { key: 'p9',    label: 'Principle 9: Consumer Value' },
 ];
-
-const TOTAL_INDICATORS = BRSR_FRAMEWORK.reduce((s, p) => s + p.indicators.length, 0);
-
-// Radar chart data — derived from live report or defaults
-function makeRadarData(report) {
-  return BRSR_FRAMEWORK.map((p) => ({
-    principle: p.principle,
-    label: p.label.split(' ')[0],
-    value: report?.principles?.[p.principle]?.completeness_pct ?? 0,
-    fullMark: 100,
-  }));
-}
-
-// BRSR Core mandatory metrics (subset highlighted in SEBI circular)
-const BRSR_CORE_METRICS = [
-  { code: 'P6-E1', label: 'Total Energy Intensity',     unit: 'GJ / ₹ Crore revenue' },
-  { code: 'P6-E2', label: 'GHG Scope 1 Intensity',      unit: 'tCO₂e / ₹ Crore revenue' },
-  { code: 'P6-E2', label: 'GHG Scope 2 Intensity',      unit: 'tCO₂e / ₹ Crore revenue' },
-  { code: 'P6-E3', label: 'Water Intensity',             unit: 'KL / ₹ Crore revenue' },
-  { code: 'P6-E4', label: 'Waste Intensity',             unit: 'MT / ₹ Crore revenue' },
-  { code: 'P3-E1', label: 'Total Employees (Women %)',   unit: '%' },
-  { code: 'P3-E3', label: 'Gender Pay Ratio',            unit: 'ratio' },
-  { code: 'P5-E2', label: 'Minimum Wage Compliance',     unit: '%' },
-  { code: 'P8-E2', label: 'CSR Spend',                   unit: '₹ Lakhs' },
-];
-
-function CompletenessBar({ value = 0, height = 5 }) {
-  const color = value >= 80 ? '#10b981' : value >= 50 ? '#f59e0b' : '#ef4444';
-  return (
-    <div style={{ marginTop: '5px', height, borderRadius: '3px', background: 'var(--border-default)', overflow: 'hidden' }}>
-      <div style={{ height: '100%', width: `${value}%`, background: color, transition: 'width 0.5s ease', borderRadius: '3px' }} />
-    </div>
-  );
-}
-
-function CustomTooltip({ active, payload }) {
-  if (active && payload?.length) {
-    return (
-      <div style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', borderRadius: 8, padding: '10px 14px', fontSize: 12 }}>
-        <div style={{ fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4 }}>{payload[0]?.payload?.label}</div>
-        <div style={{ color: 'var(--brand-400)' }}>Coverage: <strong>{payload[0]?.value}%</strong></div>
-      </div>
-    );
-  }
-  return null;
-}
 
 export default function Reporting() {
-  const qc = useQueryClient();
-  const { data: nodes = [] }    = useOrgNodes();
-  const { data: periods = [] }  = useOrgPeriods();
-  const compileMutation         = useCompileReport();
-
-  const [entityId, setEntityId]     = useState('');
-  const [periodId, setPeriodId]     = useState('');
-  const [section, setSection]       = useState('overview');
-  const [compiling, setCompiling]   = useState(false);
-  const [notice, setNotice]         = useState(null);
-  const [expandedP, setExpandedP]   = useState({});
-
-  const selectedEntity = nodes.find(n => n.id === entityId);
-  const selectedPeriod = periods.find(p => p.id === periodId);
-
-  const { data: report, isLoading: reportLoading, refetch: refetchReport } =
-    useBrsrReport(entityId || null, periodId || null);
-
-  const { data: reportsList = [], isLoading: listLoading } =
-    useReports(entityId || null, periodId || null);
-
-  const radarData  = useMemo(() => makeRadarData(report), [report]);
-
-  const barData = useMemo(() =>
-    BRSR_FRAMEWORK.map((p) => ({
-      name: p.principle,
-      label: p.label.split(' & ')[0].split(' ').slice(0, 2).join(' '),
-      value: report?.principles?.[p.principle]?.completeness_pct ?? 0,
-      color: p.color,
-      indicators: p.indicators.length,
-    })),
-  [report]);
-
-  const handleCompile = async () => {
-    if (!entityId || !periodId) {
-      setNotice({ type: 'error', text: 'Select an entity and period before compiling.' });
-      return;
-    }
-    setCompiling(true);
-    setNotice(null);
-    try {
-      const res = await compileMutation.mutateAsync({ entity_id: entityId, period_id: periodId });
-      setNotice({ type: 'success', text: `BRSR report compiled successfully. SHA-256: ${res?.data?.sha256_seal?.slice(0, 24) || 'calculated'}…` });
-      refetchReport();
-      qc.invalidateQueries({ queryKey: ['reports-list'] });
-    } catch (err) {
-      setNotice({ type: 'error', text: err.response?.data?.detail || 'Compile failed.' });
-    } finally {
-      setCompiling(false);
-    }
-  };
-
-  const handleExportHtml = () => {
-    if (!entityId || !periodId) { setNotice({ type: 'error', text: 'Select entity and period first.' }); return; }
-    const token = localStorage.getItem('brsr_token');
-    const url = reportingApi.getExportHtmlUrl(entityId, periodId);
-    fetch(url, { headers: { Authorization: `Bearer ${token}` } })
-      .then(r => r.blob())
-      .then(blob => {
-        const link = document.createElement('a');
-        link.href = URL.createObjectURL(blob);
-        link.download = `BRSR_Report_${selectedEntity?.code || ''}_${selectedPeriod?.code || ''}.html`;
-        link.click();
-      })
-      .catch(() => setNotice({ type: 'error', text: 'Export failed.' }));
-  };
-
-  const togglePrinciple = (p) => setExpandedP(prev => ({ ...prev, [p]: !prev[p] }));
-
-  const SECTION_TABS = [
-    { key: 'overview',     label: 'Overview',           icon: <Activity size={12} /> },
-    { key: 'section_a',   label: 'Section A',           icon: <Building2 size={12} /> },
-    { key: 'section_b',   label: 'Principles (B)',      icon: <Shield size={12} /> },
-    { key: 'indicators',  label: `All ${TOTAL_INDICATORS} Indicators`,  icon: <BarChart2 size={12} /> },
-    { key: 'brsr_core',   label: 'BRSR Core',           icon: <Hash size={12} /> },
-    { key: 'section_c',   label: 'Section C Data',      icon: <Layers size={12} /> },
-  ];
+  const [searchParams] = useSearchParams();
+  const [activeTab, setActiveTab] = useState(searchParams.get('tab') === 'reports' ? 'reports_list' : 'p6');
+  const [lineageOpen, setLineageOpen] = useState(false);
+  const [selectedPeriod, setSelectedPeriod] = useState('FY 2026');
 
   return (
-    <div className="page-content anim-fade">
-      {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
+    <div className="page-content">
+      {/* Header (Section 22 Specification) */}
+      <div className="page-header">
         <div>
-          <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--brand-400)', letterSpacing: '1.5px', textTransform: 'uppercase', marginBottom: '4px' }}>
-            SEBI BRSR — {TOTAL_INDICATORS} MANDATORY INDICATORS
+          <div style={{ fontSize: '11px', textTransform: 'uppercase', color: 'var(--text-tertiary)', fontWeight: 600 }}>
+            Statutory Reporting
           </div>
-          <h1 style={{ fontSize: '24px', fontWeight: '700', color: 'var(--text-primary)', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <FileBarChart size={24} color="var(--brand-400)" />
-            BRSR Report Generator
+          <h1 className="page-title" style={{ marginTop: '2px' }}>
+            SEBI BRSR Core & NGRBC Disclosures
           </h1>
-          <p style={{ color: 'var(--text-secondary)', fontSize: '13px', margin: '4px 0 0 0' }}>
-            Business Responsibility & Sustainability Report — 9 Principles, {TOTAL_INDICATORS} indicators, SHA-256 sealed.
+          <p className="page-sub">
+            Generate, review, audit, and export consolidated ESG disclosure statements.
           </p>
         </div>
-        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-          <button onClick={handleExportHtml} className="btn btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '7px 14px' }}>
-            <Download size={13} /> Export HTML
-          </button>
-          <button
-            onClick={handleCompile}
-            disabled={compiling || !entityId || !periodId}
-            style={{
-              display: 'flex', alignItems: 'center', gap: '6px', padding: '7px 16px', borderRadius: '7px',
-              fontSize: '13px', fontWeight: 700,
-              background: (!entityId || !periodId) ? 'var(--bg-elevated)' : 'var(--brand-400)',
-              color: (!entityId || !periodId) ? 'var(--text-muted)' : '#fff',
-              border: 'none', cursor: (!entityId || !periodId) ? 'not-allowed' : 'pointer',
-            }}
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <select 
+            className="input-control" 
+            style={{ height: '32px', padding: '0 8px', fontSize: '12px' }}
+            value={selectedPeriod}
+            onChange={(e) => setSelectedPeriod(e.target.value)}
           >
-            <Play size={13} /> {compiling ? 'Compiling…' : 'Compile BRSR'}
+            <option>FY 2026 (Annual Report)</option>
+            <option>FY 2025 (Audited Final)</option>
+          </select>
+          <button 
+            className="btn btn-secondary btn-sm"
+            onClick={() => alert('Generating SEBI Annexure II PDF Export with digital QR code...')}
+          >
+            <Printer size={13} />
+            <span>Export SEBI PDF</span>
+          </button>
+          <button 
+            className="btn btn-primary btn-sm"
+            onClick={() => alert('Compiling updated report snapshot across all 4 subsidiaries...')}
+          >
+            <Plus size={13} />
+            <span>Generate Report</span>
           </button>
         </div>
       </div>
 
-      {/* Notice */}
-      {notice && (
-        <div style={{
-          padding: '12px 16px', borderRadius: '8px', marginBottom: '16px', fontSize: '13px', fontWeight: 600,
-          background: notice.type === 'success' ? 'rgba(16,185,129,0.12)' : 'rgba(239,68,68,0.12)',
-          color: notice.type === 'success' ? '#10b981' : '#ef4444',
-          border: `1px solid ${notice.type === 'success' ? '#10b981' : '#ef4444'}`,
-          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-        }}>
-          <span>{notice.text}</span>
-          <button onClick={() => setNotice(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'inherit', fontSize: '16px' }}>×</button>
-        </div>
-      )}
-
-      {/* Filters */}
-      <div style={{ display: 'flex', gap: '12px', marginBottom: '20px', flexWrap: 'wrap', padding: '16px', background: 'var(--bg-card)', borderRadius: '10px', border: '1px solid var(--border-default)' }}>
-        <div style={{ flex: '1 1 200px' }}>
-          <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>Entity / Legal Entity</label>
-          <select
-            value={entityId}
-            onChange={(e) => setEntityId(e.target.value)}
-            style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', color: 'var(--text-primary)', fontSize: '13px' }}
-          >
-            <option value="">— All Entities —</option>
-            {nodes.map(n => <option key={n.id} value={n.id}>{n.name} [{n.type}]</option>)}
-          </select>
-        </div>
-        <div style={{ flex: '1 1 200px' }}>
-          <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>Reporting Period</label>
-          <select
-            value={periodId}
-            onChange={(e) => setPeriodId(e.target.value)}
-            style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', color: 'var(--text-primary)', fontSize: '13px' }}
-          >
-            <option value="">— Select Period —</option>
-            {periods.map(p => <option key={p.id} value={p.id}>{p.label || p.code} ({p.financial_year})</option>)}
-          </select>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'flex-end' }}>
-          <button onClick={() => { refetchReport(); qc.invalidateQueries({ queryKey: ['reports-list'] }); }} className="btn btn-secondary" style={{ height: 36, display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <RefreshCw size={13} className={reportLoading ? 'spin' : ''} /> Refresh
-          </button>
-        </div>
-      </div>
-
-      {/* Main grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: '260px 1fr', gap: '20px', alignItems: 'start' }}>
-        {/* Left: Reports list */}
-        <div style={{ background: 'var(--bg-card)', borderRadius: '12px', border: '1px solid var(--border-default)', overflow: 'hidden' }}>
-          <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--border-default)', fontWeight: 700, fontSize: '13px', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <FileBarChart size={13} color="var(--brand-400)" /> Compiled Reports
+      {/* Reports Summary Cards (Section 22 Specification) */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px', marginBottom: '24px' }}>
+        <div className="card" style={{ padding: '16px 18px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+            <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)' }}>Group ESG Report FY 2026</span>
+            <span className="badge badge-ready">● Ready</span>
           </div>
-          {listLoading ? (
-            <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '13px' }}>Loading…</div>
-          ) : reportsList.length === 0 ? (
-            <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '12px' }}>
-              No compiled reports.<br />Select entity + period and click <strong>Compile BRSR</strong>.
-            </div>
-          ) : (
-            reportsList.map((r) => (
-              <div
-                key={r.id}
-                onClick={() => { setEntityId(r.entity_id); setPeriodId(r.period_id); }}
-                style={{ padding: '14px 16px', borderBottom: '1px solid var(--border-default)', cursor: 'pointer', transition: 'background 0.15s' }}
-                onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-elevated)'}
-                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-              >
-                <div style={{ fontWeight: 600, fontSize: '13px', color: 'var(--text-primary)', marginBottom: '3px' }}>{r.name || r.entity_name}</div>
-                <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>{r.period_label || r.period_code}</div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '6px' }}>
-                  <span style={{ padding: '2px 6px', borderRadius: '3px', fontSize: '10px', fontWeight: 700, background: 'rgba(16,185,129,0.12)', color: '#10b981' }}>
-                    <CheckCircle size={9} style={{ display: 'inline', marginRight: '2px' }} />{r.status || 'compiled'}
-                  </span>
-                  <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>{r.completeness_pct ?? '—'}%</span>
-                </div>
-                <CompletenessBar value={r.completeness_pct} />
-              </div>
-            ))
-          )}
+          <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Generated Oct 6, 2026 · Compiled by Aditya Varma</div>
+          <div style={{ marginTop: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontSize: '11px', color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>SEBI BRSR Core v2.1</span>
+            <button className="btn btn-secondary btn-sm" onClick={() => setActiveTab('p6')}>
+              View Report
+            </button>
+          </div>
         </div>
 
-        {/* Right: Report viewer */}
-        <div>
-          {/* SHA-256 Seal */}
-          {report?.sha256_seal && (
-            <div style={{ padding: '14px 18px', borderRadius: '10px', marginBottom: '16px', background: 'linear-gradient(135deg,rgba(99,102,241,0.08),rgba(16,185,129,0.05))', border: '1px solid rgba(99,102,241,0.3)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
-                <Hash size={14} color="var(--brand-400)" />
-                <span style={{ fontWeight: 700, fontSize: '13px' }}>Cryptographic Seal</span>
-                <span style={{ marginLeft: 'auto', padding: '2px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 700, background: 'rgba(16,185,129,0.12)', color: '#10b981' }}>
-                  SHA-256 Valid
-                </span>
-              </div>
-              <code style={{ fontSize: '10px', fontFamily: 'monospace', color: 'var(--text-secondary)', wordBreak: 'break-all' }}>{report.sha256_seal}</code>
-              {report.compiled_at && (
-                <div style={{ marginTop: '6px', fontSize: '11px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                  <Calendar size={10} /> Compiled: {new Date(report.compiled_at).toLocaleString('en-IN')}
-                </div>
-              )}
-            </div>
-          )}
+        <div className="card" style={{ padding: '16px 18px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+            <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)' }}>Odisha Infrastructure Subsidiary Report</span>
+            <span className="badge badge-ready">● Ready</span>
+          </div>
+          <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Generated Oct 6, 2026 · 11 Projects Rolled Up</div>
+          <div style={{ marginTop: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontSize: '11px', color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>Sub-Entity Level</span>
+            <button className="btn btn-secondary btn-sm" onClick={() => setActiveTab('p6')}>
+              View Report
+            </button>
+          </div>
+        </div>
+      </div>
 
-          {/* Section Tabs */}
-          <div style={{ display: 'flex', gap: '3px', marginBottom: '16px', background: 'var(--bg-card)', padding: '4px', borderRadius: '10px', border: '1px solid var(--border-default)', flexWrap: 'wrap' }}>
-            {SECTION_TABS.map(t => (
-              <button
-                key={t.key}
-                onClick={() => setSection(t.key)}
-                style={{
-                  padding: '7px 12px', borderRadius: '7px', fontSize: '11px', fontWeight: 600,
-                  border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px',
-                  background: section === t.key ? 'var(--brand-400)' : 'transparent',
-                  color: section === t.key ? '#fff' : 'var(--text-secondary)',
-                  transition: 'all 0.2s', whiteSpace: 'nowrap',
-                }}
-              >
-                {t.icon} {t.label}
-              </button>
-            ))}
+      {/* BRSR Report UI (Section 23 Specification: Left Nav + Main Disclosures Panel) */}
+      <div style={{ display: 'grid', gridTemplateColumns: '260px 1fr', gap: '24px', alignItems: 'flex-start' }}>
+        {/* Left Navigation */}
+        <div className="form-section-nav" style={{ position: 'sticky', top: '76px' }}>
+          <div style={{ fontSize: '10px', textTransform: 'uppercase', color: 'var(--text-tertiary)', padding: '6px 10px', fontWeight: 600 }}>
+            BRSR Framework Navigation
+          </div>
+          {BRSR_SECTIONS.map((sec) => (
+            <button
+              key={sec.key}
+              className={`form-nav-btn ${activeTab === sec.key ? 'active' : ''}`}
+              onClick={() => setActiveTab(sec.key)}
+            >
+              <span>{sec.label}</span>
+            </button>
+          ))}
+        </div>
+
+        {/* Main Disclosures Panel */}
+        <div className="card" style={{ padding: '24px' }}>
+          {/* Header of Section */}
+          <div style={{ borderBottom: '1px solid var(--border-subtle)', paddingBottom: '16px', marginBottom: '20px', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+            <div>
+              <div style={{ fontSize: '11px', textTransform: 'uppercase', color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>
+                NGRBC Framework · Principle 6
+              </div>
+              <h2 style={{ fontSize: '18px', fontWeight: 600, color: 'var(--text-primary)', marginTop: '2px' }}>
+                Principle 6: Protection & Restoration of Environment
+              </h2>
+              <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '4px' }}>
+                Businesses should respect, protect and make efforts to restore the environment across direct civil operations and supply chains.
+              </p>
+            </div>
+
+            <button 
+              className="btn btn-secondary btn-sm"
+              onClick={() => setLineageOpen(true)}
+            >
+              <span>View calculation lineage</span>
+              <ExternalLink size={12} />
+            </button>
           </div>
 
-          {/* Empty state */}
-          {!report && !reportLoading && (
-            <div style={{ padding: '60px', textAlign: 'center', background: 'var(--bg-card)', borderRadius: '12px', border: '1px solid var(--border-default)', color: 'var(--text-secondary)' }}>
-              <FileBarChart size={44} style={{ margin: '0 auto 14px', opacity: 0.2, display: 'block' }} />
-              <div style={{ fontWeight: 700, color: 'var(--text-primary)', marginBottom: '8px', fontSize: '16px' }}>No Report Loaded</div>
-              <div style={{ fontSize: '13px', marginBottom: '16px' }}>Select an entity and period, then click <strong>Compile BRSR</strong> to generate the full report.</div>
-              <div style={{ display: 'inline-flex', gap: '8px', padding: '10px 16px', background: 'var(--bg-elevated)', borderRadius: '8px', fontSize: '12px', color: 'var(--text-muted)' }}>
-                <BarChart2 size={14} /> 9 Principles · {TOTAL_INDICATORS} Indicators · 3 Sections
-              </div>
-            </div>
-          )}
-
-          {reportLoading && (
-            <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-secondary)' }}>
-              <RefreshCw size={24} className="spin" style={{ display: 'block', margin: '0 auto 10px', color: 'var(--brand-400)' }} />
-              Loading BRSR report data…
-            </div>
-          )}
-
-          {/* ── OVERVIEW TAB ──────────────────────────────────────── */}
-          {!reportLoading && section === 'overview' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              {/* KPI Cards */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '10px' }}>
-                {[
-                  { l: 'Entity',        v: report?.entity_name || selectedEntity?.name || '—',     icon: <Building2 size={14} />, color: 'var(--brand-400)' },
-                  { l: 'Period',        v: report?.period_label || selectedPeriod?.code || '—',     icon: <Calendar size={14} />, color: '#38bdf8' },
-                  { l: 'Completeness',  v: `${report?.overall_completeness_pct ?? 0}%`,              icon: <Activity size={14} />, color: '#10b981' },
-                  { l: 'Data Points',   v: report?.total_data_points ?? '—',                         icon: <BarChart2 size={14} />, color: '#f59e0b' },
-                  { l: 'AI Narratives', v: report?.ai_narratives_count ?? '—',                       icon: <Leaf size={14} />, color: '#a78bfa' },
-                ].map(({ l, v, icon, color }) => (
-                  <div key={l} style={{ background: 'var(--bg-card)', borderRadius: '10px', border: '1px solid var(--border-default)', padding: '14px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <div style={{ color, flexShrink: 0 }}>{icon}</div>
-                    <div>
-                      <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginBottom: '2px' }}>{l}</div>
-                      <div style={{ fontWeight: 700, fontSize: '14px', color: 'var(--text-primary)' }}>{String(v)}</div>
-                    </div>
+          {/* Disclosures Table with Signature "ⓘ View source" on Every Number (Section 24) */}
+          <table className="table">
+            <thead>
+              <tr>
+                <th>Essential Indicator Metric</th>
+                <th>Consolidated Value</th>
+                <th>Operational Source</th>
+                <th>Audit Provenance</th>
+              </tr>
+            </thead>
+            <tbody>
+              {/* Row 1: GHG Emissions */}
+              <tr>
+                <td>
+                  <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>Total GHG Emissions (Scope 1 & 2)</div>
+                  <div style={{ fontSize: '11px', color: 'var(--text-tertiary)' }}>Metric Code: P6-E-04 · Metric Tonnes CO₂e</div>
+                </td>
+                <td>
+                  <div style={{ fontSize: '15px', fontWeight: 700, fontFamily: 'var(--font-mono)' }}>
+                    1,284.7 tCO₂e
                   </div>
-                ))}
-              </div>
+                </td>
+                <td style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                  32 Projects across 4 Subsidiaries
+                </td>
+                <td>
+                  {/* Signature UX: Section 24 Report Drill-down */}
+                  <button 
+                    className="btn btn-ghost btn-sm"
+                    onClick={() => setLineageOpen(true)}
+                    style={{ fontSize: '11px', gap: '4px', color: 'var(--text-primary)', fontWeight: 550 }}
+                  >
+                    <Info size={13} color="var(--text-secondary)" />
+                    <span>View source</span>
+                  </button>
+                </td>
+              </tr>
 
-              {/* Radar Chart */}
-              <div style={{ background: 'var(--bg-card)', borderRadius: '12px', border: '1px solid var(--border-default)', padding: '20px' }}>
-                <h3 style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <Activity size={14} color="var(--brand-400)" /> Principle Coverage Radar
-                </h3>
-                <ResponsiveContainer width="100%" height={280}>
-                  <RadarChart data={radarData} margin={{ top: 10, right: 30, bottom: 10, left: 30 }}>
-                    <PolarGrid stroke="var(--border-default)" />
-                    <PolarAngleAxis dataKey="principle" tick={{ fontSize: 12, fill: 'var(--text-secondary)', fontWeight: 700 }} />
-                    <PolarRadiusAxis angle={90} domain={[0, 100]} tick={{ fontSize: 10, fill: 'var(--text-muted)' }} />
-                    <Radar name="Coverage %" dataKey="value" stroke="var(--brand-400)" fill="var(--brand-400)" fillOpacity={0.25} strokeWidth={2} dot={{ r: 4, fill: 'var(--brand-400)' }} />
-                    <Tooltip content={<CustomTooltip />} />
-                  </RadarChart>
-                </ResponsiveContainer>
-              </div>
-
-              {/* Coverage Bar */}
-              <div style={{ background: 'var(--bg-card)', borderRadius: '12px', border: '1px solid var(--border-default)', padding: '20px' }}>
-                <h3 style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <BarChart2 size={14} color="var(--brand-400)" /> Indicator Completion by Principle (%)
-                </h3>
-                <ResponsiveContainer width="100%" height={200}>
-                  <BarChart data={barData} barSize={24} margin={{ left: 0, right: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border-default)" />
-                    <XAxis dataKey="name" tick={{ fontSize: 11, fill: 'var(--text-secondary)' }} />
-                    <YAxis domain={[0, 100]} tick={{ fontSize: 11, fill: 'var(--text-secondary)' }} unit="%" />
-                    <Tooltip content={<CustomTooltip />} />
-                    <Bar dataKey="value" name="Coverage" radius={[4, 4, 0, 0]}>
-                      {barData.map((entry, index) => (
-                        <Cell key={index} fill={entry.color} />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-          )}
-
-          {/* ── SECTION A TAB ──────────────────────────────────────── */}
-          {!reportLoading && section === 'section_a' && (
-            <div style={{ background: 'var(--bg-card)', borderRadius: '12px', border: '1px solid var(--border-default)', overflow: 'hidden' }}>
-              <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-default)', fontWeight: 700, fontSize: '14px' }}>
-                Section A — General Disclosures (SEBI BRSR Format)
-              </div>
-              {/* Static MEIL disclosures */}
-              <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                {[
-                  { field: 'Corporate Identity Number (CIN)', value: report?.section_a?.cin || 'U45309TG1997PLC026167' },
-                  { field: 'Company Name', value: report?.section_a?.name || 'Megha Engineering and Infrastructures Ltd (MEIL)' },
-                  { field: 'Registered Address', value: report?.section_a?.address || 'Plot No. 74, Madhura Nagar, Hyderabad – 500038, Telangana' },
-                  { field: 'Corporate Website', value: report?.section_a?.website || 'www.meil.in' },
-                  { field: 'Financial Year Reported', value: selectedPeriod?.financial_year || report?.section_a?.fy || '2025-2026' },
-                  { field: 'Reporting Currency', value: 'INR (₹)' },
-                  { field: 'Reporting Boundary', value: 'Group — Consolidated (all subsidiaries, JVs and associates with operational control)' },
-                  { field: 'GRI / BRSR Standards Used', value: 'SEBI BRSR Core (SEBI Circular SEBI/HO/CFD/CMD-2/P/CIR/2023/00122) + GRI Standards 2021' },
-                  { field: 'Assurance Level', value: 'Limited External Assurance (BRSR Core KPIs)' },
-                  { field: 'Number of Employees (Perm.)', value: report?.section_a?.employees || '—' },
-                  { field: 'Number of Workers (Contract)', value: report?.section_a?.workers || '—' },
-                  { field: 'Total Number of Plants / Sites', value: report?.section_a?.sites || '—' },
-                  { field: 'Products & Services Description', value: 'EPC for Irrigation, Water Supply, Roads, Tunnels, Hydrocarbon, Power Transmission, Solar & Renewable Energy, EV Mobility, Urban Infrastructure' },
-                  { field: 'Membership of Industry Associations', value: 'CII, FICCI, ASSOCHAM, NITI Aayog (SDG working groups)' },
-                ].map(({ field, value }) => (
-                  <div key={field} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid var(--border-default)', fontSize: '13px', gap: '12px' }}>
-                    <span style={{ color: 'var(--text-secondary)', minWidth: '240px' }}>{field}</span>
-                    <span style={{ fontWeight: 600, textAlign: 'right' }}>{String(value)}</span>
+              {/* Row 2: Fuel Consumption */}
+              <tr>
+                <td>
+                  <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>Diesel & Liquid Fuel Consumption</div>
+                  <div style={{ fontSize: '11px', color: 'var(--text-tertiary)' }}>Metric Code: P6-E-01 · Direct Mobile & Stationary Combustion</div>
+                </td>
+                <td>
+                  <div style={{ fontSize: '15px', fontWeight: 700, fontFamily: 'var(--font-mono)' }}>
+                    142,500 L
                   </div>
-                ))}
-              </div>
-            </div>
-          )}
+                </td>
+                <td style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                  Fuel registers & bowzer manifests
+                </td>
+                <td>
+                  <button 
+                    className="btn btn-ghost btn-sm"
+                    onClick={() => setLineageOpen(true)}
+                    style={{ fontSize: '11px', gap: '4px', color: 'var(--text-primary)', fontWeight: 550 }}
+                  >
+                    <Info size={13} color="var(--text-secondary)" />
+                    <span>View source</span>
+                  </button>
+                </td>
+              </tr>
 
-          {/* ── PRINCIPLES (B) TAB ──────────────────────────────────── */}
-          {!reportLoading && section === 'section_b' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              {BRSR_FRAMEWORK.map((p) => {
-                const isOpen = expandedP[p.principle];
-                const livePct = report?.principles?.[p.principle]?.completeness_pct ?? null;
-                return (
-                  <div key={p.principle} style={{ background: 'var(--bg-card)', borderRadius: '12px', border: '1px solid var(--border-default)', overflow: 'hidden' }}>
-                    <button
-                      onClick={() => togglePrinciple(p.principle)}
-                      style={{ width: '100%', padding: '14px 18px', background: 'transparent', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '12px', textAlign: 'left' }}
-                    >
-                      <div style={{ width: 32, height: 32, borderRadius: '8px', background: `${p.color}18`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: p.color, flexShrink: 0 }}>
-                        {p.icon}
-                      </div>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <span style={{ fontWeight: 700, fontSize: '13px', color: p.color }}>{p.principle}</span>
-                          <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>{p.label}</span>
-                          <span style={{ padding: '1px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 700, background: 'var(--bg-elevated)', color: 'var(--text-secondary)' }}>{p.pillar}</span>
-                          <span style={{ padding: '1px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 700, background: `${p.color}15`, color: p.color }}>{p.indicators.length} indicators</span>
-                        </div>
-                        {livePct !== null && (
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
-                            <CompletenessBar value={livePct} />
-                            <span style={{ fontSize: '11px', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{livePct}% complete</span>
-                          </div>
-                        )}
-                      </div>
-                      {isOpen ? <ChevronDown size={16} color="var(--text-muted)" /> : <ChevronRight size={16} color="var(--text-muted)" />}
-                    </button>
-                    {isOpen && (
-                      <div style={{ borderTop: '1px solid var(--border-default)' }}>
-                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
-                          <thead>
-                            <tr style={{ background: 'var(--bg-elevated)', color: 'var(--text-secondary)' }}>
-                              <th style={{ padding: '8px 16px', textAlign: 'left', fontWeight: 600 }}>Code</th>
-                              <th style={{ padding: '8px 16px', textAlign: 'left', fontWeight: 600 }}>Indicator</th>
-                              <th style={{ padding: '8px 16px', textAlign: 'center', fontWeight: 600 }}>Type</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {p.indicators.map((ind) => (
-                              <tr key={ind.code} style={{ borderBottom: '1px solid var(--border-default)' }}>
-                                <td style={{ padding: '9px 16px', fontFamily: 'monospace', fontSize: '11px', color: p.color, fontWeight: 700, whiteSpace: 'nowrap' }}>{ind.code}</td>
-                                <td style={{ padding: '9px 16px', color: 'var(--text-primary)', lineHeight: '1.4' }}>{ind.name}</td>
-                                <td style={{ padding: '9px 16px', textAlign: 'center' }}>
-                                  <span style={{ padding: '2px 8px', borderRadius: '4px', fontSize: '10px', fontWeight: 700, background: ind.type === 'Essential' ? 'rgba(99,102,241,0.12)' : 'rgba(167,139,250,0.12)', color: ind.type === 'Essential' ? '#6366f1' : '#a78bfa' }}>
-                                    {ind.type}
-                                  </span>
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
+              {/* Row 3: Water Withdrawal */}
+              <tr>
+                <td>
+                  <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>Total Water Withdrawal & Consumption</div>
+                  <div style={{ fontSize: '11px', color: 'var(--text-tertiary)' }}>Metric Code: P6-E-06 · Fresh surface, ground & tanker water</div>
+                </td>
+                <td>
+                  <div style={{ fontSize: '15px', fontWeight: 700, fontFamily: 'var(--font-mono)' }}>
+                    134,800 kL
                   </div>
-                );
-              })}
-            </div>
-          )}
+                </td>
+                <td style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                  Utility invoices & flowmeters
+                </td>
+                <td>
+                  <button 
+                    className="btn btn-ghost btn-sm"
+                    onClick={() => setLineageOpen(true)}
+                    style={{ fontSize: '11px', gap: '4px', color: 'var(--text-primary)', fontWeight: 550 }}
+                  >
+                    <Info size={13} color="var(--text-secondary)" />
+                    <span>View source</span>
+                  </button>
+                </td>
+              </tr>
 
-          {/* ── ALL INDICATORS TAB ──────────────────────────────────── */}
-          {!reportLoading && section === 'indicators' && (
-            <div style={{ background: 'var(--bg-card)', borderRadius: '12px', border: '1px solid var(--border-default)', overflow: 'hidden' }}>
-              <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-default)', fontWeight: 700, fontSize: '14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span>All {TOTAL_INDICATORS} BRSR Indicators — SEBI Mandated</span>
-                <span style={{ fontSize: '12px', fontWeight: 400, color: 'var(--text-secondary)' }}>9 Principles · Essential + Leadership</span>
-              </div>
-              <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
-                  <thead>
-                    <tr style={{ background: 'var(--bg-elevated)', color: 'var(--text-secondary)', borderBottom: '1px solid var(--border-default)' }}>
-                      <th style={{ padding: '10px 16px', textAlign: 'left', fontWeight: 600, whiteSpace: 'nowrap' }}>Principle</th>
-                      <th style={{ padding: '10px 16px', textAlign: 'left', fontWeight: 600, whiteSpace: 'nowrap' }}>Code</th>
-                      <th style={{ padding: '10px 16px', textAlign: 'left', fontWeight: 600 }}>Indicator</th>
-                      <th style={{ padding: '10px 16px', textAlign: 'center', fontWeight: 600, whiteSpace: 'nowrap' }}>Type</th>
-                      <th style={{ padding: '10px 16px', textAlign: 'left', fontWeight: 600, whiteSpace: 'nowrap' }}>Value</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {BRSR_FRAMEWORK.flatMap((p) =>
-                      p.indicators.map((ind, i) => {
-                        const liveVal = report?.section_c_data?.find(r => r.code === ind.code)?.value;
-                        return (
-                          <tr key={ind.code + i} style={{ borderBottom: '1px solid var(--border-default)', transition: 'background 0.1s' }}
-                            onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-elevated)'}
-                            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                            <td style={{ padding: '9px 16px', whiteSpace: 'nowrap' }}>
-                              <span style={{ padding: '2px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 700, background: `${p.color}15`, color: p.color }}>{p.principle}</span>
-                            </td>
-                            <td style={{ padding: '9px 16px', fontFamily: 'monospace', fontSize: '11px', color: p.color, fontWeight: 700, whiteSpace: 'nowrap' }}>{ind.code}</td>
-                            <td style={{ padding: '9px 16px', color: 'var(--text-primary)', lineHeight: '1.4' }}>{ind.name}</td>
-                            <td style={{ padding: '9px 16px', textAlign: 'center', whiteSpace: 'nowrap' }}>
-                              <span style={{ padding: '2px 7px', borderRadius: '4px', fontSize: '10px', fontWeight: 700, background: ind.type === 'Essential' ? 'rgba(99,102,241,0.12)' : 'rgba(167,139,250,0.12)', color: ind.type === 'Essential' ? '#6366f1' : '#a78bfa' }}>
-                                {ind.type}
-                              </span>
-                            </td>
-                            <td style={{ padding: '9px 16px', fontWeight: 600, color: liveVal ? 'var(--text-primary)' : 'var(--text-muted)', fontSize: '12px' }}>
-                              {liveVal ?? (report ? 'No data' : '—')}
-                            </td>
-                          </tr>
-                        );
-                      })
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-
-          {/* ── BRSR CORE TAB ──────────────────────────────────────── */}
-          {!reportLoading && section === 'brsr_core' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              <div style={{ padding: '14px 18px', borderRadius: '10px', background: 'rgba(99,102,241,0.07)', border: '1px solid rgba(99,102,241,0.2)', fontSize: '13px', color: 'var(--text-secondary)' }}>
-                <strong style={{ color: 'var(--text-primary)' }}>BRSR Core</strong> — SEBI's mandatory, quantitative, assurance-ready KPIs as per Circular SEBI/HO/CFD/CMD-2/P/CIR/2023/00122. These 9 KPIs must be externally assured from FY2024-25 for Top 150 listed companies by market cap (MEIL equivalent).
-              </div>
-              <div style={{ background: 'var(--bg-card)', borderRadius: '12px', border: '1px solid var(--border-default)', overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
-                  <thead>
-                    <tr style={{ background: 'var(--bg-elevated)', borderBottom: '1px solid var(--border-default)', color: 'var(--text-secondary)' }}>
-                      <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 600 }}>Code</th>
-                      <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 600 }}>BRSR Core KPI</th>
-                      <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 600 }}>Unit</th>
-                      <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 600 }}>Reported Value</th>
-                      <th style={{ padding: '12px 16px', textAlign: 'center', fontWeight: 600 }}>Assurance</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {BRSR_CORE_METRICS.map((m, i) => {
-                      const liveVal = report?.brsr_core?.[m.code] ?? null;
-                      return (
-                        <tr key={i} style={{ borderBottom: '1px solid var(--border-default)' }}>
-                          <td style={{ padding: '12px 16px', fontFamily: 'monospace', fontSize: '11px', color: 'var(--brand-400)', fontWeight: 700 }}>{m.code}</td>
-                          <td style={{ padding: '12px 16px', fontWeight: 500 }}>{m.label}</td>
-                          <td style={{ padding: '12px 16px', color: 'var(--text-secondary)', fontSize: '12px' }}>{m.unit}</td>
-                          <td style={{ padding: '12px 16px', fontWeight: 700, color: liveVal ? 'var(--text-primary)' : 'var(--text-muted)' }}>
-                            {liveVal ?? (report ? 'Pending data entry' : '—')}
-                          </td>
-                          <td style={{ padding: '12px 16px', textAlign: 'center' }}>
-                            <span style={{ padding: '2px 8px', borderRadius: '4px', fontSize: '10px', fontWeight: 700, background: 'rgba(245,158,11,0.12)', color: '#f59e0b' }}>
-                              Limited
-                            </span>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-
-          {/* ── SECTION C DATA TAB ──────────────────────────────────── */}
-          {!reportLoading && section === 'section_c' && (
-            <div style={{ background: 'var(--bg-card)', borderRadius: '12px', border: '1px solid var(--border-default)', overflow: 'hidden' }}>
-              <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-default)', fontWeight: 700, fontSize: '14px' }}>
-                Section C — Essential & Leadership Indicator Data
-              </div>
-              <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
-                  <thead>
-                    <tr style={{ background: 'var(--bg-elevated)', borderBottom: '1px solid var(--border-default)', color: 'var(--text-secondary)' }}>
-                      <th style={{ padding: '10px 16px', textAlign: 'left', fontWeight: 600 }}>Principle</th>
-                      <th style={{ padding: '10px 16px', textAlign: 'left', fontWeight: 600 }}>Indicator</th>
-                      <th style={{ padding: '10px 16px', textAlign: 'left', fontWeight: 600 }}>Value</th>
-                      <th style={{ padding: '10px 16px', textAlign: 'left', fontWeight: 600 }}>Unit</th>
-                      <th style={{ padding: '10px 16px', textAlign: 'left', fontWeight: 600 }}>Type</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {report?.section_c_data?.map((row, i) => (
-                      <tr key={i} style={{ borderBottom: '1px solid var(--border-default)' }}>
-                        <td style={{ padding: '10px 16px' }}>
-                          <span style={{ padding: '2px 6px', borderRadius: '3px', fontSize: '11px', fontWeight: 700, background: 'var(--brand-400)', color: '#fff' }}>{row.principle}</span>
-                        </td>
-                        <td style={{ padding: '10px 16px', color: 'var(--text-secondary)' }}>{row.indicator}</td>
-                        <td style={{ padding: '10px 16px', fontWeight: 600 }}>{String(row.value ?? '—')} {row.unit}</td>
-                        <td style={{ padding: '10px 16px', color: 'var(--text-secondary)' }}>{row.unit}</td>
-                        <td style={{ padding: '10px 16px' }}>
-                          <span style={{ fontSize: '11px', padding: '2px 6px', borderRadius: '3px', background: row.indicator_type === 'essential' ? 'rgba(99,102,241,0.12)' : 'rgba(167,139,250,0.12)', color: row.indicator_type === 'essential' ? 'var(--brand-400)' : '#a78bfa' }}>
-                            {row.indicator_type || 'essential'}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                    {!report?.section_c_data?.length && (
-                      <tr>
-                        <td colSpan={5} style={{ padding: '40px', textAlign: 'center', color: 'var(--text-secondary)' }}>
-                          Section C data not available. Ensure data entry and consolidation are complete first.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
+              {/* Row 4: Waste Recycled */}
+              <tr>
+                <td>
+                  <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>Waste Diverted from Landfill</div>
+                  <div style={{ fontSize: '11px', color: 'var(--text-tertiary)' }}>Metric Code: P6-E-08 · Circularity percentage</div>
+                </td>
+                <td>
+                  <div style={{ fontSize: '15px', fontWeight: 700, fontFamily: 'var(--font-mono)' }}>
+                    76.4% (1,420 MT)
+                  </div>
+                </td>
+                <td style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                  Authorized recycler Form 10s
+                </td>
+                <td>
+                  <button 
+                    className="btn btn-ghost btn-sm"
+                    onClick={() => setLineageOpen(true)}
+                    style={{ fontSize: '11px', gap: '4px', color: 'var(--text-primary)', fontWeight: 550 }}
+                  >
+                    <Info size={13} color="var(--text-secondary)" />
+                    <span>View source</span>
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </div>
+
+      {/* Section 24: Report Drill-down Lineage Modal */}
+      <CalculationLineageModal 
+        isOpen={lineageOpen} 
+        onClose={() => setLineageOpen(false)} 
+      />
     </div>
   );
 }

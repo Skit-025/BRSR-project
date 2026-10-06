@@ -1,197 +1,130 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, Building2, BookOpen, FileText,
-  GitBranch, BarChart3, FileBarChart, Leaf,
-  UserCheck, LogOut, ShieldCheck, Eye, ClipboardCheck,
-  FolderOpen, Layers, Settings2
+  GitBranch, FileBarChart, Leaf, ChevronLeft, ChevronRight,
+  ShieldCheck, FolderOpen, Layers, Settings2, Sliders,
+  CheckCircle2, AlertCircle, Database, History, Cpu
 } from 'lucide-react';
-import { useAuth, ROLE_META } from '../context/AuthContext';
+import { useAuth } from '../context/AuthContext';
 
-/*
- * NAV CONFIG — Each item declares which permissions are needed to see it.
- * If `perms` is empty/undefined the item is visible to all authenticated users.
- * Section labels get `section: true`.
- */
-const NAV_CONFIG = [
-  // ── Dashboard ─────────────────────────────────────────────────
+const NAV_SECTIONS = [
   {
-    label: 'Overview',
-    icon: LayoutDashboard,
-    to: '/dashboard',
-    perms: [],  // everyone sees the dashboard
-  },
-
-  // ── ADMINISTRATION ────────────────────────────────────────────
-  { section: true, label: 'ADMINISTRATION', perms: ['user:manage'] },
-  {
-    label: 'User Provisioning',
-    icon: UserCheck,
-    to: '/admin/users',
-    perms: ['user:manage'],
-  },
-
-  // ── ORG & METRICS ─────────────────────────────────────────────
-  { section: true, label: 'CONFIGURATION', perms: ['org:read'] },
-  {
-    label: 'Org Hierarchy',
-    icon: Building2,
-    to: '/org',
-    perms: ['org:read'],
+    title: '',
+    items: [
+      { label: 'Overview', icon: LayoutDashboard, to: '/dashboard' },
+    ],
   },
   {
-    label: 'Metric Catalogue',
-    icon: BookOpen,
-    to: '/metrics',
-    perms: ['metric:read'],
-  },
-
-  // ── DATA COLLECTION ───────────────────────────────────────────
-  { section: true, label: 'DATA COLLECTION', perms: ['submission:create', 'submission:read'] },
-  {
-    label: 'Data Entry',
-    icon: FileText,
-    to: '/collection',
-    perms: ['form:submit', 'submission:create'],
+    title: 'ORGANIZATION',
+    items: [
+      { label: 'Organization', icon: Building2, to: '/org' },
+      { label: 'Projects', icon: Layers, to: '/projects' },
+    ],
   },
   {
-    label: 'Evidence Vault',
-    icon: FolderOpen,
-    to: '/evidence',
-    perms: ['evidence:read'],
-  },
-
-  // ── ASSURANCE / WORKFLOW ──────────────────────────────────────
-  { section: true, label: 'ASSURANCE', perms: ['submission:review', 'form:review', 'audit:read', 'assurance:write'] },
-  {
-    label: 'Workflow & Approvals',
-    icon: GitBranch,
-    to: '/workflow',
-    perms: ['submission:review', 'form:review', 'submission:read'],
-  },
-
-  // ── REPORTING ─────────────────────────────────────────────────
-  { section: true, label: 'REPORTING', perms: ['report:read'] },
-  {
-    label: 'Consolidation',
-    icon: Layers,
-    to: '/consolidation',
-    perms: ['consolidation:read'],
+    title: 'ESG',
+    items: [
+      { label: 'ESG Data', icon: FileText, to: '/collection' },
+      { label: 'Parameters', icon: Sliders, to: '/parameters' },
+      { label: 'Templates', icon: BookOpen, to: '/templates' },
+      { label: 'Evidence', icon: FolderOpen, to: '/evidence' },
+    ],
   },
   {
-    label: 'BRSR Report',
-    icon: FileBarChart,
-    to: '/reporting',
-    perms: ['report:read'],
+    title: 'WORKFLOW',
+    items: [
+      { label: 'Reviews', icon: GitBranch, to: '/workflow' },
+    ],
+  },
+  {
+    title: 'REPORTING',
+    items: [
+      { label: 'Reports', icon: FileBarChart, to: '/reporting?tab=reports' },
+      { label: 'BRSR', icon: Database, to: '/reporting' },
+      { label: 'Calculations', icon: Cpu, to: '/calculations' },
+    ],
+  },
+  {
+    title: 'SYSTEM',
+    items: [
+      { label: 'Data Quality', icon: AlertCircle, to: '/data-quality' },
+      { label: 'Audit Log', icon: History, to: '/audit-log' },
+    ],
   },
 ];
 
-function userCanSee(item, hasPermission) {
-  if (!item.perms || item.perms.length === 0) return true;
-  return item.perms.some((p) => hasPermission(p));
-}
-
-function getInitials(name) {
-  if (!name) return 'U';
-  const parts = name.trim().split(' ');
-  if (parts.length >= 2) return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
-  return name.substring(0, 2).toUpperCase();
-}
-
 export default function Sidebar() {
+  const [collapsed, setCollapsed] = useState(false);
+  const { user, roleMeta } = useAuth();
   const navigate = useNavigate();
-  const { user, logout, hasPermission, role, roleMeta } = useAuth();
-
-  const handleLogout = () => {
-    logout();
-    navigate('/landing');
-  };
-
-  // Build a filtered list based on current user's permissions
-  const visibleItems = NAV_CONFIG.filter((item) => userCanSee(item, hasPermission));
-
-  // Remove orphan section labels (section with no visible items below it)
-  const cleanedItems = visibleItems.filter((item, idx) => {
-    if (!item.section) return true;
-    // Look ahead — is there at least one non-section item before the next section?
-    const rest = visibleItems.slice(idx + 1);
-    const nextSectionIdx = rest.findIndex((x) => x.section);
-    const itemsBetween = nextSectionIdx === -1 ? rest : rest.slice(0, nextSectionIdx);
-    return itemsBetween.length > 0;
-  });
 
   return (
-    <aside className="sidebar anim-slide">
-      {/* Logo */}
-      <div className="sidebar-logo">
-        <div className="sidebar-logo-icon">
-          <Leaf size={18} color="#fff" />
-        </div>
-        <div className="sidebar-logo-text">
-          <span className="sidebar-logo-title">MEIL ESG Portal</span>
-          <span className="sidebar-logo-sub">BRSR · FY 2024-25</span>
-        </div>
+    <aside className={`sidebar ${collapsed ? 'collapsed' : ''}`}>
+      {/* Sidebar Header */}
+      <div className="sidebar-header">
+        {!collapsed && (
+          <NavLink to="/dashboard" className="sidebar-logo">
+            <div className="sidebar-logo-icon">▲</div>
+            <div className="sidebar-logo-text">
+              <span className="sidebar-logo-title">Enterprise ESG</span>
+              <span className="sidebar-logo-sub">OS v2.4 · SEBI Core</span>
+            </div>
+          </NavLink>
+        )}
+        <button 
+          className="sidebar-collapse-btn" 
+          onClick={() => setCollapsed(!collapsed)}
+          title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+        >
+          {collapsed ? <ChevronRight size={15} /> : <ChevronLeft size={15} />}
+        </button>
       </div>
 
-      {/* Role Badge */}
-      {roleMeta && (
-        <div className="sidebar-role-badge" style={{ borderColor: roleMeta.color + '55' }}>
-          <span className="sidebar-role-icon">{roleMeta.icon}</span>
-          <span className="sidebar-role-label" style={{ color: roleMeta.color }}>
-            {roleMeta.label}
-          </span>
-        </div>
-      )}
-
-      {/* Nav */}
+      {/* Navigation Sections */}
       <nav className="sidebar-nav">
-        {cleanedItems.map((item, i) => {
-          if (item.section) {
-            return (
-              <span key={`sec-${i}`} className="nav-section-label">
-                {item.label}
-              </span>
-            );
-          }
-          const Icon = item.icon;
-          return (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              end={item.to === '/dashboard'}
-              className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`}
-            >
-              <Icon size={15} className="nav-item-icon" />
-              {item.label}
-            </NavLink>
-          );
-        })}
+        {NAV_SECTIONS.map((sec, i) => (
+          <React.Fragment key={i}>
+            {!collapsed && sec.title && (
+              <span className="nav-section-label">{sec.title}</span>
+            )}
+            {sec.items.map((item) => {
+              const Icon = item.icon;
+              return (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  end={item.to === '/dashboard'}
+                  className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
+                  title={collapsed ? item.label : undefined}
+                >
+                  <Icon size={14} className="nav-item-icon" />
+                  {!collapsed && <span>{item.label}</span>}
+                </NavLink>
+              );
+            })}
+          </React.Fragment>
+        ))}
       </nav>
 
-      {/* Footer user card & Sign Out */}
-      <div className="sidebar-footer">
-        <div className="user-card">
-          <div className="user-avatar">
-            {getInitials(user?.full_name || user?.email)}
-          </div>
-          <div className="user-info">
-            <div className="user-name truncate" title={user?.full_name || user?.email}>
-              {user?.full_name || user?.email || 'Authenticated User'}
+      {/* Footer User Info */}
+      {!collapsed && (
+        <div className="sidebar-footer">
+          <div className="user-card">
+            <div className="user-avatar">
+              {user?.full_name ? user.full_name.charAt(0) : 'A'}
             </div>
-            <div className="user-role" style={{ textTransform: 'capitalize', color: roleMeta?.color }}>
-              {roleMeta?.label || (user?.role?.replace(/_/g, ' ')) || 'Employee'}
+            <div className="user-info">
+              <div className="user-name" title={user?.full_name}>
+                {user?.full_name || 'Aditya Varma'}
+              </div>
+              <div className="user-role">
+                {user?.title || 'Group ESG Executive'}
+              </div>
             </div>
           </div>
-          <button
-            className="icon-btn text-rose"
-            onClick={handleLogout}
-            title="Sign Out of Portal"
-            style={{ marginLeft: 'auto' }}
-          >
-            <LogOut size={15} />
-          </button>
         </div>
-      </div>
+      )}
     </aside>
   );
 }

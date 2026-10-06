@@ -99,85 +99,111 @@ export const ROLE_META = {
   viewer:           { label: 'Viewer',            color: '#94a3b8', icon: '👁️' },
 };
 
-export const isMock = () => localStorage.getItem('brsr_mock_mode') === 'true';
+export const DEMO_PERSONAS = {
+  aditya: {
+    key: 'aditya',
+    full_name: 'Aditya Varma',
+    email: 'aditya.v@enterprise.com',
+    role: 'group_admin',
+    title: 'Group ESG Executive',
+    organization: 'Enterprise Group (Parent)',
+  },
+  priya: {
+    key: 'priya',
+    full_name: 'Priya Verma',
+    email: 'priya.v@odisha-infra.com',
+    role: 'checker',
+    title: 'BU Reviewer',
+    organization: 'Odisha Infrastructure / Construction BU',
+  },
+  rahul: {
+    key: 'rahul',
+    full_name: 'Rahul Sharma',
+    email: 'rahul.s@highway-exp.com',
+    role: 'maker',
+    title: 'Project Data Maker',
+    organization: 'Highway Expansion (PRJ-101)',
+  },
+  anil: {
+    key: 'anil',
+    full_name: 'Anil Mehta',
+    email: 'anil.m@enterprise.com',
+    role: 'esg_manager',
+    title: 'ESG Director',
+    organization: 'Corporate Sustainability Office',
+  },
+  admin: {
+    key: 'admin',
+    full_name: 'System Admin',
+    email: 'admin@enterprise.com',
+    role: 'system_admin',
+    title: 'System Administrator',
+    organization: 'IT & Security Governance',
+  },
+  auditor: {
+    key: 'auditor',
+    full_name: 'Dr. Radhika Sen',
+    email: 'radhika.s@audit-assurance.com',
+    role: 'auditor',
+    title: 'Independent BRSR Auditor',
+    organization: 'Statutory Assurance Partner',
+  },
+};
+
+export const isMock = () => localStorage.getItem('brsr_mock_mode') === 'true' || !localStorage.getItem('brsr_token');
 
 export function AuthProvider({ children }) {
-  const [mockMode, setMockMode] = useState(() => localStorage.getItem('brsr_mock_mode') === 'true');
+  const [mockMode, setMockMode] = useState(() => localStorage.getItem('brsr_mock_mode') !== 'false');
   const [user, setUser] = useState(() => {
     try {
       const saved = localStorage.getItem('brsr_user');
-      return saved ? JSON.parse(saved) : null;
+      return saved ? JSON.parse(saved) : DEMO_PERSONAS.aditya;
     } catch {
-      return null;
+      return DEMO_PERSONAS.aditya;
     }
   });
-  const [token, setToken] = useState(() => localStorage.getItem('brsr_token') || '');
-  const [loading, setLoading] = useState(true);
+  const [token, setToken] = useState(() => localStorage.getItem('brsr_token') || 'mock-session-token');
+  const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    if (token) {
-      if (localStorage.getItem('brsr_mock_mode') === 'true' || token === 'mock-session-token') {
-        setMockMode(true);
-        setLoading(false);
-        return;
-      }
-      authApi.getMe()
-        .then((res) => {
-          setUser(res.data);
-          localStorage.setItem('brsr_user', JSON.stringify(res.data));
-        })
-        .catch((err) => {
-          console.warn('Session check failed or expired:', err.message);
-          if (err.response?.status === 401) {
-            logout();
-          }
-        })
-        .finally(() => setLoading(false));
-    } else {
-      setLoading(false);
-    }
-  }, [token]);
-
-  const login = async (identifier, password) => {
-    const cleanId = (identifier || '').trim();
-    const cleanPwd = (password || '').trim();
-    setMockMode(false);
-    localStorage.removeItem('brsr_mock_mode');
-    const res = await authApi.login({
-      username: cleanId,
-      email: cleanId,
-      password: cleanPwd
-    });
-    const { access_token, user: loggedUser } = res.data;
-    setToken(access_token);
-    setUser(loggedUser);
-    localStorage.setItem('brsr_token', access_token);
-    localStorage.setItem('brsr_user', JSON.stringify(loggedUser));
-    return loggedUser;
-  };
-
-  const enterMockMode = (mockRole = 'system_admin') => {
-    const demoAdmin = {
-      id: 'demo-system-admin-uuid',
-      email: 'demo.admin@meil.in',
-      full_name: 'Demo System Administrator (Mock Mode)',
-      role: mockRole,
-      is_active: true,
-      is_mfa_enabled: false,
-      is_mock_mode: true
-    };
+  const switchPersona = (personaKey) => {
+    const persona = DEMO_PERSONAS[personaKey] || DEMO_PERSONAS.aditya;
+    setUser(persona);
     setMockMode(true);
     setToken('mock-session-token');
-    setUser(demoAdmin);
     localStorage.setItem('brsr_mock_mode', 'true');
     localStorage.setItem('brsr_token', 'mock-session-token');
-    localStorage.setItem('brsr_user', JSON.stringify(demoAdmin));
+    localStorage.setItem('brsr_user', JSON.stringify(persona));
   };
+
+  const enterMockMode = (personaKey = 'aditya') => {
+    switchPersona(personaKey);
+  };
+
 
   const exitMockMode = () => {
     setMockMode(false);
     localStorage.removeItem('brsr_mock_mode');
     logout();
+  };
+
+  const login = async (username, password) => {
+    setLoading(true);
+    try {
+      const res = await authApi.login({ username, password });
+      const { access_token, user: apiUser } = res.data;
+      setToken(access_token);
+      setUser(apiUser);
+      setMockMode(false);
+      localStorage.setItem('brsr_token', access_token);
+      localStorage.setItem('brsr_user', JSON.stringify(apiUser));
+      localStorage.setItem('brsr_mock_mode', 'false');
+      return apiUser;
+    } catch (err) {
+      console.error('Login failed:', err);
+      throw err;
+    } finally {
+      setLoading(false);
+    }
   };
 
   const logout = () => {
@@ -236,7 +262,7 @@ export function AuthProvider({ children }) {
   return (
     <AuthContext.Provider value={{
       user, token, loading, login, logout,
-      mockMode, enterMockMode, exitMockMode,
+      mockMode, enterMockMode, exitMockMode, switchPersona, DEMO_PERSONAS,
       role, roleMeta,
       hasPermission,
       isAdmin, isGroupAdmin, isEsgManager, isSubAdmin,

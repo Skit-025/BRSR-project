@@ -184,3 +184,25 @@ export const aiApi = {
   explainNumber: (data) => api.post('/ai/explain-number', data),
   submitDecision: (runId, data) => api.post(`/ai/runs/${runId}/decision`, data),
 };
+
+// ─────────────────────────────────────────────────────────────────
+// Calculation Engine & Lineage
+// ─────────────────────────────────────────────────────────────────
+export const calcApi = {
+  getFormulas: () => api.get('/calc/formulas'),
+  getFactors: () => api.get('/calc/factors'),
+  calcScope1: (data) => api.post('/calc/scope1', data),
+  calcScope2: (data) => api.post('/calc/scope2', data),
+  calcEnergyIntensity: (data) => api.post('/calc/energy-intensity', data),
+  calcSafetyLtifr: (data) => api.post('/calc/safety-ltifr', data),
+  convertUnit: (params) => api.get('/calc/convert-unit', { params }),
+};
+
+export const lineageApi = {
+  getLineage: (metricCode, periodId, entityId) => {
+    let url = `/lineage/${encodeURIComponent(metricCode)}/${encodeURIComponent(periodId)}`;
+    if (entityId) url += `?entity_id=${encodeURIComponent(entityId)}`;
+    return api.get(url);
+  },
+};
+

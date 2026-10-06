@@ -296,3 +296,37 @@ export const useAiCheckPolicy = () => {
   if (isMock()) return MockApi.useMockAiCheckPolicy();
   return useMutation({ mutationFn: (data) => aiApi.checkPolicy(data) });
 };
+
+// ── Enterprise ESG Operating System Hooks ───────────────────────────────────
+export const useProjects = () => {
+  return MockApi.useMockProjects();
+};
+
+export const useSubsidiariesHealth = () => {
+  return MockApi.useMockSubsidiariesHealth();
+};
+
+export const useActivityFeed = () => {
+  return MockApi.useMockActivityFeed();
+};
+
+export const useCalculationLineage = () => {
+  return MockApi.useMockCalculationLineage();
+};
+
+export const useCalculationPipeline = () => {
+  return MockApi.useMockCalculationPipeline();
+};
+
+export const useDataQuality = () => {
+  return MockApi.useMockDataQuality();
+};
+
+export const useParametersCatalog = () => {
+  return MockApi.useMockParametersCatalog();
+};
+
+export const useTemplatesCatalog = () => {
+  return MockApi.useMockTemplatesCatalog();
+};
+

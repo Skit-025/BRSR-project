@@ -1,315 +1,322 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
+import {
+  Download, ArrowUpRight, ArrowDownRight, CheckCircle2,
+  Clock, AlertTriangle, Layers, Building2, TrendingUp,
+  FileText, ExternalLink, Calendar, ShieldCheck
+} from 'lucide-react';
 import {
   AreaChart, Area, BarChart, Bar,
-  ResponsiveContainer, XAxis, YAxis, Tooltip, CartesianGrid, Legend
+  ResponsiveContainer, XAxis, YAxis, Tooltip, CartesianGrid
 } from 'recharts';
 import {
-  TrendingUp, AlertTriangle, CheckCircle, Clock,
-  Building2, FileText, Shield, BarChart3, ArrowUpRight, Zap, RefreshCw, Award, Activity
-} from 'lucide-react';
-import { useDashboardSummary, useOrgPeriods, useOrgNodes } from '../hooks/useApi';
+  useSubsidiariesHealth,
+  useActivityFeed,
+  useProjects
+} from '../hooks/useApi';
+import { useAuth } from '../context/AuthContext';
+import CalculationLineageModal from '../components/CalculationLineageModal';
+
+// Clean monochrome & restrained accent chart colors
+const ENERGY_DATA = [
+  { month: 'Apr', renewable: 4200, fossil: 8100 },
+  { month: 'May', renewable: 4800, fossil: 7900 },
+  { month: 'Jun', renewable: 5400, fossil: 7600 },
+  { month: 'Jul', renewable: 5900, fossil: 7100 },
+  { month: 'Aug', renewable: 6300, fossil: 6800 },
+  { month: 'Sep', renewable: 6800, fossil: 6400 },
+];
+
+const EMISSIONS_DATA = [
+  { category: 'Diesel (Scope 1)', emissions: 412.6 },
+  { category: 'Grid Power (Scope 2)', emissions: 548.2 },
+  { category: 'Transport (Scope 1)', emissions: 184.5 },
+  { category: 'Process Fugitive', emissions: 139.4 },
+];
 
 export default function Dashboard() {
-  const { data: rawPeriods = [] } = useOrgPeriods();
-  const { data: rawNodes = [] } = useOrgNodes();
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const { data: subs = [] } = useSubsidiariesHealth();
+  const { data: activity = [] } = useActivityFeed();
+  const { data: projects = [] } = useProjects();
+  const [selectedPeriod, setSelectedPeriod] = useState('FY 2026');
+  const [lineageOpen, setLineageOpen] = useState(false);
 
-  const periods = Array.isArray(rawPeriods) ? rawPeriods : [];
-  const nodes = Array.isArray(rawNodes) ? rawNodes : [];
-
-  const [selectedPeriod, setSelectedPeriod] = useState('');
-  const [selectedEntity, setSelectedEntity] = useState('');
-
-  // Default to first period and root group entity if not set
-  const activePeriodId = selectedPeriod || (periods.length > 0 ? periods[0].id : '');
-  const activeEntityId = selectedEntity || (nodes.length > 0 ? nodes.find(n => n.type === 'group')?.id || nodes[0].id : '');
-
-  const { data: summary, isLoading, refetch, isRefetching } = useDashboardSummary(activePeriodId, activeEntityId);
-
-  const subProgress = summary?.submission_progress || {
-    total_entities: 0,
-    total_submissions: 0,
-    approved: 0,
-    in_review: 0,
-    draft: 0,
-    rejected: 0,
-    overall_progress_pct: 0,
-  };
-
-  const envKpis = summary?.key_environmental_kpis || {
-    total_energy_gj: 0,
-    scope1_emissions_tco2e: 0,
-    scope2_emissions_tco2e: 0,
-    total_ghg_tco2e: 0,
-    water_consumption_kl: 0,
-    waste_generated_mt: 0,
-  };
-
-  const socKpis = summary?.key_social_kpis || {
-    ltifr: 0,
-    fatalities: 0,
-    total_employees: 0,
-  };
-
-  const principles = summary?.principles || [];
-
-  const chartData = principles.map(p => ({
-    name: `P${p.principle}`,
-    total: p.total_metrics,
-    reported: p.reported_metrics,
-    quality: p.data_quality_score,
-  }));
+  const firstName = user?.full_name?.split(' ')[0] || 'Aditya';
 
   return (
-    <div className="page-content anim-fade">
-      {/* Top Banner / Filter Toolbar */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '16px' }}>
+    <div className="page-content">
+      {/* Page Header (Section 7 Specification) */}
+      <div className="page-header">
         <div>
-          <h1 style={{ fontSize: '24px', fontWeight: '700', color: 'var(--text-primary)', margin: 0 }}>
-            Executive ESG & BRSR Dashboard
+          <div style={{ fontSize: '11px', textTransform: 'uppercase', color: 'var(--text-tertiary)', letterSpacing: '0.05em', fontWeight: 600 }}>
+            Overview
+          </div>
+          <h1 className="page-title" style={{ marginTop: '2px' }}>
+            Good morning, {firstName}.
           </h1>
-          <p style={{ color: 'var(--text-secondary)', fontSize: '13px', margin: '4px 0 0 0' }}>
-            Real-time multi-tier consolidation and SEBI Core compliance analytics.
+          <p className="page-sub">
+            Here's the current ESG reporting status across your organization.
           </p>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-          {/* Period selector */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: 500 }}>Period:</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'var(--bg-surface)', border: '1px solid var(--border-default)', borderRadius: '6px', padding: '0 8px', height: '32px' }}>
+            <Calendar size={13} color="var(--text-tertiary)" />
             <select
               value={selectedPeriod}
               onChange={(e) => setSelectedPeriod(e.target.value)}
-              className="select-input"
-              style={{ padding: '6px 12px', borderRadius: '6px', background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', color: 'var(--text-primary)', fontSize: '13px' }}
+              style={{ border: 'none', background: 'transparent', fontSize: '12px', fontWeight: 550, outline: 'none' }}
             >
-              {periods.length === 0 ? (
-                <option value="">No Periods Configured</option>
-              ) : (
-                periods.map(p => (
-                  <option key={p.id} value={p.id}>{p.code} ({p.status})</option>
-                ))
-              )}
+              <option value="FY 2026">Reporting Period: FY 2026</option>
+              <option value="FY 2025">Reporting Period: FY 2025</option>
             </select>
           </div>
 
-          {/* Entity selector */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: 500 }}>Entity:</span>
-            <select
-              value={selectedEntity}
-              onChange={(e) => setSelectedEntity(e.target.value)}
-              className="select-input"
-              style={{ padding: '6px 12px', borderRadius: '6px', background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', color: 'var(--text-primary)', fontSize: '13px' }}
-            >
-              {nodes.length === 0 ? (
-                <option value="">No Units Configured</option>
-              ) : (
-                nodes.map(n => (
-                  <option key={n.id} value={n.id}>{n.name} [{n.type.toUpperCase()}]</option>
-                ))
-              )}
-            </select>
-          </div>
-
-          <button
-            onClick={() => refetch()}
-            disabled={isRefetching || !activePeriodId || !activeEntityId}
-            className="btn btn-secondary"
-            style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 14px', borderRadius: '6px' }}
+          <button 
+            className="btn btn-secondary btn-sm"
+            onClick={() => alert('Exporting Executive ESG Consolidation Brief (PDF / XLSX)...')}
           >
-            <RefreshCw size={13} className={isRefetching ? 'spin' : ''} />
-            {isRefetching ? 'Refreshing...' : 'Refresh'}
+            <Download size={13} />
+            <span>Export Report</span>
           </button>
         </div>
       </div>
 
-      {/* Onboarding Callout when workspace has no nodes or periods */}
-      {nodes.length === 0 && (
-        <div style={{
-          background: 'rgba(99, 102, 241, 0.08)',
-          border: '1px solid var(--border-brand)',
-          borderRadius: '12px',
-          padding: '24px 28px',
-          marginBottom: '28px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          flexWrap: 'wrap',
-          gap: '16px'
-        }}>
-          <div>
-            <h3 style={{ fontSize: '16px', color: '#fff', margin: '0 0 6px 0', fontWeight: 700 }}>
-              Live Workspace Clean & Ready
-            </h3>
-            <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: 0, maxWidth: '680px', lineHeight: 1.5 }}>
-              All mock data has been purged from your live database. To begin collecting statutory SEBI BRSR reports, configure your Group & Subsidiary organization units in Org Hierarchy. Or use Mock Mode to explore simulated data.
-            </p>
+      {/* KPI Cards Grid (Section 7: Subtle, precise cards) */}
+      <div className="kpi-grid">
+        <div className="kpi-card">
+          <div className="kpi-label">
+            <span>Data Coverage</span>
+            <ShieldCheck size={14} color="var(--text-tertiary)" />
           </div>
-          <div style={{ display: 'flex', gap: '10px' }}>
-            <Link to="/org" className="btn btn-primary" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-              <Building2 size={14} />
-              <span>Configure Org Hierarchy</span>
-            </Link>
-          </div>
-        </div>
-      )}
-
-      {/* KPI Cards Grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '16px', marginBottom: '24px' }}>
-        {/* Quality Score */}
-        <div className="card" style={{ padding: '18px', background: 'var(--bg-card)', borderRadius: '12px', border: '1px solid var(--border-default)' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-            <span style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: 600, textTransform: 'uppercase' }}>Data Quality Score</span>
-            <Award size={18} color="var(--brand-400)" />
-          </div>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
-            <span style={{ fontSize: '28px', fontWeight: '800', color: 'var(--text-primary)' }}>
-              {summary ? summary.data_quality_score : '--'}
-            </span>
-            <span style={{ fontSize: '12px', color: 'var(--brand-400)', fontWeight: 700 }}>
-              Grade {summary ? summary.data_quality_grade : 'N/A'}
-            </span>
-          </div>
-          <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '6px' }}>
-            Weighted integrity & primary evidence index
+          <div className="kpi-value">94.2%</div>
+          <div className="kpi-footer">
+            <span className="trend-up">↑ 4.2%</span>
+            <span>vs previous quarter</span>
           </div>
         </div>
 
-        {/* Total GHG */}
-        <div className="card" style={{ padding: '18px', background: 'var(--bg-card)', borderRadius: '12px', border: '1px solid var(--border-default)' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-            <span style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: 600, textTransform: 'uppercase' }}>Total GHG Emissions</span>
-            <Zap size={18} color="#f59e0b" />
+        <div className="kpi-card">
+          <div className="kpi-label">
+            <span>Pending Review</span>
+            <Clock size={14} color="var(--text-tertiary)" />
           </div>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
-            <span style={{ fontSize: '28px', fontWeight: '800', color: 'var(--text-primary)' }}>
-              {envKpis.total_ghg_tco2e.toLocaleString()}
-            </span>
-            <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>tCO₂e</span>
-          </div>
-          <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '6px' }}>
-            Scope 1: {envKpis.scope1_emissions_tco2e.toLocaleString()} | Scope 2: {envKpis.scope2_emissions_tco2e.toLocaleString()}
+          <div className="kpi-value">17</div>
+          <div className="kpi-footer">
+            <span className="trend-up">↓ 12%</span>
+            <span>reduction in queue cycle time</span>
           </div>
         </div>
 
-        {/* Energy Consumption */}
-        <div className="card" style={{ padding: '18px', background: 'var(--bg-card)', borderRadius: '12px', border: '1px solid var(--border-default)' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-            <span style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: 600, textTransform: 'uppercase' }}>Energy Consumption</span>
-            <TrendingUp size={18} color="#10b981" />
+        <div className="kpi-card">
+          <div className="kpi-label">
+            <span>ESG Reports</span>
+            <CheckCircle2 size={14} color="var(--status-ready-text)" />
           </div>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
-            <span style={{ fontSize: '28px', fontWeight: '800', color: 'var(--text-primary)' }}>
-              {envKpis.total_energy_gj.toLocaleString()}
-            </span>
-            <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>GJ</span>
-          </div>
-          <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '6px' }}>
-            Fuel + Purchased Grid Electricity (CEA v20)
+          <div className="kpi-value">8 / 8</div>
+          <div className="kpi-footer">
+            <span className="badge badge-ready" style={{ fontSize: '10px' }}>● Ready for Board Sign-off</span>
           </div>
         </div>
 
-        {/* Safety & Workforce */}
-        <div className="card" style={{ padding: '18px', background: 'var(--bg-card)', borderRadius: '12px', border: '1px solid var(--border-default)' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-            <span style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: 600, textTransform: 'uppercase' }}>Safety & LTIFR</span>
-            <Shield size={18} color="#38bdf8" />
+        <div className="kpi-card">
+          <div className="kpi-label">
+            <span>Active Projects</span>
+            <Layers size={14} color="var(--text-tertiary)" />
           </div>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
-            <span style={{ fontSize: '28px', fontWeight: '800', color: 'var(--text-primary)' }}>
-              {socKpis.ltifr}
-            </span>
-            <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>/ 1M hrs</span>
-          </div>
-          <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '6px' }}>
-            Fatalities: {socKpis.fatalities} | Total Workforce: {socKpis.total_employees.toLocaleString()}
+          <div className="kpi-value">32</div>
+          <div className="kpi-footer">
+            <span>100% operational boundary linked</span>
           </div>
         </div>
       </div>
 
-      {/* Progress & Submission Funnel */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '20px', marginBottom: '24px' }}>
-        {/* Submission Funnel Card */}
-        <div className="card" style={{ padding: '20px', background: 'var(--bg-card)', borderRadius: '12px', border: '1px solid var(--border-default)' }}>
-          <h3 style={{ fontSize: '15px', fontWeight: '700', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <FileText size={16} color="var(--brand-400)" />
-            Submission Completion Funnel
-          </h3>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
-            <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>Overall Approved Progress</span>
-            <span style={{ fontSize: '16px', fontWeight: '700', color: '#10b981' }}>{subProgress.overall_progress_pct}%</span>
-          </div>
-          <div style={{ width: '100%', height: '8px', background: 'var(--bg-elevated)', borderRadius: '4px', overflow: 'hidden', marginBottom: '20px' }}>
-            <div style={{ width: `${subProgress.overall_progress_pct}%`, height: '100%', background: '#10b981', transition: 'width 0.5s ease' }} />
+      {/* ESG Performance Charts & Lineage Trigger (Section 8 Specification) */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: '20px', marginBottom: '24px' }}>
+        {/* Executive ESG Overview Card */}
+        <div className="card">
+          <div className="card-header">
+            <div>
+              <div className="card-title">ESG Performance — FY 2026</div>
+              <div className="card-sub">Energy mix transition & Scope 1/2 GHG profile across operations</div>
+            </div>
+            <button 
+              className="btn btn-ghost btn-sm"
+              onClick={() => setLineageOpen(true)}
+              style={{ fontSize: '12px', gap: '4px' }}
+            >
+              <span>ⓘ View calculation lineage</span>
+            </button>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px', textAlign: 'center' }}>
-            <div style={{ padding: '10px', background: 'var(--bg-elevated)', borderRadius: '8px' }}>
-              <div style={{ fontSize: '18px', fontWeight: '700', color: 'var(--text-primary)' }}>{subProgress.total_submissions}</div>
-              <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>Total Packs</div>
+          <div style={{ height: '240px', width: '100%' }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={ENERGY_DATA} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="renewGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#18181b" stopOpacity={0.15}/>
+                    <stop offset="95%" stopColor="#18181b" stopOpacity={0}/>
+                  </linearGradient>
+                  <linearGradient id="fossilGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#71717a" stopOpacity={0.1}/>
+                    <stop offset="95%" stopColor="#71717a" stopOpacity={0}/>
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border-subtle)" />
+                <XAxis dataKey="month" stroke="var(--text-tertiary)" fontSize={11} tickLine={false} />
+                <YAxis stroke="var(--text-tertiary)" fontSize={11} tickLine={false} axisLine={false} />
+                <Tooltip 
+                  contentStyle={{ background: '#ffffff', border: '1px solid var(--border-default)', borderRadius: '6px', fontSize: '12px' }}
+                />
+                <Area type="monotone" dataKey="renewable" stroke="#18181b" strokeWidth={2} fillOpacity={1} fill="url(#renewGrad)" name="Renewable (GJ)" />
+                <Area type="monotone" dataKey="fossil" stroke="#71717a" strokeWidth={1.5} fillOpacity={1} fill="url(#fossilGrad)" name="Grid/Fossil (GJ)" />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: '12px', borderTop: '1px solid var(--border-subtle)', fontSize: '12px', color: 'var(--text-secondary)' }}>
+            <div style={{ display: 'flex', gap: '16px' }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span style={{ width: '8px', height: '8px', background: '#18181b', borderRadius: '2px' }} />
+                <span>Clean Energy: <strong>51.5%</strong></span>
+              </span>
+              <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span style={{ width: '8px', height: '8px', background: '#71717a', borderRadius: '2px' }} />
+                <span>Grid Thermal: <strong>48.5%</strong></span>
+              </span>
             </div>
-            <div style={{ padding: '10px', background: 'var(--bg-elevated)', borderRadius: '8px' }}>
-              <div style={{ fontSize: '18px', fontWeight: '700', color: '#10b981' }}>{subProgress.approved}</div>
-              <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>Approved</div>
-            </div>
-            <div style={{ padding: '10px', background: 'var(--bg-elevated)', borderRadius: '8px' }}>
-              <div style={{ fontSize: '18px', fontWeight: '700', color: '#f59e0b' }}>{subProgress.in_review}</div>
-              <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>In Review</div>
-            </div>
-            <div style={{ padding: '10px', background: 'var(--bg-elevated)', borderRadius: '8px' }}>
-              <div style={{ fontSize: '18px', fontWeight: '700', color: '#64748b' }}>{subProgress.draft}</div>
-              <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>Draft</div>
-            </div>
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: '11px' }}>Total Consumed: 348,250 GJ</span>
           </div>
         </div>
 
-        {/* Principle Coverage Chart */}
-        <div className="card" style={{ padding: '20px', background: 'var(--bg-card)', borderRadius: '12px', border: '1px solid var(--border-default)' }}>
-          <h3 style={{ fontSize: '15px', fontWeight: '700', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <BarChart3 size={16} color="var(--brand-400)" />
-            BRSR Principles 1 - 9 Metric Coverage
-          </h3>
-          <div style={{ height: '200px' }}>
+        {/* GHG Scope Breakdown Card */}
+        <div className="card">
+          <div className="card-header">
+            <div>
+              <div className="card-title">Scope 1 & 2 Emissions by Stream</div>
+              <div className="card-sub">Total verified footprint: 1,284.7 tCO₂e</div>
+            </div>
+          </div>
+
+          <div style={{ height: '240px', width: '100%' }}>
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border-default)" opacity={0.5} />
-                <XAxis dataKey="name" stroke="var(--text-secondary)" fontSize={11} />
-                <YAxis stroke="var(--text-secondary)" fontSize={11} />
-                <Tooltip
-                  contentStyle={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', borderRadius: '8px', color: 'var(--text-primary)' }}
+              <BarChart data={EMISSIONS_DATA} layout="vertical" margin={{ top: 10, right: 20, left: 20, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="var(--border-subtle)" />
+                <XAxis type="number" stroke="var(--text-tertiary)" fontSize={11} tickLine={false} />
+                <YAxis dataKey="category" type="category" stroke="var(--text-secondary)" fontSize={11} tickLine={false} axisLine={false} width={110} />
+                <Tooltip 
+                  contentStyle={{ background: '#ffffff', border: '1px solid var(--border-default)', borderRadius: '6px', fontSize: '12px' }}
                 />
-                <Bar dataKey="total" fill="var(--brand-400)" name="Total Metrics" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="quality" fill="#10b981" name="Quality Score" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="emissions" fill="#18181b" radius={[0, 4, 4, 0]} name="tCO₂e" />
               </BarChart>
             </ResponsiveContainer>
           </div>
+
+          <div style={{ paddingTop: '12px', borderTop: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: 'var(--text-secondary)' }}>
+            <span>Verified with IPCC Guidelines</span>
+            <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>1,284.7 tCO₂e</span>
+          </div>
         </div>
       </div>
 
-      {/* Principles Grid */}
-      <h3 style={{ fontSize: '16px', fontWeight: '700', marginBottom: '16px', color: 'var(--text-primary)' }}>
-        National Guidelines for Responsible Business Conduct (NGRBC Principles)
-      </h3>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '14px' }}>
-        {principles.map((p) => (
-          <div key={p.principle} className="card" style={{ padding: '16px', background: 'var(--bg-card)', borderRadius: '10px', border: '1px solid var(--border-default)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-              <span style={{ fontWeight: '700', fontSize: '14px', color: 'var(--brand-400)' }}>Principle {p.principle}</span>
-              <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '4px', background: 'var(--bg-elevated)', color: 'var(--text-secondary)' }}>
-                {p.reported_metrics} / {p.total_metrics} Metrics
-              </span>
+      {/* Bottom Grid: Organization Health Table & Linear Activity Feed */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: '20px' }}>
+        {/* Section 9: Organization Health / Reporting Coverage */}
+        <div className="card" style={{ padding: 0 }}>
+          <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div>
+              <div className="card-title">Reporting Coverage</div>
+              <div className="card-sub">Consolidated status across subsidiary operational boundaries</div>
             </div>
-            <div style={{ width: '100%', height: '6px', background: 'var(--bg-elevated)', borderRadius: '3px', overflow: 'hidden', margin: '8px 0' }}>
-              <div style={{ width: `${p.completion_percentage}%`, height: '100%', background: 'var(--brand-400)' }} />
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: 'var(--text-secondary)' }}>
-              <span>Completion: {p.completion_percentage}%</span>
-              <span>Data Quality: {p.data_quality_score}/100</span>
-            </div>
+            <button className="btn btn-ghost btn-sm" onClick={() => navigate('/org')}>
+              <span>View All</span>
+              <ArrowUpRight size={13} />
+            </button>
           </div>
-        ))}
+
+          <table className="table">
+            <thead>
+              <tr>
+                <th>Subsidiary</th>
+                <th>Coverage</th>
+                <th>Emissions</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {subs.map((sub) => {
+                let badgeClass = 'badge-ready';
+                if (sub.statusKey === 'review') badgeClass = 'badge-review';
+                if (sub.statusKey === 'attention') badgeClass = 'badge-attention';
+
+                return (
+                  <tr key={sub.id} style={{ cursor: 'pointer' }} onClick={() => navigate('/org')}>
+                    <td>
+                      <div style={{ fontWeight: 550, color: 'var(--text-primary)' }}>{sub.name}</div>
+                      <div style={{ fontSize: '11px', color: 'var(--text-tertiary)' }}>{sub.code} · {sub.projectCount} Projects</div>
+                    </td>
+                    <td>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <div style={{ width: '60px', height: '6px', background: 'var(--bg-subtle)', borderRadius: '99px', overflow: 'hidden' }}>
+                          <div style={{ width: `${sub.coverage}%`, height: '100%', background: 'var(--accent-black)' }} />
+                        </div>
+                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: '12px', fontWeight: 600 }}>{sub.coverage}%</span>
+                      </div>
+                    </td>
+                    <td style={{ fontFamily: 'var(--font-mono)', fontSize: '12px' }}>
+                      {sub.totalEmissions} tCO₂e
+                    </td>
+                    <td>
+                      <span className={`badge ${badgeClass}`}>
+                        <span className="status-dot" />
+                        {sub.status}
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Section 10: Linear-Style Activity Feed */}
+        <div className="card">
+          <div className="card-header">
+            <div>
+              <div className="card-title">Recent activity</div>
+              <div className="card-sub">Real-time enterprise telemetry events</div>
+            </div>
+            <button className="btn btn-ghost btn-sm" onClick={() => navigate('/audit-log')}>
+              <span>Audit Log</span>
+            </button>
+          </div>
+
+          <div className="activity-feed">
+            {activity.slice(0, 5).map((act) => (
+              <div key={act.id} className="activity-item">
+                <span className="activity-dot" style={{ background: act.dotColor }} />
+                <span className="activity-time">{act.time}</span>
+                <div className="activity-text">
+                  <div style={{ color: 'var(--text-primary)', fontSize: '13px' }}>
+                    {act.text}
+                  </div>
+                  <div style={{ fontSize: '11px', color: 'var(--text-tertiary)' }}>
+                    by {act.author}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
+
+      {/* Calculation Lineage Modal */}
+      <CalculationLineageModal 
+        isOpen={lineageOpen} 
+        onClose={() => setLineageOpen(false)} 
+      />
     </div>
   );
 }

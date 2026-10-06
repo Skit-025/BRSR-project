@@ -67,6 +67,13 @@ import EvidenceVault  from './pages/EvidenceVault';
 import Workflow       from './pages/Workflow';
 import Consolidation  from './pages/Consolidation';
 import Reporting      from './pages/Reporting';
+import Projects       from './pages/Projects';
+import ProjectDetails from './pages/ProjectDetails';
+import ParametersAdmin from './pages/ParametersAdmin';
+import TemplateBuilder from './pages/TemplateBuilder';
+import Calculations   from './pages/Calculations';
+import DataQuality    from './pages/DataQuality';
+import AuditLog       from './pages/AuditLog';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -218,11 +225,23 @@ export default function App() {
                     <Consolidation />
                   </PermissionGuard>
                 } />
-                <Route path="/reporting" element={
-                  <PermissionGuard perms={['report:read']}>
-                    <Reporting />
-                  </PermissionGuard>
-                } />
+                {/* Projects */}
+                <Route path="/projects" element={<Projects />} />
+                <Route path="/projects/:id" element={<ProjectDetails />} />
+
+                {/* ESG Parameters & Templates */}
+                <Route path="/parameters" element={<ParametersAdmin />} />
+                <Route path="/templates" element={<TemplateBuilder />} />
+
+                {/* Reporting */}
+                <Route path="/reporting" element={<Reporting />} />
+
+                {/* Calculations & Lineage */}
+                <Route path="/calculations" element={<Calculations />} />
+
+                {/* System Quality & Audit Log */}
+                <Route path="/data-quality" element={<DataQuality />} />
+                <Route path="/audit-log" element={<AuditLog />} />
               </Route>
 
               {/* Catch-all redirect */}

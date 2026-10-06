@@ -19,6 +19,14 @@ import {
   MOCK_CONSOLIDATION_FIGURES,
   MOCK_BRSR_REPORT,
   MOCK_REPORTS_LIST,
+  MOCK_PROJECTS,
+  MOCK_SUBSIDIARIES_HEALTH,
+  MOCK_ACTIVITY_FEED,
+  MOCK_CALCULATION_LINEAGE,
+  MOCK_CALCULATION_PIPELINE,
+  MOCK_DATA_QUALITY_ISSUES,
+  MOCK_PARAMETERS_CATALOG,
+  MOCK_TEMPLATES_CATALOG,
 } from './mockData';
 
 // ── tiny helper: returns a resolved-query shape instantly ─────────────────────
@@ -84,6 +92,30 @@ export const useMockBrsrReport = (_entityId, _periodId) =>
 
 export const useMockReports = (_entityId, _periodId) =>
   useMockQuery(['reports-list', 'mock', 'mock'], MOCK_REPORTS_LIST);
+
+export const useMockProjects = () =>
+  useMockQuery(['projects-list'], MOCK_PROJECTS);
+
+export const useMockSubsidiariesHealth = () =>
+  useMockQuery(['subsidiaries-health'], MOCK_SUBSIDIARIES_HEALTH);
+
+export const useMockActivityFeed = () =>
+  useMockQuery(['activity-feed'], MOCK_ACTIVITY_FEED);
+
+export const useMockCalculationLineage = () =>
+  useMockQuery(['calc-lineage'], MOCK_CALCULATION_LINEAGE);
+
+export const useMockCalculationPipeline = () =>
+  useMockQuery(['calc-pipeline'], MOCK_CALCULATION_PIPELINE);
+
+export const useMockDataQuality = () =>
+  useMockQuery(['data-quality'], MOCK_DATA_QUALITY_ISSUES);
+
+export const useMockParametersCatalog = () =>
+  useMockQuery(['param-catalog'], MOCK_PARAMETERS_CATALOG);
+
+export const useMockTemplatesCatalog = () =>
+  useMockQuery(['tpl-catalog'], MOCK_TEMPLATES_CATALOG);
 
 // ── Mock Mutations (no-op in demo — show success toast, don't touch DB) ───────
 const mockMutation = (label) => ({

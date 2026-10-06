@@ -1317,7 +1317,236 @@ export const MOCK_BRSR_REPORT = {
 };
 
 export const MOCK_REPORTS_LIST = [
-  { id: 'mock-report-001', entity_id: 'mock-node-meil', period_id: 'mock-period-2024', name: 'MEIL BRSR Full Report – FY 2024-25 (Draft)', type: 'brsr_full', status: 'draft', compiled_at: '2024-09-15T10:00:00Z', compiled_by: 'Dr. Radhika Sen' },
-  { id: 'mock-report-002', entity_id: 'mock-node-meil', period_id: 'mock-period-2023', name: 'MEIL BRSR Full Report – FY 2023-24 (Final)', type: 'brsr_full', status: 'final', compiled_at: '2023-09-20T10:00:00Z', compiled_by: 'Dr. Radhika Sen' },
-  { id: 'mock-report-003', entity_id: 'mock-node-meil', period_id: 'mock-period-2023', name: 'MEIL BRSR Core (SEBI Annex II) – FY 2023-24', type: 'brsr_core', status: 'final', compiled_at: '2023-09-22T14:30:00Z', compiled_by: 'Dr. Radhika Sen' },
+  { id: 'mock-report-001', entity_id: 'mock-node-meil', period_id: 'mock-period-2024', name: 'Group ESG Report FY 2026', type: 'brsr_full', status: 'final', compiled_at: '2026-10-06T19:42:00Z', compiled_by: 'Aditya (Executive Group)' },
+  { id: 'mock-report-002', entity_id: 'mock-node-odisha', period_id: 'mock-period-2024', name: 'Odisha Infrastructure Subsidiary Report', type: 'brsr_sub', status: 'final', compiled_at: '2026-10-06T18:10:00Z', compiled_by: 'BU Manager' },
+  { id: 'mock-report-003', entity_id: 'mock-node-meil', period_id: 'mock-period-2023', name: 'FY 2025 Consolidated BRSR Core Report', type: 'brsr_core', status: 'final', compiled_at: '2025-09-22T14:30:00Z', compiled_by: 'Dr. Radhika Sen' },
 ];
+
+// ── 30+ Enterprise Projects (Matching Section 12 & 45 Specification) ─────────
+export const MOCK_PROJECTS = [
+  { id: 'prj-101', code: 'PRJ-HW-EXP', name: 'Highway Expansion', bu_id: 'bu-const', bu_name: 'Infrastructure / Construction', subsidiary: 'Odisha Infrastructure', status: 'review', coverage: 87, stage: 'Construction', location: 'Odisha', reporting_period: 'FY 2026', manager: 'Rahul Sharma', description: 'Construction of a 50 km highway including earthwork, concrete batching and road paving.' },
+  { id: 'prj-102', code: 'PRJ-SOLAR-300', name: 'Solar Plant 300MW', bu_id: 'bu-solar', bu_name: 'Energy Systems / Solar', subsidiary: 'Energy Systems', status: 'ready', coverage: 100, stage: 'Operational', location: 'Karnataka', reporting_period: 'FY 2026', manager: 'Sneha Patel', description: '300MW utility-scale photovoltaic farm with bifacial solar panels and automated tracker systems.' },
+  { id: 'prj-103', code: 'PRJ-METRO-P2', name: 'Metro Phase II Corridor', bu_id: 'bu-const', bu_name: 'Infrastructure / Construction', subsidiary: 'Odisha Infrastructure', status: 'complete', coverage: 96, stage: 'Construction', location: 'Bhubaneswar', reporting_period: 'FY 2026', manager: 'T. Suresh Kumar', description: 'Elevated urban transit metro line spanning 22 km with 18 green-certified stations.' },
+  { id: 'prj-104', code: 'PRJ-FACT-UPG', name: 'Factory Upgrade Unit 4', bu_id: 'bu-heavy', bu_name: 'Manufacturing / Heavy Fab', subsidiary: 'Manufacturing', status: 'attention', coverage: 72, stage: 'Retrofit', location: 'Telangana', reporting_period: 'FY 2026', manager: 'Vikram Joshi', description: 'Precision heavy machinery fabrication line modernization with electric induction furnaces.' },
+  { id: 'prj-105', code: 'PRJ-BEST-EV', name: 'BEST Mumbai 2,100 EV Fleet', bu_id: 'bu-ev', bu_name: 'Urban Transit / EV Fleet', subsidiary: 'Urban Transit & Services', status: 'ready', coverage: 98, stage: 'Operational', location: 'Mumbai', reporting_period: 'FY 2026', manager: 'K. Rajesh', description: 'Zero-emission electric city bus deployment and depot charging infrastructure.' },
+  { id: 'prj-106', code: 'PRJ-ZOJILA-TUN', name: 'Zojila Tunnel Strategic Pass', bu_id: 'bu-const', bu_name: 'Infrastructure / Construction', subsidiary: 'Odisha Infrastructure', status: 'review', coverage: 84, stage: 'Construction', location: 'Jammu & Kashmir', reporting_period: 'FY 2026', manager: 'Col. Sanjeev Rao', description: '14.15 km horseshoe tunnel bypass under harsh all-weather Himalayan pass conditions.' },
+  { id: 'prj-107', code: 'PRJ-WIND-150', name: 'Wind Farm Hybrid 150MW', bu_id: 'bu-solar', bu_name: 'Energy Systems / Wind', subsidiary: 'Energy Systems', status: 'ready', coverage: 92, stage: 'Operational', location: 'Gujarat', reporting_period: 'FY 2026', manager: 'Arun Varma', description: 'Wind-solar hybrid generation site with low-noise gearless aerodynamic turbines.' },
+  { id: 'prj-108', code: 'PRJ-POLAVARAM', name: 'Polavaram Headworks EPC', bu_id: 'bu-const', bu_name: 'Infrastructure / Construction', subsidiary: 'Odisha Infrastructure', status: 'complete', coverage: 95, stage: 'Execution', location: 'Andhra Pradesh', reporting_period: 'FY 2026', manager: 'M. Venkat', description: 'Multi-purpose national irrigation dam and hydroelectric spillway civil works.' },
+  { id: 'prj-109', code: 'PRJ-TX-765KV', name: 'Transmission Corridor 765kV', bu_id: 'bu-ops', bu_name: 'Operations & Maintenance', subsidiary: 'Odisha Infrastructure', status: 'complete', coverage: 97, stage: 'Operational', location: 'Uttar Pradesh', reporting_period: 'FY 2026', manager: 'G. Sundaram', description: 'High-voltage green energy evacuation transmission lines and substations.' },
+  { id: 'prj-110', code: 'PRJ-HYDROGEN', name: 'Green Hydrogen Pilot Electrolyzer', bu_id: 'bu-hydro', bu_name: 'Hydro & Clean Tech', subsidiary: 'Energy Systems', status: 'ready', coverage: 90, stage: 'Commissioning', location: 'Andhra Pradesh', reporting_period: 'FY 2026', manager: 'Dr. Anita Roy', description: '5MW PEM water electrolyzer producing certified green hydrogen with solar energy.' },
+  { id: 'prj-111', code: 'PRJ-BRIDGE-MAH', name: 'Mahanadi Cable-Stayed Bridge', bu_id: 'bu-const', bu_name: 'Infrastructure / Construction', subsidiary: 'Odisha Infrastructure', status: 'ready', coverage: 94, stage: 'Construction', location: 'Cuttack', reporting_period: 'FY 2026', manager: 'Deepak Nayak', description: 'Iconic 3.2 km cable-stayed bridge incorporating recycled slag concrete aggregates.' },
+  { id: 'prj-112', code: 'PRJ-CGD-HYD', name: 'City Gas Network Hyderabad', bu_id: 'bu-ops', bu_name: 'Operations & Maintenance', subsidiary: 'Energy Systems', status: 'ready', coverage: 96, stage: 'Expansion', location: 'Telangana', reporting_period: 'FY 2026', manager: 'N. Srinivas', description: 'Natural gas pipeline distribution network converting diesel transit to clean fuel.' },
+  { id: 'prj-113', code: 'PRJ-CHARGING-50', name: 'Rapid EV Hub 50-Bay Yard', bu_id: 'bu-charge', bu_name: 'Urban Transit / Charging', subsidiary: 'Urban Transit & Services', status: 'ready', coverage: 100, stage: 'Operational', location: 'Pune', reporting_period: 'FY 2026', manager: 'Sameer Kulkarni', description: 'Smart high-throughput DC fast-charging plaza with battery energy storage.' },
+  { id: 'prj-114', code: 'PRJ-FAB-DRILL', name: 'Automated Rig Fabrication Yard', bu_id: 'bu-heavy', bu_name: 'Manufacturing / Heavy Fab', subsidiary: 'Manufacturing', status: 'attention', coverage: 68, stage: 'Operational', location: 'Kakinada', reporting_period: 'FY 2026', manager: 'B. R. Raju', description: 'Robotic welding and assembly yard for deep onshore geothermal rigs.' },
+  { id: 'prj-115', code: 'PRJ-WATER-LIFT', name: 'Kaleshwaram Lift Irrigation Pkg 8', bu_id: 'bu-ops', bu_name: 'Operations & Maintenance', subsidiary: 'Odisha Infrastructure', status: 'complete', coverage: 99, stage: 'Operational', location: 'Telangana', reporting_period: 'FY 2026', manager: 'P. Ravinder', description: 'World largest high-capacity lift irrigation pump houses with renewable power mix.' },
+  { id: 'prj-116', code: 'PRJ-SMART-GRID', name: 'Smart Grid Distribution Automation', bu_id: 'bu-ops', bu_name: 'Operations & Maintenance', subsidiary: 'Energy Systems', status: 'ready', coverage: 93, stage: 'Rollout', location: 'Rajasthan', reporting_period: 'FY 2026', manager: 'Meera Chawla', description: 'Advanced metering infrastructure (AMI) reducing transmission & distribution losses.' },
+  { id: 'prj-117', code: 'PRJ-AIRPORT-EPC', name: 'Greenfield Airport Terminal EPC', bu_id: 'bu-const', bu_name: 'Infrastructure / Construction', subsidiary: 'Odisha Infrastructure', status: 'review', coverage: 81, stage: 'Construction', location: 'Bhogapuram', reporting_period: 'FY 2026', manager: 'R. K. Verma', description: 'GRIHA 4-star rated airport terminal building with rainwater harvesting ponds.' },
+  { id: 'prj-118', code: 'PRJ-FOUNDRY-ZERO', name: 'Castings Foundry Zero-Effluent Plant', bu_id: 'bu-ind', bu_name: 'Manufacturing / Industrial', subsidiary: 'Manufacturing', status: 'attention', coverage: 75, stage: 'Retrofit', location: 'Tamil Nadu', reporting_period: 'FY 2026', manager: 'S. Ramanathan', description: 'Zero Liquid Discharge (ZLD) foundry with sand reclamation technology.' },
+  { id: 'prj-119', code: 'PRJ-INTERCITY-EV', name: 'Intercity Electric Coach Fleet', bu_id: 'bu-ev', bu_name: 'Urban Transit / EV Fleet', subsidiary: 'Urban Transit & Services', status: 'ready', coverage: 95, stage: 'Pilot', location: 'Maharashtra', reporting_period: 'FY 2026', manager: 'Alok Mishra', description: 'Long-range intercity luxury 12m electric motor coaches on expressway routes.' },
+  { id: 'prj-120', code: 'PRJ-WASTE-ENERGY', name: 'Municipal Solid Waste to Energy 15MW', bu_id: 'bu-solar', bu_name: 'Energy Systems / Bio', subsidiary: 'Energy Systems', status: 'ready', coverage: 88, stage: 'Operational', location: 'Karnataka', reporting_period: 'FY 2026', manager: 'Devendra Gowda', description: 'Refuse-derived fuel boiler generating base load power while reducing landfill burden.' },
+  { id: 'prj-121', code: 'PRJ-SOLAR-ROOF', name: 'Industrial Rooftop Solar 25MWp', bu_id: 'bu-solar', bu_name: 'Energy Systems / Solar', subsidiary: 'Energy Systems', status: 'complete', coverage: 100, stage: 'Operational', location: 'Gujarat', reporting_period: 'FY 2026', manager: 'Hitesh Modi', description: 'Distributed solar PV across 14 manufacturing plants.' },
+  { id: 'prj-122', code: 'PRJ-DESAL-PLANT', name: 'Seawater Reverse Osmosis Desalination', bu_id: 'bu-ops', bu_name: 'Operations & Maintenance', subsidiary: 'Odisha Infrastructure', status: 'ready', coverage: 94, stage: 'Operational', location: 'Gujarat', reporting_period: 'FY 2026', manager: 'Kiran Patel', description: '100 MLD energy-efficient desalination facility feeding coastal industrial hubs.' },
+  { id: 'prj-123', code: 'PRJ-TUNNEL-METRO', name: 'Underground Metro Bored Tunnel 8km', bu_id: 'bu-const', bu_name: 'Infrastructure / Construction', subsidiary: 'Odisha Infrastructure', status: 'review', coverage: 85, stage: 'TBM Drive', location: 'Kolkata', reporting_period: 'FY 2026', manager: 'Siddhartha Sen', description: 'Twin Earth Pressure Balance TBM tunnels with continuous noise and vibration telemetry.' },
+  { id: 'prj-124', code: 'PRJ-FLOAT-SOLAR', name: 'Reservoir Floating Solar 100MW', bu_id: 'bu-solar', bu_name: 'Energy Systems / Solar', subsidiary: 'Energy Systems', status: 'ready', coverage: 91, stage: 'Construction', location: 'Telangana', reporting_period: 'FY 2026', manager: 'V. Prakash', description: 'High-density polyethylene modular float solar plant minimizing water evaporation.' },
+  { id: 'prj-125', code: 'PRJ-STEEL-FAB', name: 'Structural Girder Fabrication Plant', bu_id: 'bu-heavy', bu_name: 'Manufacturing / Heavy Fab', subsidiary: 'Manufacturing', status: 'ready', coverage: 92, stage: 'Operational', location: 'Raipur', reporting_period: 'FY 2026', manager: 'Mohan Lal', description: 'Automated beam welding with 100% dust collection and heat recovery.' },
+  { id: 'prj-126', code: 'PRJ-DEF-TELECOM', name: 'Ruggedized Optical Ground Wire (OPGW)', bu_id: 'bu-ind', bu_name: 'Manufacturing / Industrial', subsidiary: 'Manufacturing', status: 'complete', coverage: 97, stage: 'Operational', location: 'Hyderabad', reporting_period: 'FY 2026', manager: 'Brig. K. K. Das', description: 'Low-loss fiber optic cables integrated inside high voltage shield wires.' },
+  { id: 'prj-127', code: 'PRJ-DEPOT-DELHI', name: 'Delhi DTC 1,000 EV Depot Hub', bu_id: 'bu-charge', bu_name: 'Urban Transit / Charging', subsidiary: 'Urban Transit & Services', status: 'ready', coverage: 99, stage: 'Operational', location: 'New Delhi', reporting_period: 'FY 2026', manager: 'Gaurav Anand', description: 'High-capacity charging yard supporting zero-emission transit in National Capital.' },
+  { id: 'prj-128', code: 'PRJ-PUMPED-STOR', name: 'Pumped Hydro Storage 1,200MW', bu_id: 'bu-hydro', bu_name: 'Hydro & Clean Tech', subsidiary: 'Energy Systems', status: 'review', coverage: 83, stage: 'Engineering', location: 'Andhra Pradesh', reporting_period: 'FY 2026', manager: 'N. Chandrasekhar', description: 'Closed-loop pumped hydro facility acting as giant clean grid battery.' },
+  { id: 'prj-129', code: 'PRJ-SEWAGE-STP', name: 'Smart Urban Tertiary STP 80MLD', bu_id: 'bu-ops', bu_name: 'Operations & Maintenance', subsidiary: 'Odisha Infrastructure', status: 'complete', coverage: 98, stage: 'Operational', location: 'Varanasi', reporting_period: 'FY 2026', manager: 'Prabhat Rai', description: 'Membrane bioreactor tertiary sewage treatment producing industrial grade reuse water.' },
+  { id: 'prj-130', code: 'PRJ-SMART-TRANS', name: 'Intelligent Expressway Traffic TMS', bu_id: 'bu-ops', bu_name: 'Operations & Maintenance', subsidiary: 'Urban Transit & Services', status: 'ready', coverage: 96, stage: 'Operational', location: 'Delhi-Mumbai Exp', reporting_period: 'FY 2026', manager: 'Neha Kapoor', description: 'Solar-powered IoT sensors and automated toll systems reducing idle vehicle emissions.' },
+  { id: 'prj-131', code: 'PRJ-BIO-CNG', name: 'Agricultural Straw Bio-CNG Plant', bu_id: 'bu-solar', bu_name: 'Energy Systems / Bio', subsidiary: 'Energy Systems', status: 'ready', coverage: 93, stage: 'Operational', location: 'Punjab', reporting_period: 'FY 2026', manager: 'Gurpreet Singh', description: 'Anaerobic digestion of paddy straw preventing open stubble burning emissions.' },
+  { id: 'prj-132', code: 'PRJ-BATTERY-PACK', name: 'LFP Traction Battery Module Assembly', bu_id: 'bu-heavy', bu_name: 'Manufacturing / Industrial', subsidiary: 'Manufacturing', status: 'attention', coverage: 78, stage: 'Ramping Up', location: 'Telangana', reporting_period: 'FY 2026', manager: 'S. K. Iyer', description: 'Cleanroom battery pack assembly facility certified for zero hazardous runoff.' },
+];
+
+// ── Subsidiaries Health (Matching Section 9 Specification) ───────────────────
+export const MOCK_SUBSIDIARIES_HEALTH = [
+  { id: 'sub-01', name: 'Odisha Infrastructure', code: 'ODISHA-INFRA', coverage: 98, status: 'Ready', statusKey: 'ready', buCount: 2, projectCount: 11, totalEmissions: 724.3 },
+  { id: 'sub-02', name: 'Energy Systems', code: 'ENERGY-SYS', coverage: 94, status: 'Review', statusKey: 'review', buCount: 2, projectCount: 9, totalEmissions: 312.8 },
+  { id: 'sub-03', name: 'Manufacturing', code: 'HEAVY-MFG', coverage: 88, status: 'Attention', statusKey: 'attention', buCount: 2, projectCount: 7, totalEmissions: 198.4 },
+  { id: 'sub-04', name: 'Services', code: 'TRANSIT-SRV', coverage: 100, status: 'Ready', statusKey: 'ready', buCount: 2, projectCount: 5, totalEmissions: 49.2 },
+];
+
+// ── Linear-Style Real-Time Activity Feed (Matching Section 10 Specification) ─
+export const MOCK_ACTIVITY_FEED = [
+  { id: 'act-01', time: '2m', dotColor: '#09090b', text: 'Project P-103 submitted ESG data', entity: 'Metro Phase II', author: 'Rahul Sharma', action: 'Submit' },
+  { id: 'act-02', time: '12m', dotColor: '#059669', text: 'BU Manager approved Project P-98', entity: 'Construction BU', author: 'Priya Verma', action: 'Approve' },
+  { id: 'act-03', time: '31m', dotColor: '#0284c7', text: 'Calculation completed for Odisha BU', entity: 'Odisha Infrastructure', author: 'Calculation Engine', action: 'Compute' },
+  { id: 'act-04', time: '1h', dotColor: '#09090b', text: 'Evidence uploaded for Water Consumption', entity: 'Highway Expansion', author: 'T. Suresh', action: 'Upload' },
+  { id: 'act-05', time: '2h', dotColor: '#059669', text: 'Subsidiary report generated', entity: 'Energy Systems', author: 'Aditya (Admin)', action: 'Generate' },
+  { id: 'act-06', time: '4h', dotColor: '#d97706', text: 'AI detected fuel discrepancy in Q1 logbook (resolved)', entity: 'Factory Upgrade Unit 4', author: 'Extraction Agent', action: 'Flag' },
+  { id: 'act-07', time: '6h', dotColor: '#09090b', text: 'New project created via Wizard: Solar Plant 300MW', entity: 'Energy Systems', author: 'Aditya (Admin)', action: 'Create' },
+];
+
+// ── Calculation Lineage Node Graph (Matching Section 21 Specification) ────────
+export const MOCK_CALCULATION_LINEAGE = {
+  rootValue: '1,284.7 tCO₂e',
+  metric: 'Group Scope 1 & 2 GHG Emissions',
+  period: 'FY 2026',
+  methodology: 'GHG Protocol Corporate Standard & SEBI BRSR Core v2.1',
+  calculatedAt: 'Oct 6, 2026 · 19:42 IST',
+  tree: [
+    {
+      level: 'Group Level',
+      label: 'Group Emissions',
+      value: '1,284.7 tCO₂e',
+      detail: 'Consolidated across 4 Subsidiaries, 8 BUs, 32 Projects',
+      breakdown: [
+        { name: 'Odisha Infrastructure', val: '724.3 tCO₂e', pct: '56.4%' },
+        { name: 'Energy Systems', val: '312.8 tCO₂e', pct: '24.3%' },
+        { name: 'Manufacturing', val: '198.4 tCO₂e', pct: '15.4%' },
+        { name: 'Services', val: '49.2 tCO₂e', pct: '3.9%' },
+      ],
+      isExpanded: true,
+    },
+    {
+      level: 'Subsidiary Level',
+      label: 'Odisha Infrastructure',
+      value: '724.3 tCO₂e',
+      detail: 'Aggregated from Construction BU (412.6 tCO₂e) and Operations BU (311.7 tCO₂e)',
+      isExpanded: true,
+    },
+    {
+      level: 'Business Unit Level',
+      label: 'Infrastructure / Construction BU',
+      value: '412.6 tCO₂e',
+      detail: 'Aggregated across 6 active linear construction projects',
+      isExpanded: true,
+    },
+    {
+      level: 'Project Level',
+      label: 'Highway Expansion (PRJ-101)',
+      value: '187.4 tCO₂e',
+      detail: 'Direct operational footprint (Diesel GenSets + Heavy Earthmovers + Pavers)',
+      isExpanded: true,
+    },
+    {
+      level: 'Operational Input Level',
+      label: 'Diesel Consumption',
+      value: '12,500 litres',
+      detail: 'DEFRA 2024 Scope 1 Emission Factor: 2.68 kg CO₂e / litre (12,500 × 2.68 = 33.50 tCO₂e diesel fraction)',
+      isExpanded: true,
+    },
+    {
+      level: 'Source Verification Level',
+      label: 'Fuel_Register_April.pdf',
+      value: 'SHA-256: 8f3a21b4a908c6de... · 1.8 MB',
+      detail: 'Signed fuel delivery receipt & consumption logbook · OCR extraction verified by BU Manager Priya Verma on Oct 6, 2026',
+      isLeaf: true,
+    },
+  ],
+};
+
+// ── Calculation Pipeline Status (Matching Section 20 Specification) ───────────
+export const MOCK_CALCULATION_PIPELINE = [
+  { id: 'step-1', label: 'Project data approved', status: 'completed', time: '12m ago', detail: 'Highway Expansion diesel & water records verified' },
+  { id: 'step-2', label: 'Project metrics calculated', status: 'completed', time: '9m ago', detail: '187.4 tCO₂e generated using Methodology v2.1' },
+  { id: 'step-3', label: 'BU aggregation completed', status: 'completed', time: '6m ago', detail: 'Construction BU consolidated total: 412.6 tCO₂e' },
+  { id: 'step-4', label: 'Subsidiary aggregation running', status: 'in_progress', time: 'Running…', detail: 'Rolling up Odisha Infrastructure 11 projects' },
+  { id: 'step-5', label: 'Group report pending', status: 'pending', time: 'Queued', detail: 'Awaiting Subsidiary consensus before final lock' },
+];
+
+// ── Signature UX: "Why is this required?" (Matching Section 16 Specification) ──
+export const MOCK_WHY_REQUIRED = {
+  diesel: {
+    title: 'Why this data matters',
+    description: 'Diesel consumption is used as a raw input for the project\'s energy and emissions calculations (Scope 1 direct greenhouse gas emissions). Accurate litres allow calculation of direct CO₂e using regulatory emission factors.',
+    uploadRequirements: 'What should I upload?\n• Fuel invoices, fuel issuer register logs, or approved site consumption logbooks.\n• Invoices must indicate supplier name, date range, and total quantity in litres.',
+    brsrMapping: 'SEBI BRSR Principle 6 (Environment) — Essential Indicator 1 (Total Energy Consumption) & Essential Indicator 4 (Scope 1 GHG Emissions).',
+  },
+  water: {
+    title: 'Why this data matters',
+    description: 'Total water consumption tracks withdrawal from municipal supply, groundwater bores, and surface bodies. Required to determine water intensity per unit of revenue and project area.',
+    uploadRequirements: 'What should I upload?\n• Municipal utility water bills, water tanker delivery manifests, or digital flowmeter log extracts.\n• Document must show meter reading dates and cubic metres (kL) billed.',
+    brsrMapping: 'SEBI BRSR Principle 6 (Environment) — Essential Indicator 6 (Water Withdrawal & Consumption).',
+  },
+  waste: {
+    title: 'Why this data matters',
+    description: 'Separation of hazardous versus non-hazardous waste proves responsible site stewardship and compliance with CPCB / State Pollution Control Board disposal norms.',
+    uploadRequirements: 'What should I upload?\n• Authorized recycler manifests, hazardous waste manifest Form 10, or scrap disposal receipts.\n• Must reflect weight in metric tonnes (MT) and recycler authorization registration number.',
+    brsrMapping: 'SEBI BRSR Principle 6 (Environment) — Essential Indicator 8 (Waste Generation & Management).',
+  },
+  safety: {
+    title: 'Why this data matters',
+    description: 'Lost Time Injury Frequency Rate (LTIFR) is the universal enterprise metric for occupational health and safety assurance. Measures injuries resulting in lost days per million person-hours worked.',
+    uploadRequirements: 'What should I upload?\n• Monthly HSE Safety Committee logbook, site attendance sheets, and certified accident incident investigation reports.',
+    brsrMapping: 'SEBI BRSR Principle 3 (Employee Wellbeing) — Essential Indicator 3 (Safety Data & LTIFR).',
+  },
+};
+
+// ── Data Quality Issues (Matching Section 25 Specification) ───────────────────
+export const MOCK_DATA_QUALITY_ISSUES = {
+  coverage: 94.2,
+  summary: {
+    missingEvidence: 12,
+    invalidSubmissions: 7,
+    unusualValues: 4,
+    pendingReviews: 3,
+  },
+  items: [
+    { id: 'dq-01', type: 'missing_evidence', severity: 'high', project: 'Factory Upgrade Unit 4', metric: 'Water Withdrawal', issue: 'Missing water tanker utility receipts for March 2026', link: '/collection?prj=prj-104' },
+    { id: 'dq-02', type: 'unusual_values', severity: 'warning', project: 'Kurla EV Depot', metric: 'Grid Electricity', issue: '24% surge in energy draw above 3-month trailing moving average', link: '/workflow?prj=prj-105' },
+    { id: 'dq-03', type: 'invalid_submissions', severity: 'high', project: 'Highway Expansion', metric: 'Hazardous Waste', issue: 'Recycler license expired on 2026-03-31; manifest rejected', link: '/collection?prj=prj-101' },
+    { id: 'dq-04', type: 'pending_reviews', severity: 'info', project: 'Zojila Tunnel Strategic Pass', metric: 'Scope 1 Fuel', issue: 'Submitted 14 hours ago; pending BU reviewer approval', link: '/workflow?prj=prj-106' },
+  ],
+};
+
+// ── ESG Parameters Admin Catalog (Matching Section 26 Specification) ──────────
+export const MOCK_PARAMETERS_CATALOG = [
+  { id: 'param-diesel', name: 'Diesel Consumption', code: 'ENV-DSL-01', unit: 'litres (L)', definition: 'High speed diesel consumed in mobile machinery, earthmoving equipment, and backup generators.', calculationRole: 'Scope 1 Raw Input (Factor: 2.68 kg CO₂e/L)', evidenceReq: 'Fuel Register / Invoices', brsrMapping: 'P6 Essential 1 & 4', applicability: 'Roads, Infrastructure, Manufacturing', version: 'v2.1' },
+  { id: 'param-elec', name: 'Grid Electricity Consumption', code: 'ENV-ELE-02', unit: 'kilowatt-hours (kWh)', definition: 'Purchased grid power through HT or LT distribution substations.', calculationRole: 'Scope 2 Raw Input (Factor: 0.716 kg CO₂e/kWh CEA v20)', evidenceReq: 'Electricity Board Bills', brsrMapping: 'P6 Essential 1 & 5', applicability: 'All Projects & Sites', version: 'v2.0' },
+  { id: 'param-water', name: 'Water Withdrawal & Consumption', code: 'ENV-WAT-03', unit: 'kilolitres (kL / m³)', definition: 'Total freshwater withdrawn from municipal, groundwater, or surface water sources.', calculationRole: 'Water Intensity Index', evidenceReq: 'Utility Bills / Flowmeter Records', brsrMapping: 'P6 Essential 6', applicability: 'All Projects', version: 'v1.4' },
+  { id: 'param-waste-nonhaz', name: 'Non-Hazardous Solid Waste', code: 'ENV-WST-04', unit: 'Metric Tonnes (MT)', definition: 'Construction debris, excavated soil, metal scrap, and municipal solid waste generated.', calculationRole: 'Diversion & Circularity Metric', evidenceReq: 'Recycler Receipts', brsrMapping: 'P6 Essential 8', applicability: 'Civil & EPC', version: 'v1.2' },
+  { id: 'param-waste-haz', name: 'Hazardous Waste Generated', code: 'ENV-WST-05', unit: 'Metric Tonnes (MT)', definition: 'Used lubricating oil, contaminated filters, chemical drums, and e-waste.', calculationRole: 'CPCB Compliance Metric', evidenceReq: 'Form 10 Manifests', brsrMapping: 'P6 Essential 8', applicability: 'Plant & Heavy Fleet', version: 'v1.3' },
+  { id: 'param-ltifr', name: 'Lost Time Injury Frequency Rate', code: 'SOC-SAF-06', unit: 'injuries / million hours', definition: 'Number of lost-time injuries occurring per million hours worked by site employees and contractors.', calculationRole: 'Safety Core KPI', evidenceReq: 'Safety Incident Registers', brsrMapping: 'P3 Essential 3', applicability: 'All Entities', version: 'v3.0' },
+  { id: 'param-diversity', name: 'Workforce Gender Diversity', code: 'SOC-DIV-07', unit: 'percentage (%)', definition: 'Ratio of female employees and contract personnel relative to total active workforce.', calculationRole: 'Social Inclusivity Score', evidenceReq: 'Payroll / HRMS Registers', brsrMapping: 'P3 Essential 1', applicability: 'All Entities', version: 'v2.0' },
+];
+
+// ── Template Builder Catalog (Matching Section 27 Specification) ──────────────
+export const MOCK_TEMPLATES_CATALOG = [
+  {
+    id: 'tpl-road-v1',
+    name: 'Road Construction v1',
+    code: 'TPL-ROAD-01',
+    applicableProjectTypes: ['Highway', 'Expressway', 'Paving', 'Earthwork'],
+    parameters: [
+      { id: 'param-diesel', name: 'Diesel Consumption', checked: true, required: true },
+      { id: 'param-elec', name: 'Grid Electricity', checked: true, required: true },
+      { id: 'param-water', name: 'Water Consumption', checked: true, required: true },
+      { id: 'param-waste-nonhaz', name: 'Non-Hazardous Waste', checked: true, required: true },
+      { id: 'param-waste-haz', name: 'Hazardous Waste', checked: true, required: true },
+      { id: 'param-ltifr', name: 'Worker Safety / LTIFR', checked: true, required: true },
+      { id: 'param-diversity', name: 'Workforce Gender Diversity', checked: false, required: false },
+    ],
+  },
+  {
+    id: 'tpl-solar-v1',
+    name: 'Solar Energy Operations v1',
+    code: 'TPL-SOLAR-01',
+    applicableProjectTypes: ['Solar PV', 'Floating Solar', 'Hybrid Wind-Solar'],
+    parameters: [
+      { id: 'param-diesel', name: 'Diesel Consumption', checked: false, required: false },
+      { id: 'param-elec', name: 'Grid Electricity / Auxiliary Draw', checked: true, required: true },
+      { id: 'param-water', name: 'Module Cleaning Water', checked: true, required: true },
+      { id: 'param-waste-nonhaz', name: 'Packaging Scrap', checked: true, required: false },
+      { id: 'param-waste-haz', name: 'Inverter Electronic Waste', checked: true, required: true },
+      { id: 'param-ltifr', name: 'Worker Safety / LTIFR', checked: true, required: true },
+      { id: 'param-diversity', name: 'Workforce Gender Diversity', checked: true, required: false },
+    ],
+  },
+  {
+    id: 'tpl-mfg-v2',
+    name: 'Heavy Manufacturing v2',
+    code: 'TPL-MFG-02',
+    applicableProjectTypes: ['Foundry', 'Heavy Fabrication', 'Rig Assembly', 'Battery Packaging'],
+    parameters: [
+      { id: 'param-diesel', name: 'Diesel Consumption', checked: true, required: true },
+      { id: 'param-elec', name: 'Furnace & Plant Electricity', checked: true, required: true },
+      { id: 'param-water', name: 'Process & Cooling Water', checked: true, required: true },
+      { id: 'param-waste-nonhaz', name: 'Foundry Slag & Metal Scrap', checked: true, required: true },
+      { id: 'param-waste-haz', name: 'Effluent Sludge & Used Oils', checked: true, required: true },
+      { id: 'param-ltifr', name: 'Worker Safety / LTIFR', checked: true, required: true },
+      { id: 'param-diversity', name: 'Workforce Gender Diversity', checked: true, required: true },
+    ],
+  },
+];
+
