@@ -9,6 +9,7 @@ from app.modules.org.schemas import (
     OrgNodeRead,
     OrgNodeTreeRead,
     ReportingPeriodCreate,
+    ReportingPeriodUpdate,
     ReportingPeriodRead,
     MetricApplicabilityRead,
     ApplicabilityOverrideRequest
@@ -88,6 +89,43 @@ def get_node(node_id: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Node not found.")
     return node
 
+
+@router.put("/nodes/{node_id}", response_model=OrgNodeRead)
+def update_node(node_id: str, node_in: OrgNodeUpdate, db: Session = Depends(get_db)):
+    """Updates an organization unit's metadata, boundary status, or ownership."""
+    node = db.query(OrgNode).filter(OrgNode.id == node_id, OrgNode.is_deleted == False).first()
+    if not node:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Node not found.")
+
+    if node_in.name is not None:
+        node.name = node_in.name
+    if node_in.code is not None:
+        node.code = node_in.code
+    if node_in.ownership_pct is not None:
+        node.ownership_pct = node_in.ownership_pct
+    if node_in.control_type is not None:
+        node.control_type = node_in.control_type.value
+    if node_in.boundary is not None:
+        node.boundary = node_in.boundary
+    if node_in.project_type is not None:
+        node.project_type = node_in.project_type.value
+    if node_in.location_state is not None:
+        node.location_state = node_in.location_state
+    if node_in.is_water_stressed is not None:
+        node.is_water_stressed = node_in.is_water_stressed
+    if node_in.is_pat_designated is not None:
+        node.is_pat_designated = node_in.is_pat_designated
+    if node_in.has_land_acquisition is not None:
+        node.has_land_acquisition = node_in.has_land_acquisition
+    if node_in.is_active is not None:
+        node.is_active = node_in.is_active
+
+    db.commit()
+    db.refresh(node)
+    evaluate_applicability_for_node(node, db)
+    return node
+
+
 # --- REPORTING PERIODS ---
 
 @router.get("/periods", response_model=List[ReportingPeriodRead])
@@ -96,6 +134,7 @@ def list_periods(financial_year: Optional[str] = None, db: Session = Depends(get
     if financial_year:
         query = query.filter(ReportingPeriod.financial_year == financial_year)
     return query.order_by(ReportingPeriod.start_date.desc()).all()
+
 
 @router.post("/periods", response_model=ReportingPeriodRead, status_code=status.HTTP_201_CREATED)
 def create_period(period_in: ReportingPeriodCreate, db: Session = Depends(get_db)):
@@ -114,6 +153,25 @@ def create_period(period_in: ReportingPeriodCreate, db: Session = Depends(get_db
         status=period_in.status.value
     )
     db.add(period)
+    db.commit()
+    db.refresh(period)
+    return period
+
+
+@router.put("/periods/{period_id}", response_model=ReportingPeriodRead)
+def update_period(period_id: str, period_in: ReportingPeriodUpdate, db: Session = Depends(get_db)):
+    """Updates a reporting period's lifecycle state (OPEN / LOCKED) or calendar dates."""
+    period = db.query(ReportingPeriod).filter(ReportingPeriod.id == period_id, ReportingPeriod.is_deleted == False).first()
+    if not period:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Reporting period not found.")
+
+    if period_in.status is not None:
+        period.status = period_in.status.value
+    if period_in.start_date is not None:
+        period.start_date = period_in.start_date
+    if period_in.end_date is not None:
+        period.end_date = period_in.end_date
+
     db.commit()
     db.refresh(period)
     return period

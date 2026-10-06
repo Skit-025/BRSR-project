@@ -90,7 +90,7 @@ def lock_reporting_period(
         {"metric": dp.metric_code, "val": dp.normalized_value or dp.value_numeric, "unit": dp.unit}
         for dp in data_points
     ]
-    snapshot_bytes = json.dumps(payload_summary, sort_keys=True).encode("utf-8")
+    snapshot_bytes = json.dumps(payload_summary, sort_keys=True, default=str).encode("utf-8")
     snapshot_hash = hashlib.sha256(snapshot_bytes).hexdigest()
 
     period.status = PeriodStatus.LOCKED.value

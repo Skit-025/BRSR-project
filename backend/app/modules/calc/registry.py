@@ -63,6 +63,32 @@ FORMULA_METADATA: Dict[str, FormulaInfo] = {
         required_inputs=["lost_time_injuries", "total_man_hours_worked"],
         output_unit="per million hours",
     ),
+    "CALC-GHG-SCOPE3-CAPITAL-GOODS": FormulaInfo(
+        code="CALC-GHG-SCOPE3-CAPITAL-GOODS",
+        name="Scope 3 – Capital Goods Embodied Carbon",
+        description=(
+            "Computes embodied GHG emissions (tCO2e) from procurement of heavy plant and equipment "
+            "(excavators, cranes, pipe-layers, HV transformers, DG sets). "
+            "Uses weight-based factors (tCO2e/tonne) sourced from worldsteel 2023 / IPCC 2006 Tier 1, "
+            "with a spend-based fallback (tCO2e/INR Lakh) per SEBI BRSR guidance."
+        ),
+        category="GHG",
+        required_inputs=["assets"],
+        output_unit="tCO2e",
+    ),
+    "CALC-GHG-SCOPE3-WASTE": FormulaInfo(
+        code="CALC-GHG-SCOPE3-WASTE",
+        name="Scope 3 – Waste Generated in Operations",
+        description=(
+            "Computes GHG emissions (tCO2e) from waste generated at MEIL construction sites: "
+            "C&D debris, MSW (site camps/offices), hazardous waste (oily rags, solvents), "
+            "e-waste, and wastewater. Factors from CPCB SWM 2022–23 / "
+            "MoEFCC C&D Rules 2016 / IPCC 2006 Waste Chapter Tier 1."
+        ),
+        category="GHG",
+        required_inputs=["waste_streams"],
+        output_unit="tCO2e",
+    ),
 }
 
 

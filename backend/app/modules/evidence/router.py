@@ -1,7 +1,13 @@
 from typing import Optional, List
+import logging
+from pydantic import BaseModel
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, status, Response
 from sqlalchemy.orm import Session
 from app.db.session import get_db
+from app.modules.auth.models import User
+from app.modules.auth.router import get_current_active_user
+from app.security.rbac import Role
+from app.security.passwords import verify_password
 from app.modules.evidence.models import EvidenceFile, EvidenceLink
 from app.modules.evidence.schemas import (
     EvidenceFileRead,
@@ -12,6 +18,11 @@ from app.modules.evidence.schemas import (
 )
 from app.modules.evidence.service import process_and_store_evidence, link_evidence_to_datapoint
 from app.modules.evidence.storage import storage_service
+
+logger = logging.getLogger(__name__)
+
+class EvidenceDeleteRequest(BaseModel):
+    password: str
 
 router = APIRouter(prefix="/evidence", tags=["Evidence Vault & AI Pre-fill"])
 
@@ -128,3 +139,70 @@ def get_datapoint_evidence(data_point_id: str, db: Session = Depends(get_db)):
     """Lists all supporting evidence documents linked to a data point (3-click audit trace)."""
     links = db.query(EvidenceLink).filter(EvidenceLink.data_point_id == data_point_id).all()
     return links
+
+@router.get("/{evidence_id}/view")
+def view_evidence_file(evidence_id: str, db: Session = Depends(get_db)):
+    """Serves raw evidence document inline for in-browser PDF, JPEG, PNG rendering."""
+    evidence = db.query(EvidenceFile).filter(EvidenceFile.id == evidence_id).first()
+    if not evidence:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Evidence file not found.")
+
+    file_bytes = storage_service.get_file_bytes(evidence.storage_key)
+    if not file_bytes:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File content not found in storage vault.")
+
+    return Response(
+        content=file_bytes,
+        media_type=evidence.mime_type or "application/octet-stream",
+        headers={
+            "Content-Disposition": f'inline; filename="{evidence.original_name}"'
+        }
+    )
+
+@router.delete("/{evidence_id}", status_code=status.HTTP_200_OK)
+def delete_evidence_file(
+    evidence_id: str,
+    del_req: EvidenceDeleteRequest,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Deletes an evidence file and its cryptographic hash record.
+    Restricted to system_admin and his 1 level down roles (group_admin, esg_manager).
+    Enforces re-entering admin password for audit authorization.
+    """
+    allowed_roles = [Role.SYSTEM_ADMIN.value, Role.GROUP_ADMIN.value, Role.ESG_MANAGER.value]
+    if current_user.role not in allowed_roles:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Access denied. Only {allowed_roles} have authority to delete evidence files."
+        )
+
+    # Verify admin password
+    if not current_user.password_hash or not verify_password(del_req.password, current_user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid admin password. Evidence deletion aborted."
+        )
+
+    evidence = db.query(EvidenceFile).filter(EvidenceFile.id == evidence_id).first()
+    if not evidence:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Evidence file not found.")
+
+    filename = evidence.original_name
+    storage_key = evidence.storage_key
+
+    # Delete any datapoint links
+    db.query(EvidenceLink).filter(EvidenceLink.evidence_file_id == evidence.id).delete()
+
+    # Delete storage file
+    try:
+        storage_service.delete_file(storage_key)
+    except Exception as e:
+        logger.warning(f"Storage file cleanup error: {e}")
+
+    db.delete(evidence)
+    db.commit()
+
+    return {"success": True, "message": f"Evidence file '{filename}' was permanently deleted."}
+

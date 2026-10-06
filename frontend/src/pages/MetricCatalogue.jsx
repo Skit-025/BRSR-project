@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useMetricCatalogue } from '../hooks/useApi';
-import { BookOpen, Search, Filter, Leaf, Users, Shield, Award, CheckCircle2, ChevronRight, Hash, RefreshCw } from 'lucide-react';
+import { BookOpen, Search, Filter, Leaf, Users, Shield, Award, CheckCircle2, ChevronRight, Hash, RefreshCw, X } from 'lucide-react';
+import Modal from '../components/Modal';
 
 const CATEGORY_STYLES = {
   Environmental: { icon: Leaf,   color: '#10b981', bg: 'rgba(16, 185, 129, 0.1)' },
@@ -193,21 +194,79 @@ export default function MetricCatalogue() {
 
       {/* Detail Slideout/Modal */}
       {selectedMetric && (
-        <div style={{ marginTop: '20px', padding: '20px', background: 'var(--bg-card)', borderRadius: '12px', border: '1px solid var(--border-default)' }}>
-          <h3 style={{ fontSize: '16px', fontWeight: '700', marginBottom: '8px', color: 'var(--brand-400)' }}>
-            Indicator Specification: {selectedMetric.code} - {selectedMetric.name}
-          </h3>
-          <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '14px', lineHeight: '1.6' }}>
-            {selectedMetric.definition || 'No statutory description recorded.'}
-          </p>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px', fontSize: '12px' }}>
-            <div><strong>Data Type:</strong> {selectedMetric.data_type}</div>
-            <div><strong>Frequency:</strong> {selectedMetric.frequency || 'Monthly'}</div>
-            <div><strong>Owner Role:</strong> {selectedMetric.owner_role || 'maker'}</div>
-            <div><strong>Statutory Formula:</strong> {selectedMetric.calc_formula_code || 'Direct Measurement'}</div>
-            <div><strong>Allowed Units:</strong> {selectedMetric.allowed_units?.join(', ') || selectedMetric.base_unit}</div>
+      <Modal
+        isOpen={Boolean(selectedMetric)}
+        onClose={() => setSelectedMetric(null)}
+        maxWidth="640px"
+      >
+        <div className="modal-header">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div className="modal-header-icon" style={{ background: 'rgba(99, 102, 241, 0.15)', color: 'var(--brand-400)' }}>
+              <BookOpen size={18} />
+            </div>
+            <div>
+              <h3 style={{ fontSize: '16px', color: '#fff', margin: 0 }}>
+                {selectedMetric?.code} — Indicator Details
+              </h3>
+              <p style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: '2px 0 0 0' }}>
+                SEBI BRSR Core Statutory Metadata & Calculation Lineage
+              </p>
+            </div>
           </div>
+          <button className="icon-btn" onClick={() => setSelectedMetric(null)}>
+            <X size={18} />
+          </button>
         </div>
+
+        {selectedMetric && (
+          <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <div>
+              <h4 style={{ fontSize: '15px', fontWeight: '700', marginBottom: '6px', color: '#fff' }}>
+                {selectedMetric.name}
+              </h4>
+              <p style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: '1.6', margin: 0 }}>
+                {selectedMetric.definition || 'No statutory description recorded.'}
+              </p>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px' }}>
+              <div style={{ background: 'var(--bg-elevated)', padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--border-default)' }}>
+                <div style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Data Type</div>
+                <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', marginTop: 2 }}>{selectedMetric.data_type}</div>
+              </div>
+              <div style={{ background: 'var(--bg-elevated)', padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--border-default)' }}>
+                <div style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Collection Frequency</div>
+                <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', marginTop: 2 }}>{selectedMetric.frequency || 'Monthly'}</div>
+              </div>
+              <div style={{ background: 'var(--bg-elevated)', padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--border-default)' }}>
+                <div style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Owner Role</div>
+                <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--brand-400)', marginTop: 2, textTransform: 'capitalize' }}>{selectedMetric.owner_role || 'maker'}</div>
+              </div>
+              <div style={{ background: 'var(--bg-elevated)', padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--border-default)' }}>
+                <div style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Allowed Units</div>
+                <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', marginTop: 2 }}>{selectedMetric.allowed_units?.join(', ') || selectedMetric.base_unit}</div>
+              </div>
+            </div>
+
+            <div style={{ background: 'rgba(99, 102, 241, 0.08)', padding: '12px 16px', borderRadius: '8px', border: '1px solid var(--border-brand)' }}>
+              <div style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600, marginBottom: 4 }}>Statutory Formula Code</div>
+              <div style={{ fontSize: '13px', color: 'var(--brand-400)', fontFamily: 'JetBrains Mono', fontWeight: 700 }}>
+                {selectedMetric.calc_formula_code || 'Direct Measurement (No statutory formula transformation)'}
+              </div>
+            </div>
+
+            <div className="modal-footer" style={{ borderTop: '1px solid var(--border-default)', paddingTop: 14, marginTop: 4 }}>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => setSelectedMetric(null)}
+              >
+                Close Specification
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
       )}
     </div>
   );

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Search, Bell, RefreshCw, LogOut, User, Shield } from 'lucide-react';
+import { Search, Bell, RefreshCw, LogOut, User, Shield, FlaskConical } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../context/AuthContext';
 
@@ -20,7 +20,7 @@ export default function Header() {
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const qc = useQueryClient();
-  const { user, logout } = useAuth();
+  const { user, logout, mockMode, exitMockMode } = useAuth();
   const [isRefreshing, setIsRefreshing] = useState(false);
   const crumbs = LABELS[pathname] || [pathname.replace('/', '')];
 
@@ -54,6 +54,25 @@ export default function Header() {
       </div>
 
       <div className="header-spacer" />
+
+      {/* Mock Mode Alert Banner */}
+      {mockMode && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'rgba(245, 158, 11, 0.15)', border: '1px solid rgba(245, 158, 11, 0.35)', padding: '4px 10px', borderRadius: '6px', fontSize: '12px', color: '#f59e0b' }}>
+          <FlaskConical size={13} />
+          <span style={{ fontWeight: 600 }}>Demo / Mock Mode</span>
+          <button 
+            type="button"
+            className="btn btn-secondary btn-sm"
+            onClick={() => {
+              exitMockMode();
+              navigate('/login');
+            }}
+            style={{ padding: '2px 8px', fontSize: '11px', height: '22px', border: '1px solid rgba(245, 158, 11, 0.4)' }}
+          >
+            Exit to Live Mode
+          </button>
+        </div>
+      )}
 
       {/* User profile pill */}
       {user && (

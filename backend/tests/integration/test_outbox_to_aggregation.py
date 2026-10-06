@@ -99,7 +99,7 @@ def test_hierarchical_consolidation_and_jv_boundary_math():
 
     # 7. Trigger Consolidation Engine (F22-F23)
     cons_res = client.post("/api/v1/consolidation/run", json={"period_id": period["id"]})
-    assert cons_res.status_code == 200
+    assert cons_res.status_code == 200, f"Error: {cons_res.status_code} - {cons_res.text}"
     assert cons_res.json()["consolidated_nodes_count"] >= 1
 
     # 8. Fetch Subsidiary Consolidated Figure

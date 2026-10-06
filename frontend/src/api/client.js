@@ -39,6 +39,9 @@ export const authApi = {
   bootstrapAdmin: (data) => api.post('/auth/bootstrap-system-admin', data),
   getAdminUsers: () => api.get('/auth/admin/users'),
   provisionUser: (data) => api.post('/auth/admin/users', data),
+  updateUser: (id, data) => api.put(`/auth/admin/users/${id}`, data),
+  verifyPassword: (adminPassword) =>
+    api.post('/auth/admin/verify-password', { admin_password: adminPassword }),
   deleteUser: (id, adminPassword) =>
     api.post(`/auth/admin/users/${id}/delete`, { admin_password: adminPassword }),
   changePassword: (data) => api.post('/auth/change-password', data),
@@ -63,8 +66,10 @@ export const orgApi = {
   getNodes: () => api.get('/org/nodes'),
   getNode: (id) => api.get(`/org/nodes/${id}`),
   createNode: (data) => api.post('/org/nodes', data),
+  updateNode: (id, data) => api.put(`/org/nodes/${id}`, data),
   getPeriods: () => api.get('/org/periods'),
   createPeriod: (data) => api.post('/org/periods', data),
+  updatePeriod: (id, data) => api.put(`/org/periods/${id}`, data),
   getApplicability: (nodeId, periodId) =>
     api.get(`/org/applicability/${nodeId}/${periodId}`),
 };
@@ -117,6 +122,8 @@ export const evidenceApi = {
       headers: { 'Content-Type': 'multipart/form-data' },
     }),
   getDownloadUrl: (id) => `${API_BASE}/evidence/${id}/download`,
+  getViewUrl: (id) => `${API_BASE}/evidence/${id}/view`,
+  delete: (id, password) => api.delete(`/evidence/${id}`, { data: { password } }),
   link: (data) => api.post('/evidence/link', data),
   extract: (id, docTypeHint) =>
     api.post(`/evidence/${id}/extract`, null, {

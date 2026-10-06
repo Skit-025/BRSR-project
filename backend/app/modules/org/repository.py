@@ -45,10 +45,11 @@ class OrgRepository:
 
     def get_descendants(self, path_prefix: str) -> List[OrgNode]:
         """Fetch all children and sub-descendants using PostgreSQL materialized path prefix."""
+        from sqlalchemy import cast, String
         return (
             self.db.query(OrgNode)
             .filter(
-                OrgNode.path.like(f"{path_prefix}%"),
+                cast(OrgNode.path, String).like(f"{path_prefix}%"),
                 OrgNode.is_deleted == False,
                 OrgNode.is_active == True,
             )

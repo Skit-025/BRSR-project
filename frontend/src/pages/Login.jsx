@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Lock, User, Eye, EyeOff, ShieldCheck, ArrowRight, Leaf, AlertCircle, Sparkles } from 'lucide-react';
+import { Lock, User, Eye, EyeOff, ShieldCheck, ArrowRight, Leaf, AlertCircle, Sparkles, FlaskConical } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 export default function Login() {
   const navigate = useNavigate();
-  const { login } = useAuth();
+  const { login, enterMockMode } = useAuth();
 
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
@@ -139,11 +139,11 @@ export default function Login() {
             </button>
           </form>
 
-          {/* Quick Admin Test Section */}
+          {/* Quick Admin & Mock Mode Access Section */}
           <div className="quick-access-box">
             <div className="quick-access-header">
               <Sparkles size={14} color="var(--amber-400)" />
-              <span>Authorized System Admin Accounts</span>
+              <span>Authorized System Admin Accounts (Live Production)</span>
             </div>
             <div className="quick-access-buttons">
               <button
@@ -162,6 +162,34 @@ export default function Login() {
                 <span className="quick-role">Admin 2:</span>
                 <span className="quick-id">adtshrm007</span>
               </button>
+            </div>
+
+            <div style={{ marginTop: 14, borderTop: '1px solid var(--border-subtle)', paddingTop: 12, textAlign: 'center' }}>
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={() => {
+                  enterMockMode('system_admin');
+                  navigate('/dashboard');
+                }}
+                style={{
+                  width: '100%',
+                  justifyContent: 'center',
+                  gap: 8,
+                  padding: '9px 12px',
+                  background: 'rgba(99, 102, 241, 0.08)',
+                  borderColor: 'var(--border-brand)',
+                  color: 'var(--brand-300)',
+                  fontWeight: 600,
+                  fontSize: '13px'
+                }}
+              >
+                <FlaskConical size={15} color="var(--brand-400)" />
+                <span>Enter Mock / Demo Mode</span>
+              </button>
+              <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: 6, lineHeight: 1.4 }}>
+                Explore simulated dashboards & metrics without polluting live database records.
+              </div>
             </div>
           </div>
 

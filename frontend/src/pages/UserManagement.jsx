@@ -3,10 +3,12 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { 
   Users, UserPlus, Shield, Trash2, CheckCircle2, 
   Copy, Check, AlertCircle, Key, Building2, Eye, Filter, RefreshCw, X,
-  Lock, EyeOff, ShieldAlert
+  Lock, EyeOff, ShieldAlert, Edit3
 } from 'lucide-react';
 import { authApi, orgApi } from '../api/client';
 import { useAuth } from '../context/AuthContext';
+import Modal from '../components/Modal';
+import { MOCK_USERS, MOCK_ORG_NODES } from '../mock/mockData';
 
 const HIERARCHY_TIERS = [
   { level: 1, name: 'Level 1: Group Executive', type: 'group', desc: 'Enterprise-wide group consolidation oversight' },
@@ -26,7 +28,7 @@ const ROLES = [
   { value: 'group_admin', label: 'Group Executive Admin', desc: 'Group-level oversight and reporting period closure', badge: 'badge-purple' },
   { value: 'auditor', label: 'Independent Auditor', desc: 'Third-party assurance, read-only audit logs & SHA-256 seal', badge: 'badge-teal' },
   { value: 'viewer', label: 'Viewer', desc: 'Read-only analytics and executive dashboard access', badge: 'badge-gray' },
-  { value: 'system_admin', label: 'System Administrator', desc: 'Sole authority to provision users and manage credentials', badge: 'badge-rose' },
+  // NOTE: system_admin is NOT provisionable via UI — seeded at startup only
 ];
 
 export default function UserManagement() {
@@ -47,6 +49,20 @@ export default function UserManagement() {
   const [showDeletePassword, setShowDeletePassword] = useState(false);
   const [deleteNotice, setDeleteNotice] = useState(null);
 
+  // Edit User state
+  const [editUser, setEditUser] = useState(null);
+  const [editUserForm, setEditUserForm] = useState({
+    full_name: '',
+    role: 'maker',
+    org_node_id: '',
+    is_active: true,
+    new_password: '',
+    admin_password: '',
+  });
+  const [editUserError, setEditUserError] = useState('');
+  const [editUserPending, setEditUserPending] = useState(false);
+  const [showEditAdminPassword, setShowEditAdminPassword] = useState(false);
+
   // Form fields
   const [employeeId, setEmployeeId] = useState('');
   const [fullName, setFullName] = useState('');
@@ -59,6 +75,7 @@ export default function UserManagement() {
   const { data: users = [], isLoading: usersLoading, isRefetching: usersRefetching, refetch: refetchUsers } = useQuery({
     queryKey: ['admin-users'],
     queryFn: async () => {
+      if (localStorage.getItem('brsr_mock_mode') === 'true') return MOCK_USERS;
       const res = await authApi.getAdminUsers();
       return res.data;
     },
@@ -68,6 +85,7 @@ export default function UserManagement() {
   const { data: nodes = [] } = useQuery({
     queryKey: ['org-nodes-list'],
     queryFn: async () => {
+      if (localStorage.getItem('brsr_mock_mode') === 'true') return MOCK_ORG_NODES;
       const res = await orgApi.getNodes();
       return res.data;
     },
@@ -75,7 +93,13 @@ export default function UserManagement() {
 
   // Provision user mutation
   const provisionMutation = useMutation({
-    mutationFn: (data) => authApi.provisionUser(data),
+    mutationFn: async (data) => {
+      if (localStorage.getItem('brsr_mock_mode') === 'true') {
+        await new Promise(r => setTimeout(r, 600));
+        return { data: { email: data.email || 'mock@demo.in', temp_password: 'Demo@1234', full_name: data.full_name, role: data.role } };
+      }
+      return authApi.provisionUser(data);
+    },
     onSuccess: (res) => {
       qc.invalidateQueries({ queryKey: ['admin-users'] });
       setCreatedCredentials(res.data);
@@ -94,7 +118,15 @@ export default function UserManagement() {
 
   // Delete user mutation with administrator password verification
   const deleteMutation = useMutation({
-    mutationFn: ({ id, password }) => authApi.deleteUser(id, password),
+    mutationFn: async ({ id, password }) => {
+      if (localStorage.getItem('brsr_mock_mode') === 'true') {
+        await new Promise(r => setTimeout(r, 600));
+        // In mock mode, accept any non-empty password
+        if (!password || password.length < 4) throw new Error('Incorrect administrator password. Deletion unauthorized.');
+        return { success: true };
+      }
+      return authApi.deleteUser(id, password);
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['admin-users'] });
       setDeleteNotice({
@@ -124,6 +156,56 @@ export default function UserManagement() {
       password: adminPasswordInput
     });
   };
+
+  const handleOpenEditUser = (user) => {
+    setEditUser(user);
+    setEditUserForm({
+      full_name: user.full_name || '',
+      role: user.role || 'maker',
+      org_node_id: user.org_node_id || '',
+      is_active: user.is_active !== undefined ? user.is_active : true,
+      new_password: '',
+      admin_password: '',
+    });
+    setEditUserError('');
+    setShowEditAdminPassword(false);
+  };
+
+  const handleSaveEditUser = async (e) => {
+    e.preventDefault();
+    setEditUserError('');
+    if (!editUserForm.admin_password.trim()) {
+      setEditUserError('Administrator password is required to authorize modifications.');
+      return;
+    }
+    setEditUserPending(true);
+    try {
+      if (localStorage.getItem('brsr_mock_mode') === 'true') {
+        // Simulate success in mock/demo mode
+        await new Promise(r => setTimeout(r, 600));
+      } else {
+        await authApi.updateUser(editUser.id, {
+          full_name: editUserForm.full_name,
+          role: editUserForm.role,
+          org_node_id: editUserForm.org_node_id || null,
+          is_active: editUserForm.is_active,
+          new_password: editUserForm.new_password.trim() ? editUserForm.new_password.trim() : null,
+          admin_password: editUserForm.admin_password.trim(),
+        });
+      }
+      setDeleteNotice({
+        type: 'success',
+        text: `Employee account "${editUser.email}" successfully updated.`
+      });
+      setEditUser(null);
+      refetchUsers();
+    } catch (err) {
+      setEditUserError(err.response?.data?.detail || err.message || 'Failed to update user.');
+    } finally {
+      setEditUserPending(false);
+    }
+  };
+
 
   const handleCreateUser = (e) => {
     e.preventDefault();
@@ -389,21 +471,32 @@ export default function UserManagement() {
                       <td style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
                         {u.created_at ? new Date(u.created_at).toLocaleDateString() : 'System Seed'}
                       </td>
-                      <td style={{ textAlign: 'right' }}>
-                        {isRootAdmin || isCurrentAdmin ? (
-                          <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Protected</span>
+                      <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+                        {isRootAdmin && !isCurrentAdmin ? (
+                          <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Root Admin</span>
                         ) : (
-                          <button
-                            className="icon-btn text-rose"
-                            title="Delete / Revoke User"
-                            onClick={() => {
-                              setDeleteTargetUser(u);
-                              setAdminPasswordInput('');
-                              setDeleteError('');
-                            }}
-                          >
-                            <Trash2 size={14} />
-                          </button>
+                          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                            <button
+                              className="icon-btn"
+                              title="Edit User Details / Role / Scope"
+                              onClick={() => handleOpenEditUser(u)}
+                            >
+                              <Edit3 size={13} color="var(--brand-400)" />
+                            </button>
+                            {!isRootAdmin && !isCurrentAdmin && (
+                              <button
+                                className="icon-btn text-rose"
+                                title="Delete / Revoke User"
+                                onClick={() => {
+                                  setDeleteTargetUser(u);
+                                  setAdminPasswordInput('');
+                                  setDeleteError('');
+                                }}
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            )}
+                          </div>
                         )}
                       </td>
                     </tr>
@@ -416,10 +509,12 @@ export default function UserManagement() {
       </div>
 
       {/* Modal: Provision New User */}
-      {isModalOpen && (
-        <div className="modal-backdrop">
-          <div className="modal-dialog anim-slide">
-            <div className="modal-header">
+      <Modal 
+        isOpen={isModalOpen} 
+        onClose={() => setIsModalOpen(false)} 
+        maxWidth="560px"
+      >
+        <div className="modal-header">
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <div className="modal-header-icon">
                   <UserPlus size={18} color="var(--brand-400)" />
@@ -558,117 +653,271 @@ export default function UserManagement() {
                 </button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
+      </Modal>
 
       {/* Security Re-Authentication Modal: Admin Password required to delete */}
       {deleteTargetUser && (
-        <div className="modal-backdrop">
-          <div className="modal-dialog anim-slide" style={{ maxWidth: '480px' }}>
-            <div className="modal-header" style={{ borderBottom: '1px solid var(--border-default)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <div className="modal-header-icon" style={{ background: 'rgba(239, 68, 68, 0.15)', color: '#ef4444' }}>
-                  <ShieldAlert size={20} />
-                </div>
-                <div>
-                  <h3 style={{ fontSize: '16px', color: '#fff', margin: 0 }}>Confirm User Deletion</h3>
-                  <p style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: '2px 0 0 0' }}>
-                    Re-enter your System Administrator password to authorize
-                  </p>
-                </div>
-              </div>
-              <button
-                className="icon-btn"
-                onClick={() => {
-                  setDeleteTargetUser(null);
-                  setDeleteError('');
-                  setAdminPasswordInput('');
-                }}
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            <form onSubmit={handleConfirmDelete}>
-              <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                <div style={{ background: 'rgba(239, 68, 68, 0.08)', border: '1px solid rgba(239, 68, 68, 0.25)', borderRadius: '8px', padding: '12px 16px' }}>
-                  <div style={{ fontSize: '13px', fontWeight: 600, color: '#f87171', marginBottom: 4 }}>
-                    Warning: Irreversible Identity Revocation
+        <Modal 
+          isOpen={Boolean(deleteTargetUser)} 
+          onClose={() => {
+            setDeleteTargetUser(null);
+            setDeleteError('');
+            setAdminPasswordInput('');
+          }} 
+          maxWidth="480px"
+        >
+          <div className="modal-header" style={{ borderBottom: '1px solid var(--border-default)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div className="modal-header-icon" style={{ background: 'rgba(239, 68, 68, 0.15)', color: '#ef4444' }}>
+                    <ShieldAlert size={20} />
                   </div>
-                  <div style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-                    You are permanently revoking access for employee:
-                    <div style={{ marginTop: 6, fontWeight: 700, color: '#fff', fontSize: '13px' }}>
-                      {deleteTargetUser.email} — {deleteTargetUser.full_name} ({deleteTargetUser.role})
-                    </div>
+                  <div>
+                    <h3 style={{ fontSize: '16px', color: '#fff', margin: 0 }}>Confirm User Deletion</h3>
+                    <p style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: '2px 0 0 0' }}>
+                      Re-enter your System Administrator password to authorize
+                    </p>
                   </div>
                 </div>
-
-                {deleteError && (
-                  <div style={{ padding: '10px 14px', borderRadius: '6px', background: 'rgba(239, 68, 68, 0.15)', color: '#ef4444', border: '1px solid #ef4444', fontSize: '12px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <AlertCircle size={15} />
-                    <span>{deleteError}</span>
-                  </div>
-                )}
-
-                <div className="form-group" style={{ margin: 0 }}>
-                  <label className="form-label" style={{ fontWeight: 600, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
-                    <Lock size={14} color="var(--brand-400)" />
-                    <span>Enter System Admin Password:</span>
-                  </label>
-                  <div style={{ position: 'relative' }}>
-                    <input
-                      type={showDeletePassword ? 'text' : 'password'}
-                      value={adminPasswordInput}
-                      onChange={(e) => setAdminPasswordInput(e.target.value)}
-                      placeholder="Type your administrator password"
-                      className="form-control"
-                      autoFocus
-                      required
-                      style={{ paddingRight: '40px', height: '42px', fontSize: '14px', background: 'var(--bg-elevated)', border: deleteError ? '1px solid #ef4444' : '1px solid var(--border-strong)' }}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowDeletePassword(!showDeletePassword)}
-                      className="icon-btn"
-                      style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'none' }}
-                      title={showDeletePassword ? 'Hide password' : 'Show password'}
-                    >
-                      {showDeletePassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                    </button>
-                  </div>
-                  <span style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: 4, display: 'block' }}>
-                    Authorized System Admins: Skit-025 or adtshrm007
-                  </span>
-                </div>
-              </div>
-
-              <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
                 <button
-                  type="button"
-                  className="btn btn-secondary"
+                  className="icon-btn"
                   onClick={() => {
                     setDeleteTargetUser(null);
                     setDeleteError('');
                     setAdminPasswordInput('');
                   }}
-                  disabled={deleteMutation.isPending}
                 >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="btn btn-danger"
-                  style={{ background: '#ef4444', color: '#fff', display: 'flex', alignItems: 'center', gap: 6 }}
-                  disabled={deleteMutation.isPending || !adminPasswordInput.trim()}
-                >
-                  <Trash2 size={14} />
-                  <span>{deleteMutation.isPending ? 'Verifying...' : 'Authorize & Delete'}</span>
+                  <X size={18} />
                 </button>
               </div>
-            </form>
+
+              <form onSubmit={handleConfirmDelete}>
+                <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                  <div style={{ background: 'rgba(239, 68, 68, 0.08)', border: '1px solid rgba(239, 68, 68, 0.25)', borderRadius: '8px', padding: '12px 16px' }}>
+                    <div style={{ fontSize: '13px', fontWeight: 600, color: '#f87171', marginBottom: 4 }}>
+                      Warning: Irreversible Identity Revocation
+                    </div>
+                    <div style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                      You are permanently revoking access for employee:
+                      <div style={{ marginTop: 6, fontWeight: 700, color: '#fff', fontSize: '13px' }}>
+                        {deleteTargetUser?.email} — {deleteTargetUser?.full_name} ({deleteTargetUser?.role})
+                      </div>
+                    </div>
+                  </div>
+
+                  {deleteError && (
+                    <div style={{ padding: '10px 14px', borderRadius: '6px', background: 'rgba(239, 68, 68, 0.15)', color: '#ef4444', border: '1px solid #ef4444', fontSize: '12px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <AlertCircle size={15} />
+                      <span>{deleteError}</span>
+                    </div>
+                  )}
+
+                  <div className="form-group" style={{ margin: 0 }}>
+                    <label className="form-label" style={{ fontWeight: 600, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                      <Lock size={14} color="var(--brand-400)" />
+                      <span>Enter System Admin Password:</span>
+                    </label>
+                    <div style={{ position: 'relative' }}>
+                      <input
+                        type={showDeletePassword ? 'text' : 'password'}
+                        value={adminPasswordInput}
+                        onChange={(e) => setAdminPasswordInput(e.target.value)}
+                        placeholder="Type your administrator password"
+                        className="form-control"
+                        autoFocus
+                        required
+                        style={{ paddingRight: '40px', height: '42px', fontSize: '14px', background: 'var(--bg-elevated)', border: deleteError ? '1px solid #ef4444' : '1px solid var(--border-strong)' }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowDeletePassword(!showDeletePassword)}
+                        className="icon-btn"
+                        style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'none' }}
+                        title={showDeletePassword ? 'Hide password' : 'Show password'}
+                      >
+                        {showDeletePassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
+                    </div>
+                    <span style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: 4, display: 'block' }}>
+                      Authorized System Admins: Skit-025 or adtshrm007
+                    </span>
+                  </div>
+                </div>
+
+                <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={() => {
+                      setDeleteTargetUser(null);
+                      setDeleteError('');
+                      setAdminPasswordInput('');
+                    }}
+                    disabled={deleteMutation.isPending}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="btn btn-danger"
+                    style={{ background: '#ef4444', color: '#fff', display: 'flex', alignItems: 'center', gap: 6 }}
+                    disabled={deleteMutation.isPending || !adminPasswordInput.trim()}
+                  >
+                    <Trash2 size={14} />
+                    <span>{deleteMutation.isPending ? 'Verifying...' : 'Authorize & Delete'}</span>
+                  </button>
+                </div>
+              </form>
+        </Modal>
+      )}
+
+      {/* Modal: System Admin Edit Employee User */}
+      {editUser && (
+        <Modal
+          isOpen={Boolean(editUser)}
+          onClose={() => setEditUser(null)}
+          maxWidth="540px"
+        >
+        <div className="modal-header">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div className="modal-header-icon" style={{ background: 'rgba(99, 102, 241, 0.15)', color: 'var(--brand-400)' }}>
+              <Edit3 size={18} />
+            </div>
+            <div>
+              <h3 style={{ fontSize: '16px', color: '#fff', margin: 0 }}>System Admin: Edit User</h3>
+              <p style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: '2px 0 0 0' }}>
+                Update employee role, scope, or password ({editUser?.email})
+              </p>
+            </div>
           </div>
+          <button className="icon-btn" onClick={() => setEditUser(null)}>
+            <X size={18} />
+          </button>
         </div>
+
+        {editUserError && (
+          <div className="login-error-banner" style={{ margin: '16px 20px 0' }}>
+            <AlertCircle size={16} />
+            <span>{editUserError}</span>
+          </div>
+        )}
+
+        <form onSubmit={handleSaveEditUser} className="modal-body">
+          <div className="form-group">
+            <label>Employee Full Name <span className="text-rose">*</span></label>
+            <input
+              type="text"
+              className="form-control"
+              value={editUserForm.full_name}
+              onChange={(e) => setEditUserForm({ ...editUserForm, full_name: e.target.value })}
+              required
+            />
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div className="form-group">
+              <label>Assigned Permanent Role <span className="text-rose">*</span></label>
+              <select
+                className="form-control"
+                value={editUserForm.role}
+                onChange={(e) => setEditUserForm({ ...editUserForm, role: e.target.value })}
+              >
+                {ROLES.map(r => (
+                  <option key={r.value} value={r.value}>{r.label}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="form-group">
+              <label>Account Status</label>
+              <select
+                className="form-control"
+                value={editUserForm.is_active ? 'true' : 'false'}
+                onChange={(e) => setEditUserForm({ ...editUserForm, is_active: e.target.value === 'true' })}
+              >
+                <option value="true">Active</option>
+                <option value="false">Suspended / Deactivated</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="form-group">
+            <label>Organizational Entity Scope</label>
+            <select
+              className="form-control"
+              value={editUserForm.org_node_id || ''}
+              onChange={(e) => setEditUserForm({ ...editUserForm, org_node_id: e.target.value })}
+            >
+              <option value="">Group Wide (All Entities & Projects)</option>
+              {nodes.map(n => (
+                <option key={n.id} value={n.id}>
+                  {n.name} ({n.code}) - {n.type}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="form-group">
+            <label>Reset Password (Optional)</label>
+            <input
+              type="password"
+              className="form-control"
+              placeholder="Leave blank to keep current password"
+              value={editUserForm.new_password}
+              onChange={(e) => setEditUserForm({ ...editUserForm, new_password: e.target.value })}
+            />
+            <span className="form-help">Only fill this if you want to assign a new password to this employee.</span>
+          </div>
+
+          {/* Administrator Password Authorization Gate */}
+          <div style={{ background: 'rgba(239, 68, 68, 0.08)', border: '1px solid rgba(239, 68, 68, 0.25)', borderRadius: '8px', padding: '12px 16px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, color: '#ef4444', fontWeight: 600, fontSize: '13px' }}>
+              <ShieldAlert size={15} />
+              <span>Administrator Password Required</span>
+            </div>
+            <p style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: '0 0 10px 0', lineHeight: 1.4 }}>
+              Enter your System Administrator password to cryptographically confirm this change.
+            </p>
+            <div style={{ position: 'relative' }}>
+              <input
+                type={showEditAdminPassword ? 'text' : 'password'}
+                className="form-control"
+                placeholder="Enter your administrator password"
+                value={editUserForm.admin_password}
+                onChange={(e) => setEditUserForm({ ...editUserForm, admin_password: e.target.value })}
+                required
+                style={{ paddingRight: '40px' }}
+              />
+              <button
+                type="button"
+                onClick={() => setShowEditAdminPassword(!showEditAdminPassword)}
+                className="icon-btn"
+                style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'none' }}
+              >
+                {showEditAdminPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+              </button>
+            </div>
+          </div>
+
+          <div className="modal-footer" style={{ borderTop: '1px solid var(--border-default)', paddingTop: 14, marginTop: 10 }}>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => setEditUser(null)}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="btn btn-primary"
+              disabled={editUserPending}
+              style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+            >
+              {editUserPending ? <RefreshCw size={14} className="spin" /> : <CheckCircle2 size={14} />}
+              <span>{editUserPending ? 'Authorizing...' : 'Authorize & Save Changes'}</span>
+            </button>
+          </div>
+        </form>
+      </Modal>
       )}
     </div>
   );

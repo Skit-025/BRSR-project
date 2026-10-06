@@ -97,3 +97,17 @@ class TokenPayload(BaseModel):
 class AdminDeleteUserRequest(BaseModel):
     admin_password: str
 
+
+class AdminVerifyPasswordRequest(BaseModel):
+    admin_password: str
+
+
+class AdminUpdateUserRequest(BaseModel):
+    full_name: Optional[str] = None
+    email: Optional[str] = None
+    role: Optional[UserRole] = None
+    org_node_id: Optional[str] = None
+    is_active: Optional[bool] = None
+    new_password: Optional[str] = None
+    admin_password: Optional[str] = None
+
