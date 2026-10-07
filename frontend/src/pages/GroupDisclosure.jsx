@@ -35,7 +35,7 @@ export default function GroupDisclosure() {
 
   const [formData, setFormData] = useState({
     group_general: {
-      group_legal_name: 'Megha Engineering & Infrastructures Group (MEIL)',
+      group_legal_name: 'Aarohan Infrastructure & Energy Group',
       consolidation_approach: 'Operational Control (100% boundary for fully managed entities)',
       subsidiaries_count_in_scope: '14',
       joint_ventures_count: '6',
@@ -143,12 +143,12 @@ export default function GroupDisclosure() {
   };
 
   return (
-    <div className="page-content" style={{ padding: '28px 36px', maxWidth: 1200, margin: '0 auto' }}>
+    <div className="page-content anim-fade-up" style={{ padding: '28px 36px', maxWidth: 1200, margin: '0 auto' }}>
       {/* ── Page Header ── */}
       <div style={{ marginBottom: 24, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 16 }}>
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--brand-500)', fontSize: 13, fontWeight: 700, marginBottom: 4 }}>
-            <Globe2 size={16} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#15803d', fontSize: 13, fontWeight: 700, marginBottom: 4 }}>
+            <span className="status-beacon-live" style={{ marginRight: 2 }} />
             <span>TYPE 3 DISCLOSURE FORM (SPEC §34-36)</span>
           </div>
           <h1 style={{ fontSize: 26, fontWeight: 800, margin: 0, color: 'var(--text-primary)' }}>

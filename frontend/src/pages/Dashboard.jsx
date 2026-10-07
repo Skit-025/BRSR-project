@@ -22,8 +22,15 @@ export default function Dashboard() {
   const [lineageDrawerOpen, setLineageDrawerOpen] = useState(false);
   const [lineageMetricCode, setLineageMetricCode] = useState('ENV-ENERGY-001');
 
-  const rootNode = React.useMemo(() => nodes.find(n => n.type === 'group' || n.is_root) || nodes[0], [nodes]);
-  const activePeriodId = selectedPeriodId || periods[0]?.id;
+  const rootNode = React.useMemo(() => {
+    if (user?.org_node_id) {
+      const userNode = nodes.find(n => n.id === user.org_node_id);
+      if (userNode) return userNode;
+    }
+    return nodes.find(n => n.code === 'AAROHAN-GROUP') || nodes.find(n => n.type === 'group' || n.is_root) || nodes[0];
+  }, [nodes, user?.org_node_id]);
+
+  const activePeriodId = selectedPeriodId || periods.find(p => p.code === 'FY2025-26-M03')?.id || periods[0]?.id;
   const activeEntityId = selectedEntityId || rootNode?.id;
 
   const { data: summary, isLoading: summaryLoading } = useDashboardSummary(
@@ -137,14 +144,11 @@ export default function Dashboard() {
 
 
   return (
-    <div style={{
-      flex: 1,
-      overflowY: 'auto',
+    <div className="page-content anim-fade-up" style={{
       background: '#F8FAFC',
-      padding: '24px 28px 40px',
       fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
     }}>
-      <div style={{ maxWidth: 1240, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 20 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
 
         {/* ── Top Status Line ── */}
         <div style={{
@@ -157,7 +161,7 @@ export default function Dashboard() {
           letterSpacing: '0.04em'
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700, color: '#09090B' }}>
-            <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#10B981' }} />
+            <span className="status-beacon-live" />
             <span>LIVE FEED ACTIVE</span>
           </div>
           <span style={{ color: '#CBD5E1' }}>•</span>
@@ -292,7 +296,7 @@ export default function Dashboard() {
                 display: 'flex',
                 alignItems: 'center',
                 gap: 6,
-                background: '#09090B',
+                background: '#0070F3',
                 border: 'none',
                 padding: '6px 14px',
                 borderRadius: 6,
@@ -318,6 +322,71 @@ export default function Dashboard() {
           </div>
         </div>
 
+        {/* ── ESG REPORTING WORKFLOW PIPELINE (Spec §11) ── */}
+        <div style={{
+          background: '#FFFFFF',
+          border: '1px solid #E2E8F0',
+          borderRadius: 10,
+          padding: '16px 20px',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.02)'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#0F172A' }}>
+                ESG REPORTING WORKFLOW PIPELINE
+              </span>
+              <span style={{
+                fontSize: 11,
+                background: '#DCFCE7',
+                color: '#15803D',
+                padding: '1px 8px',
+                borderRadius: 9999,
+                fontWeight: 700,
+                border: '1px solid #BBF7D0'
+              }}>
+                Aarohan Infrastructure & Energy Group
+              </span>
+            </div>
+            <div style={{ fontSize: 12, color: '#64748B', fontWeight: 500 }}>
+              Audit Boundary: <strong>Operational Control (100%)</strong>
+            </div>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 8 }}>
+            {[
+              { label: 'Project Data Collection', status: 'done', note: '250 MW Odisha Solar Park', icon: '✓', route: '/collection' },
+              { label: 'Evidence Submitted', status: 'done', note: 'Statutory vouchers attached', icon: '✓', route: '/evidence' },
+              { label: 'BU Review & Gate', status: 'done', note: 'Solar EPC review verified', icon: '✓', route: '/workflow' },
+              { label: 'Calculation Engine', status: 'done', note: 'GHG emission factors', icon: '✓', route: '/consolidation' },
+              { label: 'BU Aggregation', status: 'done', note: 'Solar & Wind BUs rolled up', icon: '✓', route: '/disclosure/bu' },
+              { label: 'Subsidiary Aggregation', status: 'done', note: 'Renewable Energy Pvt Ltd', icon: '✓', route: '/disclosure/subsidiary' },
+              { label: 'Group Aggregation', status: 'done', note: 'Enterprise post-order roll-up', icon: '✓', route: '/consolidation' },
+              { label: 'BRSR Report Ready', status: 'done', note: 'SEBI Core disclosure locked', icon: '✓', route: '/reporting' }
+            ].map((st, i) => (
+              <div
+                key={i}
+                onClick={() => navigate(st.route)}
+                style={{
+                  padding: '9px 12px',
+                  borderRadius: 7,
+                  border: '1px solid #BBF7D0',
+                  background: '#F0FDF4',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease'
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700, color: '#15803D' }}>
+                  <span>{st.icon}</span>
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{st.label}</span>
+                </div>
+                <div style={{ fontSize: 11, color: '#64748B', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {st.note}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
         {/* ── Top 3 Executive KPI Cards ── */}
         <div style={{
           display: 'grid',
@@ -325,7 +394,7 @@ export default function Dashboard() {
           gap: 16
         }}>
           {/* Card 1: DATA COVERAGE */}
-          <div style={{
+          <div className="hover-glow" style={{
             background: '#FFFFFF',
             border: '1px solid #E5E7EB',
             borderRadius: 8,
@@ -365,7 +434,7 @@ export default function Dashboard() {
             {/* Progress bar */}
             <div>
               <div style={{ height: 4, width: '100%', background: '#F1F5F9', borderRadius: 99, overflow: 'hidden', marginBottom: 8 }}>
-                <div style={{ height: '100%', width: `${summary?.data_quality_score ?? 94.2}%`, background: '#09090B', borderRadius: 99 }} />
+                <div style={{ height: '100%', width: `${summary?.data_quality_score ?? 94.2}%`, background: '#0070F3', borderRadius: 99 }} />
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#64748B' }}>
                 <span>Target baseline: 90.0%</span>
@@ -375,7 +444,7 @@ export default function Dashboard() {
           </div>
 
           {/* Card 2: PENDING REVIEW */}
-          <div style={{
+          <div className="hover-glow" style={{
             background: '#FFFFFF',
             border: '1px solid #E5E7EB',
             borderRadius: 8,
@@ -432,7 +501,7 @@ export default function Dashboard() {
           </div>
 
           {/* Card 3: BRSR CORE STATUS */}
-          <div style={{
+          <div className="hover-glow" style={{
             background: '#FFFFFF',
             border: '1px solid #E5E7EB',
             borderRadius: 8,
@@ -543,7 +612,7 @@ export default function Dashboard() {
               </div>
               {/* Segmented/target progress bar */}
               <div style={{ height: 6, width: '100%', background: '#F1F5F9', borderRadius: 99, overflow: 'hidden', display: 'flex' }}>
-                <div style={{ width: '82%', background: '#09090B' }} />
+                <div style={{ width: '82%', background: '#0070F3' }} />
                 <div style={{ width: '6%', background: '#EF4444' }} />
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10.5, color: '#64748B' }}>
@@ -578,7 +647,7 @@ export default function Dashboard() {
                 </div>
               </div>
               <div style={{ height: 6, width: '100%', background: '#F1F5F9', borderRadius: 99, overflow: 'hidden' }}>
-                <div style={{ height: '100%', width: '84.1%', background: '#09090B', borderRadius: 99 }} />
+                <div style={{ height: '100%', width: '84.1%', background: '#0070F3', borderRadius: 99 }} />
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10.5, color: '#64748B' }}>
                 <span>Zero untreated discharge mandate</span>
@@ -611,9 +680,9 @@ export default function Dashboard() {
 
               {/* Segmented bar */}
               <div style={{ height: 10, width: '100%', background: '#F1F5F9', borderRadius: 3, overflow: 'hidden', display: 'flex' }}>
-                <div style={{ width: '40.5%', background: '#09090B' }} title={`Scope 1: ${displayScope1}`} />
-                <div style={{ width: '32.1%', background: '#52525B' }} title={`Scope 2: ${displayScope2}`} />
-                <div style={{ width: '27.4%', background: '#A1A1AA' }} title="Scope 3: 352.7 t" />
+                <div style={{ width: '40.5%', background: '#0070F3' }} title={`Scope 1: ${displayScope1}`} />
+                <div style={{ width: '32.1%', background: '#3B82F6' }} title={`Scope 2: ${displayScope2}`} />
+                <div style={{ width: '27.4%', background: '#93C5FD' }} title="Scope 3: 352.7 t" />
               </div>
 
               {/* Labels */}
@@ -764,7 +833,7 @@ export default function Dashboard() {
                   border: '1px solid #E2E8F0'
                 }}>
                   <div style={{
-                    width: 18, height: 18, borderRadius: 4, background: '#09090B',
+                    width: 18, height: 18, borderRadius: 4, background: '#0070F3',
                     color: '#FFFFFF', display: 'flex', alignItems: 'center', justifyContent: 'center',
                     fontSize: 10, flexShrink: 0, marginTop: 1
                   }}>
@@ -774,7 +843,7 @@ export default function Dashboard() {
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, fontWeight: 700, color: '#09090B' }}>
                       <span>Odisha Subsidiary Aggregation</span>
                       <span style={{
-                        background: '#09090B', color: '#FFFFFF',
+                        background: '#EFF6FF', color: '#1D4ED8', border: '1px solid #BFDBFE',
                         fontSize: 10, padding: '1px 5px', borderRadius: 3
                       }}>
                         Running (42s)
@@ -1053,7 +1122,7 @@ export default function Dashboard() {
           <button
             onClick={() => navigate('/data-quality')}
             style={{
-              background: '#09090B',
+              background: '#0070F3',
               color: '#FFFFFF',
               border: 'none',
               padding: '8px 16px',
@@ -1063,7 +1132,8 @@ export default function Dashboard() {
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
-              gap: 6
+              gap: 6,
+              boxShadow: '0 1px 2px rgba(0, 112, 243, 0.2)'
             }}
           >
             <span>Review 16 items in Data Quality</span>

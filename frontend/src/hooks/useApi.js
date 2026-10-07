@@ -485,3 +485,13 @@ export const useVerifyAuditChain = () => {
     mutationFn: () => auditApi.verifyChain().then(r => r.data),
   });
 };
+
+// ── Project Submission (live status + data points for a project node) ──
+export const useProjectSubmission = (entityId, periodId, opts) => {
+  return useQuery({
+    queryKey: ['project-submission', entityId, periodId],
+    queryFn: () => collectionApi.getPack(entityId, periodId).then(r => r.data),
+    enabled: !!entityId && !!periodId,
+    ...opts,
+  });
+};

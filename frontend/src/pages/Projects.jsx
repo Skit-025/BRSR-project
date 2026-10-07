@@ -9,18 +9,12 @@ import {
 import { useOrgNodes, useOrgPeriods } from '../hooks/useApi';
 import { useAuth } from '../context/AuthContext';
 
-/* ── Mock project data seeded with rich MEIL structure ── */
+/* ── Seeded project data for Aarohan Infrastructure & Energy Group ── */
 const MOCK_PROJECTS = [
-  { id: 'prj-best', name: 'BEST Mumbai Electric Bus Fleet', bu: 'Electric Mobility Fleet Operations', subsidiary: 'Olectra Greentech', status: 'APPROVED', coverage: 100, period: 'FY 2026', type: 'EV Fleet', location: 'Mumbai, MH', lastActivity: '2m ago' },
-  { id: 'prj-hwy-od', name: 'NH-16 Odisha Highway Expansion', bu: 'Infrastructure BU', subsidiary: 'MEIL Infra Projects', status: 'IN_REVIEW', coverage: 87, period: 'FY 2026', type: 'Road', location: 'Odisha', lastActivity: '1h ago' },
-  { id: 'prj-metro', name: 'Nagpur Metro Phase II', bu: 'Urban Mobility BU', subsidiary: 'MEIL Urban', status: 'SUBMITTED', coverage: 96, period: 'FY 2026', type: 'Metro Rail', location: 'Nagpur, MH', lastActivity: '3h ago' },
-  { id: 'prj-dam', name: 'Polavaram Irrigation Project', bu: 'Water Infrastructure BU', subsidiary: 'MEIL Infra Projects', status: 'DRAFT', coverage: 62, period: 'FY 2026', type: 'Irrigation', location: 'Andhra Pradesh', lastActivity: '1d ago' },
-  { id: 'prj-power', name: 'Telangana 765kV Transmission Line', bu: 'Power Transmission BU', subsidiary: 'MEIL Power', status: 'CHANGES_REQUESTED', coverage: 71, period: 'FY 2026', type: 'Power T&D', location: 'Telangana', lastActivity: '2d ago' },
-  { id: 'prj-solar', name: 'Rajasthan 400 MW Solar Plant', bu: 'Renewable Energy BU', subsidiary: 'MEIL Power', status: 'CALCULATED', coverage: 100, period: 'FY 2026', type: 'Solar', location: 'Rajasthan', lastActivity: '5m ago' },
-  { id: 'prj-bridge', name: 'Godavari River Bridge Project', bu: 'Infrastructure BU', subsidiary: 'MEIL Infra Projects', status: 'SUBMITTED', coverage: 78, period: 'FY 2026', type: 'Bridge', location: 'Andhra Pradesh', lastActivity: '6h ago' },
-  { id: 'prj-tunnel', name: 'Mumbai-Pune Expressway Tunnel', bu: 'Infrastructure BU', subsidiary: 'MEIL Infra Projects', status: 'IN_REVIEW', coverage: 91, period: 'FY 2026', type: 'Tunnel', location: 'Maharashtra', lastActivity: '30m ago' },
-  { id: 'prj-plant', name: 'Vijayawada Cement Plant Upgrade', bu: 'Manufacturing BU', subsidiary: 'MEIL Manufacturing', status: 'DRAFT', coverage: 45, period: 'FY 2026', type: 'Manufacturing', location: 'Andhra Pradesh', lastActivity: '3d ago' },
-  { id: 'prj-water', name: 'Hyderabad Drinking Water Supply', bu: 'Water Infrastructure BU', subsidiary: 'MEIL Infra Projects', status: 'APPROVED', coverage: 100, period: 'FY 2026', type: 'Water Supply', location: 'Hyderabad, TS', lastActivity: '12m ago' },
+  { id: 'PRJ-ODISHA-SOLAR', name: '250 MW Odisha Solar Park', bu: 'Solar EPC & Operations', subsidiary: 'Aarohan Renewable Energy Pvt. Ltd.', status: 'IN_REVIEW', coverage: 92, period: 'FY 2025–26', type: 'Solar Power Generation', location: 'Odisha, India', lastActivity: '10m ago' },
+  { id: 'PRJ-RAJ-SOLAR', name: '50 MW Rajasthan Solar Expansion', bu: 'Solar EPC & Operations', subsidiary: 'Aarohan Renewable Energy Pvt. Ltd.', status: 'APPROVED', coverage: 100, period: 'FY 2025–26', type: 'Solar Power Generation', location: 'Rajasthan, India', lastActivity: '1h ago' },
+  { id: 'PRJ-KUTCH-WIND', name: 'Kutch Wind Farm', bu: 'Wind Energy Operations', subsidiary: 'Aarohan Renewable Energy Pvt. Ltd.', status: 'CALCULATED', coverage: 100, period: 'FY 2025–26', type: 'Wind Power Generation', location: 'Gujarat, India', lastActivity: '3h ago' },
+  { id: 'PRJ-PURI-HWY', name: 'Bhubaneswar–Puri Road Expansion', bu: 'Highway Development', subsidiary: 'Aarohan Infrastructure Projects Pvt. Ltd.', status: 'SUBMITTED', coverage: 85, period: 'FY 2025–26', type: 'Highway Construction', location: 'Odisha, India', lastActivity: '5h ago' },
 ];
 
 const STATUS_CONFIG = {
@@ -70,6 +64,14 @@ export default function Projects() {
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 8;
 
+  // Known Aarohan demo project status from seed data
+  const AAROHAN_STATUS_MAP = {
+    'PRJ-ODISHA-SOLAR': { status: 'IN_REVIEW', coverage: 92, lastActivity: '10m ago' },
+    'PRJ-RAJ-SOLAR':    { status: 'APPROVED',  coverage: 100, lastActivity: '1h ago' },
+    'PRJ-KUTCH-WIND':   { status: 'CALCULATED', coverage: 100, lastActivity: '3h ago' },
+    'PRJ-PURI-HWY':     { status: 'SUBMITTED',  coverage: 85, lastActivity: '5h ago' },
+  };
+
   const projectsList = useMemo(() => {
     const projectNodes = nodes.filter(n => n.type === 'project' || n.type === 'site');
     if (!projectNodes || projectNodes.length === 0) {
@@ -78,18 +80,19 @@ export default function Projects() {
     return projectNodes.map(n => {
       const parentBu = nodes.find(b => b.id === n.parent_id);
       const parentSub = parentBu ? nodes.find(s => s.id === parentBu.parent_id) : null;
+      const knownStatus = AAROHAN_STATUS_MAP[n.code] || {};
       return {
         id: n.id,
         name: n.name,
         code: n.code,
-        bu: parentBu?.name || 'Infrastructure BU',
-        subsidiary: parentSub?.name || 'MEIL Group',
-        status: n.is_active ? 'APPROVED' : 'DRAFT',
-        coverage: 95,
-        period: 'FY 2026',
+        bu: parentBu?.name || 'Renewable BU',
+        subsidiary: parentSub?.name || 'Aarohan Group',
+        status: knownStatus.status || (n.is_active ? 'APPROVED' : 'DRAFT'),
+        coverage: knownStatus.coverage || 95,
+        period: 'FY 2025–26',
         type: n.project_type || 'Infrastructure',
-        location: n.location_state || 'India',
-        lastActivity: 'Active',
+        location: n.location_state ? `${n.location_state}, India` : 'India',
+        lastActivity: knownStatus.lastActivity || 'Active',
       };
     });
   }, [nodes]);
@@ -146,7 +149,7 @@ export default function Projects() {
   }), [projectsList]);
 
   return (
-    <div className="page-content anim-fade" style={{ background: '#f8fafc' }}>
+    <div className="page-content anim-fade-up" style={{ background: '#f8fafc' }}>
       {/* ── Status Ticker ── */}
       <div style={{
         display: 'flex', alignItems: 'center', gap: 16, marginBottom: 8,
@@ -154,7 +157,7 @@ export default function Projects() {
         fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#64748b'
       }}>
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: '#15803d' }}>
-          <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#15803d', display: 'inline-block' }}></span>
+          <span className="status-beacon-live" style={{ marginRight: 2 }} />
           PROJECT PORTFOLIO DIRECTORY
         </span>
         <span style={{ color: '#cbd5e1' }}>/</span>
@@ -175,7 +178,7 @@ export default function Projects() {
           <button className="btn btn-secondary" style={{ borderRadius: 6, border: '1px solid #e2e8f0', background: '#fff', color: '#09090b', fontWeight: 600 }}>
             <Download size={14} /> Export CSV
           </button>
-          <button className="btn btn-primary" style={{ borderRadius: 6, background: '#18181b', color: '#fff', border: 'none', fontWeight: 600 }} onClick={() => navigate('/projects/new')}>
+          <button className="btn btn-primary" style={{ borderRadius: 6, background: '#0070F3', color: '#fff', border: 'none', fontWeight: 600 }} onClick={() => navigate('/projects/new')}>
             <Plus size={14} /> Add Project
           </button>
         </div>

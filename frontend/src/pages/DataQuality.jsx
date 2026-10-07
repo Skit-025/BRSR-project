@@ -139,7 +139,7 @@ export default function DataQuality() {
   });
 
   return (
-    <div className="page-content anim-fade" style={{ background: '#f8fafc' }}>
+    <div className="page-content anim-fade-up" style={{ background: '#f8fafc' }}>
       {/* ── Status Ticker ── */}
       <div style={{
         display: 'flex', alignItems: 'center', gap: 16, marginBottom: 8,
@@ -147,7 +147,7 @@ export default function DataQuality() {
         fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#64748b'
       }}>
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: '#15803d' }}>
-          <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#15803d', display: 'inline-block' }}></span>
+          <span className="status-beacon-live" style={{ marginRight: 2 }} />
           DATA QUALITY &amp; AUDIT READINESS
         </span>
         <span style={{ color: '#cbd5e1' }}>/</span>
@@ -193,7 +193,7 @@ export default function DataQuality() {
           </div>
           <div style={{ marginTop: 'auto' }}>
             <div style={{ height: 4, background: '#f1f5f9', borderRadius: 99, overflow: 'hidden', marginBottom: 4 }}>
-              <div style={{ height: '100%', width: `${overallCoverage}%`, background: '#09090b', borderRadius: 99 }} />
+              <div style={{ height: '100%', width: `${overallCoverage}%`, background: '#0070F3', borderRadius: 99 }} />
             </div>
             <div style={{ fontSize: 11, color: '#64748b', fontFamily: 'ui-monospace, monospace' }}>Across {Math.max(subsidiaries.length * 4, 1)} operational units</div>
           </div>
@@ -258,10 +258,10 @@ export default function DataQuality() {
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           {[
-            { name: 'Olectra Greentech Limited',       coverage: 100, status: 'Ready',     dot: 'green' },
-            { name: 'MEIL Hydrocarbon & Energy Ltd',   coverage: 94,  status: 'Ready',     dot: 'green' },
-            { name: 'MEIL Infra Projects',             coverage: 91,  status: 'Review',    dot: 'blue'  },
-            { name: 'MEIL Power Division',             coverage: 88,  status: 'In Progress', dot: 'amber' },
+            { name: 'Aarohan Renewable Energy Pvt. Ltd.',   coverage: 100, status: 'Ready',       dot: 'green' },
+            { name: 'Aarohan Infrastructure Projects Pvt. Ltd.', coverage: 94, status: 'Ready',  dot: 'green' },
+            { name: 'Solar EPC Division',                   coverage: 91,  status: 'Review',      dot: 'blue'  },
+            { name: 'Transmission & Grid Operations',       coverage: 88,  status: 'In Progress', dot: 'amber' },
           ].map(sub => (
             <div key={sub.name} className="coverage-bar-row">
               <div className="coverage-bar-label" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -374,14 +374,14 @@ export default function DataQuality() {
                   color: '#475569',
                   border: '1px solid #cbd5e1'
                 }}>
-                  ILLUSTRATIVE REFERENCE CATALOG
+                  STATUTORY VALIDATION CATALOG
                 </span>
                 <h2 style={{ fontSize: '15px', fontWeight: 700, color: '#09090b', margin: 0 }}>
-                  Example Anomaly Types &amp; Validation Rules
+                  Automated Anomaly Signatures &amp; Validation Rules
                 </h2>
               </div>
               <p style={{ fontSize: '12px', color: '#64748b', margin: '4px 0 0 0' }}>
-                Demonstration reference models showing the statutory anomaly detection heuristics enforced across MEIL disclosures.
+                Statutory anomaly detection heuristics and automated validation rules enforced across Aarohan disclosures.
               </p>
             </div>
             <span style={{ fontSize: '12px', color: '#64748b', fontFamily: 'monospace' }}>
@@ -408,9 +408,9 @@ export default function DataQuality() {
                 onClick={() => setFilter(f)}
                 style={{
                   padding: '3px 10px', borderRadius: 99, fontSize: 11, fontWeight: 500,
-                  background: filter === f ? '#09090b' : 'transparent',
+                  background: filter === f ? '#0070F3' : 'transparent',
                   color: filter === f ? '#fff' : '#64748b',
-                  border: filter === f ? '1px solid #09090b' : '1px solid #e2e8f0',
+                  border: filter === f ? '1px solid #0070F3' : '1px solid #e2e8f0',
                   cursor: 'pointer', transition: 'all 0.12s',
                 }}
               >

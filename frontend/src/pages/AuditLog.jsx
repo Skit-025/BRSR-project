@@ -141,7 +141,7 @@ export default function AuditLog() {
   });
 
   return (
-    <div className="page-content anim-fade" style={{ background: '#f8fafc' }}>
+    <div className="page-content anim-fade-up" style={{ background: '#f8fafc' }}>
       {/* ── Status Ticker ── */}
       <div style={{
         display: 'flex', alignItems: 'center', gap: 16, marginBottom: 8,
@@ -149,7 +149,7 @@ export default function AuditLog() {
         fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#64748b'
       }}>
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: '#15803d' }}>
-          <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#15803d', display: 'inline-block' }}></span>
+          <span className="status-beacon-live" style={{ marginRight: 2 }} />
           IMMUTABLE AUDIT TRAIL
         </span>
         <span style={{ color: '#cbd5e1' }}>/</span>

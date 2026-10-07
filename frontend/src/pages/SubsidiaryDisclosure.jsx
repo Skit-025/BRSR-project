@@ -38,12 +38,12 @@ export default function SubsidiaryDisclosure() {
   // Form states
   const [formData, setFormData] = useState({
     section_a_org: {
-      corporate_name: 'Megha Engineering & Infrastructures Ltd (Subsidiary)',
-      cin_number: 'U45200TG2006PLC050278',
-      registered_office_address: 'S-2, Technocrat Industrial Estate, Balanagar, Hyderabad - 500037',
+      corporate_name: 'Aarohan Renewable Energy Pvt. Ltd.',
+      cin_number: 'U40106MH2018PTC312456',
+      registered_office_address: 'Aarohan Towers, Plot 14, BKC, Bandra East, Mumbai - 400051',
       contact_person: 'Corporate Sustainability Officer',
-      contact_email: 'esg.compliance@meilgroup.com',
-      website: 'https://meil.in',
+      contact_email: 'esg.compliance@aarohan-energy.in',
+      website: 'https://aarohan-energy.in',
       reporting_boundary: 'Standalone entity and operational sites',
       total_employees_permanent: '14250',
       total_workers_permanent: '28400',
@@ -59,7 +59,7 @@ export default function SubsidiaryDisclosure() {
       has_environment_policy: true,
       has_stakeholder_policy: true,
       board_committee_responsible: 'CSR & Sustainability Committee of the Board',
-      policy_weblink: 'https://meil.in/sustainability/policies',
+      policy_weblink: 'https://aarohan-energy.in/sustainability/policies',
       review_frequency_months: '12',
       independent_directors_oversight: true,
       stakeholder_grievance_redressal_in_place: true
@@ -166,12 +166,12 @@ export default function SubsidiaryDisclosure() {
   const isLocked = disclosureStatus === 'APPROVED' || disclosureStatus === 'LOCKED';
 
   return (
-    <div className="page-content" style={{ padding: '28px 36px', maxWidth: 1200, margin: '0 auto' }}>
+    <div className="page-content anim-fade-up" style={{ padding: '28px 36px', maxWidth: 1200, margin: '0 auto' }}>
       {/* ── Page Header ── */}
       <div style={{ marginBottom: 24, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 16 }}>
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--brand-500)', fontSize: 13, fontWeight: 700, marginBottom: 4 }}>
-            <Building size={16} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#15803d', fontSize: 13, fontWeight: 700, marginBottom: 4 }}>
+            <span className="status-beacon-live" style={{ marginRight: 2 }} />
             <span>TYPE 3 DISCLOSURE FORM (SPEC §26-32)</span>
           </div>
           <h1 style={{ fontSize: 26, fontWeight: 800, margin: 0, color: 'var(--text-primary)' }}>

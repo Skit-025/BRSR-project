@@ -107,7 +107,21 @@ export default function ValueChain() {
   };
 
   return (
-    <div className="page-container" style={{ padding: '24px 32px' }}>
+    <div className="page-container anim-fade-up" style={{ padding: '24px 32px' }}>
+      {/* ── Status Ticker ── */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 16, marginBottom: 8,
+        fontSize: 11, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+        fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#64748b'
+      }}>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: '#15803d' }}>
+          <span className="status-beacon-live" style={{ marginRight: 2 }} />
+          VALUE CHAIN AUDIT TRAIL
+        </span>
+        <span style={{ color: '#cbd5e1' }}>/</span>
+        <span>SEBI BRSR CORE 75% PROCUREMENT SPEND BOUNDARY</span>
+      </div>
+
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 }}>
         <div>
@@ -599,7 +613,7 @@ export default function ValueChain() {
                       checked={assessmentData.has_code_of_conduct}
                       onChange={(e) => setAssessmentData({ ...assessmentData, has_code_of_conduct: e.target.checked })}
                     />
-                    <span>Signed MEIL Supplier Code of Conduct & Human Rights Charter</span>
+                    <span>Signed Aarohan Supplier Code of Conduct & Human Rights Charter</span>
                   </label>
                 </div>
 

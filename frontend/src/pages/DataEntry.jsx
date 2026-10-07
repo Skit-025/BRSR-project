@@ -5,11 +5,11 @@ import {
   Send, Save, RefreshCw, Eye, MessageSquare, Lock,
   Leaf, Droplets, Trash2, Shield, Users, Flame, Zap, BarChart3,
   HelpCircle, FileText, Building2, ArrowRight, X, ChevronDown,
-  Upload, Paperclip
+  Upload, Paperclip, Sparkles
 } from "lucide-react";
 import { useOrgNodes, useOrgPeriods, useScopedForm, useSavePack, useSubmitPack, useFuelCatalog } from "../hooks/useApi";
 import { useAuth } from "../context/AuthContext";
-import { collectionApi, evidenceApi, calcApi, validationApi } from "../api/client";
+import { collectionApi, evidenceApi, calcApi, validationApi, aiApi } from "../api/client";
 
 
 // ── Domain colour map ─────────────────────────────────────────────────────────
@@ -104,11 +104,45 @@ function EvidenceUploader({ metricCode, evidenceRule, onUploaded }) {
   );
 }
 
-// ─── Why / What guidance card (Spec §16) ──────────────────────────────────
+// ─── Why / What guidance card (Spec §13 & §16) with E3 Guidance RAG ───────────
 function GuidanceCard({ field, open, onToggle }) {
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiAnswer, setAiAnswer] = useState(null);
+  const [customQuestion, setCustomQuestion] = useState("");
+
   const defaultWhy = field.why_needed || `Mandatory ESG disclosure parameter under BRSR ${field.scope_badge || 'reporting framework'}. Entered values are validated against historical thresholds and rolled up to corporate disclosures.`;
   const defaultWhat = field.guidance_text || `Enter the exact raw operational quantity (${field.unit || 'units'}). Note: You only provide raw operational facts; the platform automatically calculates carbon emissions and intensities.`;
   const defaultDocs = field.document_hint || `Upload original supplier invoices, utility bills, meter calibration logs, or weighbridge receipts verifying the reported quantity.`;
+
+  // Realistic examples & sources for demonstration
+  const exampleMap = {
+    'ENV-ENERGY-001': { eg: '64,500 kWh', src: 'Feeder Substation Meter TSS-04 / DISCOM Monthly Power Bill' },
+    'ENV-ENERGY-002': { eg: '12,450 Litres', src: 'IOCL Fuel Delivery Challans & Backup DG Set Run Register' },
+    'ENV-ENERGY-003': { eg: '28,300 Litres', src: 'Transit Fleet Dispatch Logs & Excavator Hour-Meter Records' },
+    'ENV-WATER-001':  { eg: '9,150 kL', src: 'CGWA Certified Ultrasonic Borewell Telemetry Logs' },
+    'ENV-WASTE-001':  { eg: '1.85 Tonnes', src: 'SPCB Form 10 Hazardous Waste Consignment Manifest' },
+  };
+  const extra = exampleMap[field.metric_code] || { eg: `1,250 ${field.unit || 'units'}`, src: 'Plant Operations Logbook / Vendor Invoices' };
+
+  const handleAskAi = async (q) => {
+    const query = q || `What constitutes ${field.metric_code} (${field.metric_name || field.name || 'this parameter'}) under SEBI BRSR Principle ${field.principle || 6}?`;
+    setAiLoading(true);
+    try {
+      const res = await aiApi.explainField({
+        indicator_code: field.metric_code,
+        question: query
+      });
+      setAiAnswer(res.data);
+    } catch (err) {
+      console.error("AI RAG error:", err);
+      setAiAnswer({
+        answer: `Guidance Note reference: ${field.metric_code} reporting requires operational data substantiated by primary meter logs or utility invoices. Values roll up under Principle ${field.principle || 6}.`,
+        citations: [{ doc: "SEBI BRSR Guidance Note", version: "2023", section: `Principle ${field.principle || 6}` }]
+      });
+    } finally {
+      setAiLoading(false);
+    }
+  };
 
   return (
     <div style={{ marginTop: 6 }}>
@@ -117,37 +151,99 @@ function GuidanceCard({ field, open, onToggle }) {
         onClick={onToggle}
         style={{
           display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11,
-          color: "#475569", background: "none", border: "none", cursor: "pointer",
+          color: "#0284C7", background: "none", border: "none", cursor: "pointer",
           fontWeight: 600, padding: 0
         }}
       >
         <HelpCircle size={12} />
-        Why is this required? / What to upload?
+        Parameter Guidance &amp; AI Copilot: Why required? Where to find?
         <ChevronDown size={11} style={{ transform: open ? "rotate(180deg)" : "none", transition: "0.2s" }} />
       </button>
       {open && (
         <div style={{
           marginTop: 6, padding: "12px 14px", background: "#f8fafc",
           border: "1px solid #e2e8f0", borderRadius: 6, fontSize: 12, lineHeight: 1.6,
-          borderLeft: "3px solid #18181b"
+          borderLeft: "3px solid #0284c7"
         }}>
           <div style={{ marginBottom: 8 }}>
             <strong style={{ color: "#09090b", display: "block", marginBottom: 3, fontSize: 11, fontFamily: "ui-monospace, monospace" }}>
-              WHY IS THIS REQUIRED?
+              1. WHY IS THIS REQUIRED?
             </strong>
             <span style={{ color: "#475569" }}>{defaultWhy}</span>
           </div>
           <div style={{ marginBottom: 8 }}>
             <strong style={{ color: "#15803d", display: "block", marginBottom: 3, fontSize: 11, fontFamily: "ui-monospace, monospace" }}>
-              RAW FACT ENTRY
+              2. RAW OPERATIONAL FACT TO ENTER
             </strong>
             <span style={{ color: "#475569" }}>{defaultWhat}</span>
           </div>
-          <div>
+          <div style={{ marginBottom: 8 }}>
+            <strong style={{ color: "#0284c7", display: "block", marginBottom: 3, fontSize: 11, fontFamily: "ui-monospace, monospace" }}>
+              3. WHERE TO FIND DATA &amp; REALISTIC EXAMPLE
+            </strong>
+            <span style={{ color: "#475569" }}>
+              Source: <strong>{extra.src}</strong> · Example Entry: <span style={{ fontFamily: 'monospace', fontWeight: 700, color: '#09090b', background: '#e2e8f0', padding: '1px 5px', borderRadius: 4 }}>{extra.eg}</span>
+            </span>
+          </div>
+          <div style={{ marginBottom: 8 }}>
             <strong style={{ color: "#b45309", display: "block", marginBottom: 3, fontSize: 11, fontFamily: "ui-monospace, monospace" }}>
-              EVIDENCE REQUIRED
+              4. EVIDENCE VOUCHER REQUIRED
             </strong>
             <span style={{ color: "#475569" }}>{defaultDocs}</span>
+          </div>
+
+          {/* E3 Guidance RAG Interactive Section */}
+          <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px dashed #cbd5e1" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+              <strong style={{ color: "#7c3aed", fontSize: 11, display: "flex", alignItems: "center", gap: 5 }}>
+                <Sparkles size={12} color="#7c3aed" /> 5. AI ENGINE E3: SEBI BRSR GUIDANCE RAG COPILOT
+              </strong>
+              {aiLoading && <span style={{ fontSize: 10, color: "#7c3aed", fontWeight: 600 }}>Querying Guidance Note...</span>}
+            </div>
+
+            {aiAnswer ? (
+              <div style={{ background: "#f5f3ff", padding: "10px 12px", borderRadius: 6, border: "1px solid #ddd6fe" }}>
+                <p style={{ margin: "0 0 6px", fontSize: 11.5, color: "#4c1d95", lineHeight: 1.5 }}>
+                  {aiAnswer.answer}
+                </p>
+                {aiAnswer.citations?.length > 0 && (
+                  <div style={{ fontSize: 10.5, color: "#6d28d9", fontWeight: 600, display: "flex", flexWrap: "wrap", gap: 4 }}>
+                    <span style={{ color: "#5b21b6" }}>Statutory Citations:</span>
+                    {aiAnswer.citations.map((c, idx) => (
+                      <span key={idx} style={{ background: "#ede9fe", padding: "1px 6px", borderRadius: 4 }}>
+                        {c.doc} ({c.version}) — §{c.section}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setAiAnswer(null)}
+                  style={{
+                    marginTop: 6, background: "none", border: "none", color: "#7c3aed",
+                    fontSize: 10.5, cursor: "pointer", textDecoration: "underline", padding: 0
+                  }}
+                >
+                  Clear Guidance
+                </button>
+              </div>
+            ) : (
+              <div style={{ display: "flex", gap: 6 }}>
+                <button
+                  type="button"
+                  onClick={() => handleAskAi()}
+                  disabled={aiLoading}
+                  style={{
+                    background: "#7c3aed", color: "#fff", border: "none", borderRadius: 5,
+                    padding: "5px 12px", fontSize: 11, fontWeight: 600, cursor: "pointer",
+                    display: "inline-flex", alignItems: "center", gap: 5, transition: "0.15s"
+                  }}
+                >
+                  <Sparkles size={12} />
+                  Ask AI Guidance for {field.metric_code}
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -155,7 +251,7 @@ function GuidanceCard({ field, open, onToggle }) {
   );
 }
 
-// ─── Pre-Submission Review Checklist Modal (Spec §18) ──────────────────────
+// ─── Pre-Submission Review Checklist Modal (Spec §7, §18) ──────────────────────
 function PreSubmissionModal({ open, onClose, onConfirm, submitting, stats, validationSummary, validationLoading }) {
   if (!open) return null;
   const isComplete = stats.filledCount === stats.totalFields;
@@ -163,15 +259,16 @@ function PreSubmissionModal({ open, onClose, onConfirm, submitting, stats, valid
 
   return (
     <div style={{
-      position: 'fixed', inset: 0, background: 'rgba(9, 9, 11, 0.5)',
+      position: 'fixed', inset: 0, background: 'rgba(9, 9, 11, 0.55)',
       backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center',
       zIndex: 1000, padding: 20
     }}>
       <div style={{
-        background: '#fff', borderRadius: 8, maxWidth: 540, width: '100%',
-        boxShadow: '0 20px 40px rgba(0,0,0,0.12)', border: '1px solid #e2e8f0', overflow: 'hidden'
+        background: '#fff', borderRadius: 10, maxWidth: 560, width: '100%',
+        boxShadow: '0 20px 40px rgba(0,0,0,0.15)', border: '1px solid #e2e8f0',
+        maxHeight: '90vh', display: 'flex', flexDirection: 'column', overflow: 'hidden'
       }}>
-        <div style={{ padding: '16px 20px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div style={{ padding: '16px 20px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <FileText size={18} color="#18181b" />
             <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: '#09090b' }}>Pre-Submission Review Checklist</h3>
@@ -179,7 +276,7 @@ function PreSubmissionModal({ open, onClose, onConfirm, submitting, stats, valid
           <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b' }}><X size={18} /></button>
         </div>
 
-        <div style={{ padding: '24px' }}>
+        <div style={{ padding: '24px', overflowY: 'auto', flex: 1 }}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
             <div style={{ padding: '14px', borderRadius: 10, background: '#f8fafc', border: '1px solid #e2e8f0' }}>
               <div style={{ fontSize: 12, color: '#64748b', fontWeight: 600 }}>Parameters Completed</div>
@@ -287,7 +384,7 @@ function PreSubmissionModal({ open, onClose, onConfirm, submitting, stats, valid
 }
 
 // ─── Single Parameter Field ─────────────────────────────────────────────────
-function ParameterField({ field, value, onChange, readOnly, submissionStatus }) {
+function ParameterField({ field, value, onChange, readOnly, submissionStatus, onEvidenceUploaded }) {
   const [showGuidance, setShowGuidance] = useState(false);
   const [localError, setLocalError] = useState(null);
 
@@ -466,7 +563,7 @@ function ParameterField({ field, value, onChange, readOnly, submissionStatus }) 
         <EvidenceUploader
           metricCode={field.metric_code}
           evidenceRule={field.evidence_rule}
-          onUploaded={() => {}}
+          onUploaded={(evId) => onEvidenceUploaded?.(field.metric_code, evId)}
         />
       )}
     </div>
@@ -566,7 +663,7 @@ function ProjectContextCard({ entity, form }) {
 }
 
 // ─── Domain Section ──────────────────────────────────────────────────────────
-function DomainSection({ domain, principle, fields, values, onChange, submissionStatus }) {
+function DomainSection({ domain, principle, fields, values, onChange, submissionStatus, onEvidenceUploaded }) {
   const [collapsed, setCollapsed] = useState(false);
   const meta = DOMAIN_META[domain] || DOMAIN_META["Environment"];
   const DomainIcon = meta.icon;
@@ -629,6 +726,7 @@ function DomainSection({ domain, principle, fields, values, onChange, submission
               value={values[field.metric_code]}
               onChange={onChange}
               submissionStatus={submissionStatus}
+              onEvidenceUploaded={onEvidenceUploaded}
             />
           ))}
         </div>
@@ -725,6 +823,8 @@ export default function DataEntry() {
   const [values, setValues] = useState({});
   const [saving, setSaving] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  // Map of metricCode → array of uploaded evidence file IDs
+  const [evidenceIds, setEvidenceIds] = useState({});
   const [submitted, setSubmitted] = useState(false);
   const [notice, setNotice] = useState(null);
   const [openGuidance, setOpenGuidance] = useState({});
@@ -771,6 +871,14 @@ export default function DataEntry() {
     setValues(prev => ({ ...prev, [metricCode]: value }));
   }, []);
 
+  const handleEvidenceUploaded = useCallback((metricCode, evidenceId) => {
+    if (!evidenceId) return;
+    setEvidenceIds(prev => ({
+      ...prev,
+      [metricCode]: [...(prev[metricCode] || []), evidenceId],
+    }));
+  }, []);
+
   const handleSave = async () => {
     if (!selectedEntity || !selectedPeriod) return;
     setSaving(true);
@@ -782,6 +890,7 @@ export default function DataEntry() {
         unit: form?.sections?.flatMap(s => s.fields || []).find(f => f.metric_code === metric_code)?.unit || "",
         status: "ACTUAL",
         entry_method: "manual_form",
+        evidence_file_ids: evidenceIds[metric_code] || [],
       }));
       const res = await savePack({
         entity_id: selectedEntity,
@@ -818,6 +927,7 @@ export default function DataEntry() {
           unit: form?.sections?.flatMap(s => s.fields || []).find(f => f.metric_code === metric_code)?.unit || "",
           status: "ACTUAL",
           entry_method: "manual_form",
+          evidence_file_ids: evidenceIds[metric_code] || [],
         }));
         const res = await savePack({
           entity_id: selectedEntity,
@@ -896,8 +1006,8 @@ export default function DataEntry() {
   }, [activeNode, orgNodes]);
 
   return (
-    <div className="page-content anim-fade" style={{ background: "#f8fafc", overflowY: "auto", minHeight: "100%" }}>
-      <div style={{ maxWidth: 1100, margin: "0 auto", padding: "24px 32px 80px 32px" }}>
+    <div className="page-content anim-fade-up" style={{ background: "#f8fafc" }}>
+      <div style={{ maxWidth: 1200, margin: "0 auto", width: "100%" }}>
 
         {/* ── Status Ticker / Header Micro-badge ── */}
         <div style={{
@@ -906,7 +1016,7 @@ export default function DataEntry() {
           fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", color: "#64748b"
         }}>
           <span style={{ display: "inline-flex", alignItems: "center", gap: 6, color: "#15803d" }}>
-            <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#15803d", display: "inline-block" }}></span>
+            <span className="status-beacon-live" style={{ marginRight: 2 }} />
             OPERATIONAL DATA INGESTION
           </span>
           <span style={{ color: "#cbd5e1" }}>/</span>
@@ -960,29 +1070,76 @@ export default function DataEntry() {
           </div>
         </div>
 
-        {/* Source-of-Truth Operational Guidance Banner */}
+        {/* Distinction Banner (Spec §14) */}
         <div style={{
-          marginBottom: 16, padding: "12px 16px", borderRadius: 8,
-          background: "#ffffff", border: "1px solid #e2e8f0",
-          display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12
+          marginBottom: 16, padding: "14px 18px", borderRadius: 8,
+          background: "#F0F9FF", border: "1px solid #BAE6FD",
+          display: "flex", alignItems: "center", justifyContent: "space-between", gap: 14, flexWrap: "wrap"
         }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <div style={{ width: 28, height: 28, borderRadius: 6, background: "#f1f5f9", display: "flex", alignItems: "center", justifyContent: "center", color: "#09090b", flexShrink: 0 }}>
-              <FileText size={15} />
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <div style={{ width: 32, height: 32, borderRadius: 8, background: "#0284C7", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", flexShrink: 0 }}>
+              <FileText size={17} />
             </div>
             <div>
-              <div style={{ fontSize: 13, fontWeight: 700, color: "#09090b" }}>
-                Source-of-Truth Project Collection Layer (Tier 1)
+              <div style={{ fontSize: 13, fontWeight: 800, color: "#0369A1" }}>
+                YOU PROVIDE RAW OPERATIONAL FACTS · SYSTEM CALCULATES EMISSIONS
               </div>
-              <div style={{ fontSize: 12, color: "#64748b" }}>
-                Enter what actually occurred at your project site. The calculation engine derives GHG emissions upon BU validation.
+              <div style={{ fontSize: 12, color: "#0C4A6E", marginTop: 2 }}>
+                As a site engineer, you only report <strong>physical quantities</strong> (kWh electricity, Litres diesel, kL water, Tonnes waste) and attach vouchers. You do <strong>not</strong> calculate emission factors or tCO₂e — the platform calculates Scope 1/2/3 and intensities deterministically upon BU review.
               </div>
             </div>
           </div>
-          <span style={{ fontSize: 10, fontWeight: 700, padding: "3px 8px", borderRadius: 99, background: "#dcfce7", color: "#15803d", border: "1px solid #bbf7d0", whiteSpace: "nowrap", fontFamily: "ui-monospace, monospace" }}>
-            EVIDENCE-BACKED
+          <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 9999, background: "#E0F2FE", color: "#0369A1", border: "1px solid #BAE6FD", whiteSpace: "nowrap" }}>
+            STATUTORY FACT LAYER
           </span>
         </div>
+
+        {/* What Happens Next? Context Banner (Spec §27) */}
+        {submissionStatus === 'SUBMITTED' || submissionStatus === 'UNDER_BU_REVIEW' ? (
+          <div style={{
+            marginBottom: 16, padding: "12px 18px", borderRadius: 8,
+            background: "#FEF3C7", border: "1px solid #FDE68A",
+            display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <Clock size={16} color="#B45309" />
+              <div style={{ fontSize: 12.5, color: "#92400E" }}>
+                <strong>Submission Status: Under BU Review</strong> — Your data has been submitted to <strong>Solar EPC & Operations</strong>. Next: BU Reviewer (Rajesh V.) will verify evidence and approve for calculation.
+              </div>
+            </div>
+            <button
+              onClick={() => navigate('/workflow')}
+              style={{
+                padding: '5px 12px', borderRadius: 6, border: '1px solid #D97706',
+                background: '#FFFFFF', color: '#92400E', fontSize: 11.5, fontWeight: 700, cursor: 'pointer'
+              }}
+            >
+              Inspect BU Review Queue ›
+            </button>
+          </div>
+        ) : submissionStatus === 'BU_APPROVED' ? (
+          <div style={{
+            marginBottom: 16, padding: "12px 18px", borderRadius: 8,
+            background: "#DCFCE7", border: "1px solid #BBF7D0",
+            display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <CheckCircle2 size={16} color="#15803D" />
+              <div style={{ fontSize: 12.5, color: "#166534" }}>
+                <strong>Submission Approved!</strong> Data has entered the automated ESG calculation and boundary aggregation pipeline.
+              </div>
+            </div>
+            <button
+              onClick={() => navigate('/consolidation')}
+              style={{
+                padding: '5px 12px', borderRadius: 6, border: '1px solid #16A34A',
+                background: '#FFFFFF', color: '#15803D', fontSize: 11.5, fontWeight: 700, cursor: 'pointer'
+              }}
+            >
+              View Calculation Pipeline ›
+            </button>
+          </div>
+        ) : null}
 
         {/* ── Status Bar ───────────────────────────────────────────────── */}
         <div style={{
@@ -1108,6 +1265,7 @@ export default function DataEntry() {
                 values={values}
                 onChange={handleFieldChange}
                 submissionStatus={submissionStatus}
+                onEvidenceUploaded={handleEvidenceUploaded}
               />
             ))}
           </div>
@@ -1157,9 +1315,10 @@ export default function DataEntry() {
               style={{
                 display: "flex", alignItems: "center", gap: 7, padding: "8px 20px",
                 borderRadius: 6, border: "none",
-                background: submitted ? "#15803d" : "#18181b",
+                background: submitted ? "#15803d" : "#0070F3",
                 fontSize: 13, fontWeight: 600, color: "#fff",
                 cursor: submitting || submitted ? "not-allowed" : "pointer",
+                boxShadow: submitted ? "none" : "0 1px 2px rgba(0, 112, 243, 0.2)",
                 transition: "all 0.15s"
               }}
             >

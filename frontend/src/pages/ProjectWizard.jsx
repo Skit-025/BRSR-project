@@ -66,12 +66,10 @@ const PROJECT_TYPES = [
 ];
 
 const BUS = [
-  { id: 'bu-ev', name: 'Electric Mobility Fleet Operations', subsidiary: 'Olectra Greentech' },
-  { id: 'bu-infra', name: 'Infrastructure BU', subsidiary: 'MEIL Infra Projects' },
-  { id: 'bu-urban', name: 'Urban Mobility BU', subsidiary: 'MEIL Urban' },
-  { id: 'bu-water', name: 'Water Infrastructure BU', subsidiary: 'MEIL Infra Projects' },
-  { id: 'bu-power', name: 'Power Transmission BU', subsidiary: 'MEIL Power' },
-  { id: 'bu-renewable', name: 'Renewable Energy BU', subsidiary: 'MEIL Power' },
+  { id: 'bu-solar', name: 'Solar EPC Business Unit', subsidiary: 'Aarohan Renewable Energy' },
+  { id: 'bu-wind', name: 'Wind Power Business Unit', subsidiary: 'Aarohan Renewable Energy' },
+  { id: 'bu-civil', name: 'Civil Infrastructure BU', subsidiary: 'Aarohan Infrastructure Projects' },
+  { id: 'bu-trans', name: 'Power Transmission BU', subsidiary: 'Aarohan Infrastructure Projects' },
 ];
 
 function StepBar({ currentStep }) {
@@ -190,7 +188,7 @@ export default function ProjectWizard() {
   };
 
   return (
-    <div className="page-content anim-fade">
+    <div className="page-content anim-fade-up">
       {/* Back */}
       <button
         onClick={() => navigate('/projects')}

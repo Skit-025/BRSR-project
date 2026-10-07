@@ -23,7 +23,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title=settings.APP_NAME,
     version="1.0.0",
-    description="MEIL ESG-BRSR Reporting Portal Backend with 7 AI Engines & Deterministic Audit Rails",
+    description="Aarohan ESG-BRSR Reporting Portal Backend with 7 AI Engines & Deterministic Audit Rails",
     lifespan=lifespan
 )
 

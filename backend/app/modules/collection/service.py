@@ -135,6 +135,20 @@ def save_draft_submission(
             )
             db.add(dp)
 
+        if dp_in.evidence_file_ids:
+            db.flush()
+            for ef_id in dp_in.evidence_file_ids:
+                existing_link = db.query(EvidenceLink).filter(
+                    EvidenceLink.evidence_id == ef_id,
+                    EvidenceLink.data_point_id == dp.id
+                ).first()
+                if not existing_link:
+                    db.add(EvidenceLink(
+                        evidence_id=ef_id,
+                        data_point_id=dp.id,
+                        notes=f"Attached during data entry for {dp.metric_code}"
+                    ))
+
     # Increment submission version
     submission.version += 1
     if user_id:

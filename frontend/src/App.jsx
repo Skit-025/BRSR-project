@@ -21,18 +21,18 @@ class ErrorBoundary extends React.Component {
         <div style={{
           minHeight: '100vh', display: 'flex', flexDirection: 'column',
           alignItems: 'center', justifyContent: 'center', padding: '40px',
-          background: '#06070f', color: '#f1f5f9', fontFamily: 'Inter, system-ui, sans-serif',
+          background: '#FAFAFA', color: '#111111', fontFamily: 'Inter, system-ui, sans-serif',
           textAlign: 'center', gap: '16px',
         }}>
           <div style={{ fontSize: '48px' }}>⚠️</div>
-          <h2 style={{ margin: 0, fontSize: '22px', color: '#f43f5e' }}>Application Error</h2>
-          <p style={{ maxWidth: '500px', color: '#94a3b8', fontSize: '14px', lineHeight: 1.6 }}>
+          <h2 style={{ margin: 0, fontSize: '22px', color: '#DC2626' }}>Application Error</h2>
+          <p style={{ maxWidth: '500px', color: '#666666', fontSize: '14px', lineHeight: 1.6 }}>
             An unexpected error occurred. Please refresh the page or contact a System Administrator.
           </p>
           <pre style={{
-            background: 'rgba(255,255,255,0.05)', borderRadius: '8px', padding: '16px 24px',
-            fontSize: '12px', color: '#f87171', maxWidth: '700px', overflow: 'auto',
-            textAlign: 'left', border: '1px solid rgba(248,113,113,0.2)',
+            background: '#FFF1F1', borderRadius: '8px', padding: '16px 24px',
+            fontSize: '12px', color: '#DC2626', maxWidth: '700px', overflow: 'auto',
+            textAlign: 'left', border: '1px solid #FECACA',
           }}>
             {this.state.error?.toString()}
           </pre>
@@ -40,7 +40,7 @@ class ErrorBoundary extends React.Component {
             onClick={() => { this.setState({ hasError: false, error: null, errorInfo: null }); window.location.href = '/'; }}
             style={{
               padding: '10px 28px', borderRadius: '8px', border: 'none',
-              background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', color: '#fff',
+              background: '#0070F3', color: '#fff',
               fontSize: '14px', fontWeight: 600, cursor: 'pointer', marginTop: '8px',
             }}
           >
@@ -165,13 +165,13 @@ function ProtectedLayout() {
     return (
       <div className="loading-screen">
         <div className="spinner" />
-        <p style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>Verifying MEIL ESG credentials...</p>
+        <p style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>Verifying Aarohan ESG credentials...</p>
       </div>
     );
   }
 
   if (!token || !user) {
-    return <Navigate to="/landing" replace />;
+    return <Navigate to="/login" replace />;
   }
 
   return (
@@ -179,7 +179,22 @@ function ProtectedLayout() {
       <Sidebar />
       <div className="main-area">
         <Header />
-        <Outlet />
+        <div
+          className="main-content-scroll"
+          id="main-content-scroll"
+          style={{
+            flex: 1,
+            minHeight: 0,
+            minWidth: 0,
+            overflowY: 'auto',
+            overflowX: 'hidden',
+            display: 'flex',
+            flexDirection: 'column',
+            position: 'relative',
+          }}
+        >
+          <Outlet />
+        </div>
       </div>
     </div>
   );

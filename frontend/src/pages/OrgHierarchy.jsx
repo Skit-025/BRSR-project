@@ -297,14 +297,17 @@ export default function OrgHierarchy() {
   });
 
   return (
-    <div className="page-content anim-fade">
+    <div className="page-content anim-fade-up">
       {/* Page Header */}
       <div className="page-header">
         <div>
-          <div className="page-tag">ENTERPRISE STRUCTURE & AUDIT BOUNDARY</div>
+          <div className="page-tag" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <span className="status-beacon-live" style={{ marginRight: 2 }} />
+            ENTERPRISE STRUCTURE &amp; AUDIT BOUNDARY
+          </div>
           <h1 className="page-title">7-Tier Organization Hierarchy & Reporting Periods</h1>
           <p className="page-subtitle">
-            Define corporate nodes, subsidiaries, projects, and operational reporting periods across MEIL Group.
+            Define corporate nodes, subsidiaries, projects, and operational reporting periods across Aarohan Group.
           </p>
         </div>
         <div className="header-actions">
@@ -577,7 +580,7 @@ export default function OrgHierarchy() {
                       </div>
                       <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: 16, lineHeight: 1.5 }}>
                         {nodeList.length === 0 
-                          ? 'Start by creating your Root Group Entity (e.g. MEIL-GROUP) or subsidiary units to establish statutory audit boundaries.'
+                          ? 'Start by creating your Root Group Entity (e.g. AAROHAN-GROUP) or subsidiary units to establish statutory audit boundaries.'
                           : 'Try changing your search term or filtering options.'}
                       </p>
                       {nodeList.length === 0 && (
@@ -686,7 +689,7 @@ export default function OrgHierarchy() {
                 <div>
                   <h3 style={{ fontSize: '16px', color: '#fff' }}>Add Organization Unit</h3>
                   <p style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-                    Create a new node within MEIL's 7-tier hierarchy structure
+                    Create a new node within Aarohan's 7-tier hierarchy structure
                   </p>
                 </div>
               </div>
@@ -708,7 +711,7 @@ export default function OrgHierarchy() {
                 <input
                   type="text"
                   className="form-control"
-                  placeholder="e.g. MEIL-HYDRO-02, PRJ-KALESH-PUMP, SITE-04"
+                  placeholder="e.g. AAROHAN-SOLAR-02, PRJ-SOLAR-PARK, SITE-04"
                   value={nodeForm.code}
                   onChange={(e) => setNodeForm({ ...nodeForm, code: e.target.value })}
                   required

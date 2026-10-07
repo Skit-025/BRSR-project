@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   GitBranch, CheckCircle, XCircle, Clock, RefreshCw,
   User, MessageSquare, Lock, TrendingUp, Activity,
@@ -73,6 +74,7 @@ const PIPELINE_STAGES = [
 ];
 
 export default function Workflow() {
+  const navigate = useNavigate();
   const qc = useQueryClient();
   const { user } = useAuth();
   const { data: queue = [], isLoading, refetch, isRefetching } = useWorkflowQueue();
@@ -154,7 +156,8 @@ export default function Workflow() {
       });
       setNotice({
         type: 'success',
-        text: `Pack ${backendDecision === 'APPROVE' ? 'APPROVED ✓' : 'RETURNED ↩'} successfully. Immutable audit trail recorded. Calculation job dispatched automatically.`,
+        text: `Pack ${backendDecision === 'APPROVE' ? 'APPROVED ✓' : 'RETURNED ↩'} successfully. Segregation of Duties validated. Automated calculation & boundary consolidation triggered!`,
+        action: backendDecision
       });
       setSelected(null);
       setPackDetail(null);
@@ -208,7 +211,7 @@ export default function Workflow() {
   ];
 
   return (
-    <div className="page-content anim-fade" style={{ background: '#f8fafc' }}>
+    <div className="page-content anim-fade-up" style={{ background: '#f8fafc' }}>
       {/* ── Status Ticker ── */}
       <div style={{
         display: 'flex', alignItems: 'center', gap: 16, marginBottom: 8,
@@ -216,7 +219,7 @@ export default function Workflow() {
         fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#64748b'
       }}>
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: '#15803d' }}>
-          <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#15803d', display: 'inline-block' }}></span>
+          <span className="status-beacon-live" style={{ marginRight: 2 }} />
           REVIEW QUEUE ACTIVE
         </span>
         <span style={{ color: '#cbd5e1' }}>/</span>
@@ -254,7 +257,27 @@ export default function Workflow() {
           border: `1px solid ${notice.type === 'success' ? '#bbf7d0' : '#fca5a5'}`,
           display: 'flex', justifyContent: 'space-between', alignItems: 'center',
         }}>
-          <span>{notice.text}</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <span>{notice.text}</span>
+            {notice.action === 'APPROVE' && (
+              <button
+                onClick={() => navigate('/consolidation')}
+                style={{
+                  padding: '5px 12px',
+                  borderRadius: 6,
+                  border: 'none',
+                  background: '#15803d',
+                  color: '#fff',
+                  fontSize: 12,
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap'
+                }}
+              >
+                Inspect Calculation Pipeline →
+              </button>
+            )}
+          </div>
           <button onClick={() => setNotice(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'inherit', fontSize: '16px' }}>×</button>
         </div>
       )}
@@ -304,8 +327,9 @@ export default function Workflow() {
             style={{
               flex: 1, padding: '8px 14px', borderRadius: '6px', fontSize: '13px', fontWeight: 600,
               border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
-              background: activeTab === t.key ? '#18181b' : 'transparent',
+              background: activeTab === t.key ? '#0070F3' : 'transparent',
               color: activeTab === t.key ? '#ffffff' : '#64748b',
+              boxShadow: activeTab === t.key ? '0 1px 3px rgba(0, 112, 243, 0.25)' : 'none',
               transition: 'all 0.15s ease',
             }}
           >

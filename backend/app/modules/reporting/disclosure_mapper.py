@@ -115,7 +115,7 @@ def compile_brsr_report(
     total_emp = int(emp_val.value) if emp_val else 12500
 
     section_a = SectionAData(
-        corporate_name="Megha Engineering & Infrastructures Ltd (MEIL)",
+        corporate_name=node.name if (node.type == "group" or node.is_root) else "Aarohan Infrastructure & Energy Group",
         financial_year=period.financial_year,
         total_employees=total_emp,
         operating_plants_and_sites_count=max(sites_count, 1)

@@ -32,6 +32,8 @@ class ReviewQueueItem(BaseModel):
     maker_id: Optional[str] = None
     submitted_at: Optional[datetime] = None
     version: int
+    data_point_count: Optional[int] = 0
+    evidence_count: Optional[int] = 0
 
 class PeriodLockResponse(BaseModel):
     period_id: str

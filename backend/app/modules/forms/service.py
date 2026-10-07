@@ -14,14 +14,17 @@ from app.modules.collection.models import Submission, DataPoint
 from app.modules.forms.schemas import DigitalFormResponse, FormSection, FormField
 from app.security.rbac import Role
 
-# 5 Authoritative MEIL Subsidiaries
-MEIL_SUBSIDIARIES = [
-    {"code": "MEIL-INFRA",  "name": "MEIL Infrastructure & Civil Engineering"},
-    {"code": "MEIL-ENERGY", "name": "MEIL Energy, Solar & Power Grids"},
-    {"code": "MEIL-WATER",  "name": "MEIL Water Treatment & Lift Irrigation"},
-    {"code": "MEIL-HYDRO",  "name": "MEIL Hydrocarbons & Petrochemical Drilling"},
-    {"code": "MEIL-EV",     "name": "MEIL Electric Mobility & Green Fleets"},
+# Aarohan Subsidiaries
+AAROHAN_SUBSIDIARIES = [
+    {"code": "AAROHAN-RENEW", "name": "Aarohan Renewable Energy Pvt. Ltd."},
+    {"code": "AAROHAN-INFRA", "name": "Aarohan Infrastructure Projects Pvt. Ltd."},
 ]
+
+def _get_subsidiaries(db: Session) -> List[Dict[str, str]]:
+    db_subs = db.query(OrgNode).filter(OrgNode.type == "subsidiary", OrgNode.is_deleted == False).all()
+    if db_subs:
+        return [{"code": s.code, "name": s.name} for s in db_subs]
+    return AAROHAN_SUBSIDIARIES
 
 PRINCIPLE_NAMES = {
     "P1": ("Governance, Ethics & Anti-Corruption", "Governance"),
@@ -109,13 +112,14 @@ def build_master_digital_form(db: Session, period_id: str) -> DigitalFormRespons
             )
         )
 
-    # 40 Dimensions Overview (5 subsidiaries x 8 roles)
+    # Dimensions Overview
+    subsidiaries = _get_subsidiaries(db)
     all_roles = [r.value for r in Role]
     dimensions_summary = {
-        "subsidiaries": MEIL_SUBSIDIARIES,
+        "subsidiaries": subsidiaries,
         "roles": all_roles,
-        "total_dimensions": len(MEIL_SUBSIDIARIES) * len(all_roles),
-        "description": "Master BRSR Digital Form encompassing all 40 subsidiary-role perspectives."
+        "total_dimensions": len(subsidiaries) * len(all_roles),
+        "description": f"Master BRSR Digital Form encompassing all {len(subsidiaries) * len(all_roles)} subsidiary-role perspectives."
     }
 
     # Check if a submission pack already exists for master/group
@@ -124,11 +128,11 @@ def build_master_digital_form(db: Session, period_id: str) -> DigitalFormRespons
     ).first()
 
     return DigitalFormResponse(
-        form_id="FORM-MEIL-MASTER-BRSR",
+        form_id="FORM-AAROHAN-MASTER-BRSR",
         form_type="master",
         entity_id=None,
-        entity_code="MEIL-GROUP",
-        entity_name="Megha Engineering & Infrastructures Limited (Consolidated Group)",
+        entity_code="AAROHAN-GROUP",
+        entity_name="Aarohan Infrastructure & Energy Group (Consolidated Group)",
         role=Role.SYSTEM_ADMIN.value,
         period_id=period_id,
         period_code=period_code,
@@ -176,8 +180,8 @@ def build_scoped_digital_form(
     if not entity:
         entity = db.query(OrgNode).filter(OrgNode.is_deleted == False).first()
 
-    entity_code = entity.code if entity else "MEIL-GENERAL"
-    entity_name = entity.name if entity else "MEIL Designated Reporting Entity"
+    entity_code = entity.code if entity else "AAROHAN-GROUP"
+    entity_name = entity.name if entity else "Aarohan Infrastructure & Energy Group"
 
     period = _lookup_period(db, period_id)
     period_code = period.code if period else period_id

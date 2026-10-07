@@ -2,6 +2,7 @@ from typing import Optional, List
 import logging
 from pydantic import BaseModel
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, status, Response
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.modules.auth.models import User
@@ -26,12 +27,15 @@ class EvidenceDeleteRequest(BaseModel):
 
 router = APIRouter(prefix="/evidence", tags=["Evidence Vault & AI Pre-fill"])
 
+security = HTTPBearer(auto_error=False)
+
 @router.post("/upload", response_model=EvidenceUploadResponse, status_code=status.HTTP_201_CREATED)
 async def upload_evidence_file(
     file: UploadFile = File(...),
     sha256: Optional[str] = Form(None),
     doc_type_hint: Optional[str] = Form(None),
     run_ocr: bool = Form(True),
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
     db: Session = Depends(get_db)
 ):
     """
@@ -43,12 +47,20 @@ async def upload_evidence_file(
     file_bytes = await file.read()
     mime_type = file.content_type or "application/octet-stream"
 
+    uploader_id = None
+    if credentials and credentials.credentials:
+        from app.security.jwt import decode_access_token
+        payload = decode_access_token(credentials.credentials)
+        if payload:
+            uploader_id = payload.get("sub")
+
     evidence, suggestions, is_relevant, rejection_reason = process_and_store_evidence(
         db=db,
         filename=file.filename or "uploaded_evidence",
         file_bytes=file_bytes,
         mime_type=mime_type,
         client_sha256=sha256,
+        uploader_id=uploader_id,
         doc_type_hint=doc_type_hint,
         run_ocr=run_ocr
     )
@@ -193,7 +205,7 @@ def delete_evidence_file(
     storage_key = evidence.storage_key
 
     # Delete any datapoint links
-    db.query(EvidenceLink).filter(EvidenceLink.evidence_file_id == evidence.id).delete()
+    db.query(EvidenceLink).filter(EvidenceLink.evidence_id == evidence.id).delete()
 
     # Delete storage file
     try:

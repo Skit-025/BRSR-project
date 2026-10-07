@@ -31,20 +31,20 @@ const BILL_TYPES = [
 ];
 
 const DEFAULT_PROJECTS = [
-  { id: 'proj-kaleshwaram', name: 'Kaleshwaram Lift Irrigation Pkg-8 (Medigadda)' },
-  { id: 'proj-wankaner',    name: 'Wankaner 50MW Wind Power Plant' },
-  { id: 'proj-zojila',      name: 'Zojila High-Altitude Tunnel Project' },
-  { id: 'proj-hyderabad',   name: 'Hyderabad Metro Rail Phase-II' },
-  { id: 'proj-korba',       name: 'Korba Super Thermal Power Station' },
-  { id: 'proj-meil-hq',     name: 'MEIL Corporate Headquarters (Banjara Hills)' },
+  { id: 'PRJ-ODISHA-SOLAR', name: '250 MW Odisha Solar Park' },
+  { id: 'PRJ-RAJ-SOLAR', name: '50 MW Rajasthan Solar Expansion' },
+  { id: 'PRJ-KUTCH-WIND', name: 'Kutch Wind Farm' },
+  { id: 'PRJ-PURI-HWY', name: 'Bhubaneswar–Puri Road Expansion' },
 ];
 
 const ENTITY_PROJECT_NAMES = {
-  'mock-node-site-medigadda': 'Kaleshwaram Lift Irrigation Pkg-8 (Medigadda)',
-  'mock-node-site-kurla': 'Kurla EV Charging Depot (Olectra)',
-  'mock-node-prj-zojila': 'Zojila High-Altitude Tunnel Project',
-  'mock-node-prj-wankaner': 'Wankaner 50MW Wind Power Plant',
-  'mock-node-meil': 'MEIL Corporate Infrastructure & Projects',
+  'PRJ-ODISHA-SOLAR': '250 MW Odisha Solar Park',
+  'PRJ-RAJ-SOLAR': '50 MW Rajasthan Solar Expansion',
+  'PRJ-KUTCH-WIND': 'Kutch Wind Farm',
+  'PRJ-PURI-HWY': 'Bhubaneswar–Puri Road Expansion',
+  'AAROHAN-GROUP': 'Aarohan Infrastructure & Energy Group',
+  'AAROHAN-RENEW': 'Aarohan Renewable Energy Pvt. Ltd.',
+  'BU-SOLAR': 'Solar EPC & Operations',
 };
 
 /**
@@ -209,8 +209,8 @@ function MockBillCard({ doc }) {
       <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '14px', background: '#f8fafc', padding: '10px 12px', borderRadius: '6px', marginBottom: '14px', border: '1px solid #e2e8f0' }}>
         <div>
           <div style={{ fontSize: '10px', color: '#64748b', textTransform: 'uppercase', fontWeight: 700 }}>Consumer / Reporting Unit</div>
-          <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '12.5px' }}>{doc?.project_name || 'Megha Engineering & Infrastructures Ltd (MEIL)'}</div>
-          <div style={{ fontSize: '11px', color: '#475569' }}>Project Site: {doc?.project_name || 'Kaleshwaram Lift Irrigation Pkg-8'}</div>
+          <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '12.5px' }}>{doc?.project_name || 'Aarohan Infrastructure & Energy Group'}</div>
+          <div style={{ fontSize: '11px', color: '#475569' }}>Project Site: {doc?.project_name || 'Odisha Solar Park - Site 01'}</div>
         </div>
         <div>
           <div style={{ fontSize: '10px', color: '#64748b', textTransform: 'uppercase', fontWeight: 700 }}>Invoice &amp; Bill Classification</div>
@@ -365,7 +365,7 @@ export default function EvidenceVault() {
       if (isMock()) {
         const validMock = ['admin123', 'Admin@123', 'admin', 'password', 'demo', user?.password].includes(adminPassword.trim());
         if (!validMock && adminPassword.trim() !== 'admin123') {
-          setDeleteError('Invalid admin password. Authorization failed. (Demo password: admin123)');
+          setDeleteError('Invalid admin password. Authorization failed.');
           setDeleting(false);
           return;
         }
@@ -537,7 +537,7 @@ export default function EvidenceVault() {
         file_size: item.size,
         mime_type: item.mime,
         sha256: Array.from({length: 64}, () => Math.floor(Math.random()*16).toString(16)).join(''),
-        uploaded_by: user?.name || 'MEIL Engineering Officer',
+        uploaded_by: user?.name || 'Aarohan Site Engineer',
         uploaded_at: new Date().toISOString(),
         doc_type: effectiveBillType,
         fuel_sub_type: effectiveBillType === 'fuel_receipt' ? effectiveFuelSubType : null,
@@ -709,7 +709,7 @@ export default function EvidenceVault() {
   }, [evidenceList, deletedIds]);
 
   return (
-    <div className="page-content anim-fade" style={{ background: '#f8fafc' }}>
+    <div className="page-content anim-fade-up" style={{ background: '#f8fafc' }}>
       {/* ── Status Ticker ── */}
       <div style={{
         display: 'flex', alignItems: 'center', gap: 16, marginBottom: 8,
@@ -717,7 +717,7 @@ export default function EvidenceVault() {
         fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#64748b'
       }}>
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: '#15803d' }}>
-          <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#15803d', display: 'inline-block' }}></span>
+          <span className="status-beacon-live" style={{ marginRight: 2 }} />
           EVIDENCE VAULT &amp; VERIFICATION
         </span>
         <span style={{ color: '#cbd5e1' }}>/</span>
@@ -1636,7 +1636,6 @@ export default function EvidenceVault() {
               />
               <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '4px', display: 'flex', justifyContent: 'space-between' }}>
                 <span>Authorized roles: System Admin, Group Admin, ESG Manager</span>
-                {isMock() && <span style={{ color: '#10b981' }}>Demo pass: admin123</span>}
               </div>
             </div>
 

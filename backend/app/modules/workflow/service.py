@@ -9,6 +9,7 @@ from app.modules.collection.models import Submission, DataPoint, SubmissionStatu
 from app.modules.workflow.models import Review, ReviewDecision
 from app.modules.workflow.schemas import ReviewActionRequest, ReviewQueueItem, PeriodLockResponse
 from app.modules.workflow.guards import enforce_segregation_of_duties, enforce_approval_gates
+from app.modules.evidence.models import EvidenceLink
 
 
 def process_review(
@@ -242,6 +243,15 @@ def get_review_queue(db: Session, reviewer_user=None) -> List[ReviewQueueItem]:
         node = db.query(OrgNode).filter(OrgNode.id == s.entity_id).first()
         period = db.query(ReportingPeriod).filter(ReportingPeriod.id == s.period_id).first()
         hierarchy_path = _build_hierarchy_path(db, node) if node else ""
+        
+        # Calculate data point and evidence voucher counts
+        dp_ids = [dp.id for dp in s.data_points]
+        dp_count = len(dp_ids)
+        ev_count = (
+            db.query(EvidenceLink).filter(EvidenceLink.data_point_id.in_(dp_ids)).count()
+            if dp_ids else 0
+        )
+
         items.append(
             ReviewQueueItem(
                 submission_id=s.id,
@@ -255,7 +265,9 @@ def get_review_queue(db: Session, reviewer_user=None) -> List[ReviewQueueItem]:
                 status=s.status,
                 maker_id=s.maker_id,
                 submitted_at=s.submitted_at,
-                version=s.version
+                version=s.version,
+                data_point_count=dp_count,
+                evidence_count=ev_count
             )
         )
     return items

@@ -271,9 +271,9 @@ export function AuthProvider({ children }) {
 
   const enterMockMode = (mockRole = 'system_admin') => {
     const demoAdmin = {
-      id: 'demo-system-admin-uuid',
-      email: 'demo.admin@meil.in',
-      full_name: 'Demo System Administrator (Mock Mode)',
+      id: 'system-admin-uuid',
+      email: 'admin@aarohan.in',
+      full_name: 'Aditya Sharma (Group ESG Director)',
       role: mockRole,
       is_active: true,
       is_mfa_enabled: false,

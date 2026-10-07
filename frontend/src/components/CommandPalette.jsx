@@ -25,10 +25,10 @@ const PALETTE_ITEMS = [
   { id: 'metric-ltir', type: 'ESG Metric', title: 'Lost Time Injury Frequency Rate (LTIFR)', subtitle: 'Safety incidents per million man-hours', url: '/collection', icon: BarChart3 },
 
   // Hierarchy Nodes
-  { id: 'node-meil', type: 'Hierarchy Scope', title: 'MEIL Group Enterprise', subtitle: 'Level 1: Enterprise Group Root', url: '/', icon: Building2 },
-  { id: 'node-hydro', type: 'Hierarchy Scope', title: 'MEIL Hydrocarbon & Energy Ltd', subtitle: 'Level 2: Subsidiary Entity', url: '/disclosure/subsidiary', icon: Building2 },
-  { id: 'node-roads', type: 'Hierarchy Scope', title: 'Roads & Highways Division BU', subtitle: 'Level 3: Divisional Business Unit', url: '/disclosure/bu', icon: Building2 },
-  { id: 'node-zojila', type: 'Hierarchy Scope', title: 'Zojila Tunnel Project Site', subtitle: 'Level 4: Major Infrastructure Project', url: '/collection', icon: Building2 },
+  { id: 'node-aarohan', type: 'Hierarchy Scope', title: 'Aarohan Infrastructure & Energy Group', subtitle: 'Level 1: Enterprise Group Root', url: '/', icon: Building2 },
+  { id: 'node-renew', type: 'Hierarchy Scope', title: 'Aarohan Renewable Energy Pvt. Ltd.', subtitle: 'Level 2: Subsidiary Entity', url: '/disclosure/subsidiary', icon: Building2 },
+  { id: 'node-solar-bu', type: 'Hierarchy Scope', title: 'Solar EPC Business Unit', subtitle: 'Level 3: Divisional Business Unit', url: '/disclosure/bu', icon: Building2 },
+  { id: 'node-odisha-site', type: 'Hierarchy Scope', title: 'Odisha Solar Park - Site 01', subtitle: 'Level 4: Major Infrastructure Project', url: '/collection', icon: Building2 },
 ];
 
 export default function CommandPalette({ isOpen, onClose }) {
@@ -84,7 +84,7 @@ export default function CommandPalette({ isOpen, onClose }) {
         position: 'fixed',
         inset: 0,
         zIndex: 9999,
-        background: 'rgba(0, 0, 0, 0.65)',
+        background: 'rgba(15, 23, 42, 0.4)',
         backdropFilter: 'blur(4px)',
         display: 'flex',
         alignItems: 'flex-start',
@@ -98,10 +98,10 @@ export default function CommandPalette({ isOpen, onClose }) {
         style={{
           width: '100%',
           maxWidth: '620px',
-          background: 'var(--card-bg, #0f172a)',
-          border: '1px solid var(--border-color, #334155)',
+          background: '#FFFFFF',
+          border: '1px solid #E2E8F0',
           borderRadius: '12px',
-          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.7)',
+          boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
           overflow: 'hidden'
         }}
         onClick={(e) => e.stopPropagation()}
@@ -112,9 +112,10 @@ export default function CommandPalette({ isOpen, onClose }) {
           alignItems: 'center',
           gap: 12,
           padding: '14px 18px',
-          borderBottom: '1px solid var(--border-color, #334155)'
+          borderBottom: '1px solid #E2E8F0',
+          background: '#FFFFFF'
         }}>
-          <Search size={18} color="var(--brand-400, #38bdf8)" />
+          <Search size={18} color="#2563EB" />
           <input
             ref={inputRef}
             type="text"
@@ -127,7 +128,7 @@ export default function CommandPalette({ isOpen, onClose }) {
               background: 'transparent',
               border: 'none',
               outline: 'none',
-              color: 'var(--text-primary, #f8fafc)',
+              color: '#09090B',
               fontSize: '15px'
             }}
           />
@@ -137,9 +138,10 @@ export default function CommandPalette({ isOpen, onClose }) {
             gap: 4,
             padding: '2px 6px',
             borderRadius: 4,
-            background: 'rgba(255, 255, 255, 0.08)',
+            background: '#F1F5F9',
+            border: '1px solid #E2E8F0',
             fontSize: '11px',
-            color: 'var(--text-muted, #94a3b8)'
+            color: '#64748B'
           }}>
             <span>ESC</span>
           </div>
@@ -148,7 +150,7 @@ export default function CommandPalette({ isOpen, onClose }) {
         {/* Results List */}
         <div style={{ maxHeight: '360px', overflowY: 'auto', padding: '8px' }}>
           {filteredItems.length === 0 ? (
-            <div style={{ padding: '32px', textAlign: 'center', color: 'var(--text-muted, #94a3b8)', fontSize: '13px' }}>
+            <div style={{ padding: '32px', textAlign: 'center', color: '#64748B', fontSize: '13px' }}>
               No matching commands or entities found for "{query}".
             </div>
           ) : (
@@ -167,8 +169,8 @@ export default function CommandPalette({ isOpen, onClose }) {
                     padding: '10px 12px',
                     borderRadius: '8px',
                     cursor: 'pointer',
-                    background: isSelected ? 'rgba(59, 130, 246, 0.12)' : 'transparent',
-                    border: `1px solid ${isSelected ? 'rgba(59, 130, 246, 0.3)' : 'transparent'}`,
+                    background: isSelected ? '#F1F5F9' : 'transparent',
+                    border: `1px solid ${isSelected ? '#CBD5E1' : 'transparent'}`,
                     transition: 'all 0.1s ease'
                   }}
                 >
@@ -176,37 +178,40 @@ export default function CommandPalette({ isOpen, onClose }) {
                     width: 32,
                     height: 32,
                     borderRadius: 6,
-                    background: isSelected ? 'var(--brand-500, #3b82f6)' : 'rgba(255, 255, 255, 0.05)',
+                    background: isSelected ? '#0070F3' : '#F8FAFC',
+                    border: `1px solid ${isSelected ? '#0070F3' : '#E2E8F0'}`,
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    color: isSelected ? '#ffffff' : 'var(--text-secondary, #94a3b8)'
+                    color: isSelected ? '#FFFFFF' : '#64748B'
                   }}>
                     <Icon size={16} />
                   </div>
 
                   <div style={{ flex: 1 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary, #f8fafc)' }}>
+                      <span style={{ fontSize: '13px', fontWeight: 600, color: '#09090B' }}>
                         {item.title}
                       </span>
                       <span style={{
                         fontSize: '10px',
-                        padding: '1px 5px',
-                        borderRadius: 3,
-                        background: 'rgba(255, 255, 255, 0.08)',
-                        color: 'var(--text-secondary, #94a3b8)'
+                        padding: '1px 6px',
+                        borderRadius: 4,
+                        background: '#F1F5F9',
+                        border: '1px solid #E2E8F0',
+                        color: '#475569',
+                        fontWeight: 600
                       }}>
                         {item.type}
                       </span>
                     </div>
-                    <div style={{ fontSize: '11px', color: 'var(--text-muted, #94a3b8)', marginTop: 2 }}>
+                    <div style={{ fontSize: '11px', color: '#64748B', marginTop: 2 }}>
                       {item.subtitle}
                     </div>
                   </div>
 
                   {isSelected && (
-                    <CornerDownLeft size={14} color="var(--brand-400, #38bdf8)" />
+                    <CornerDownLeft size={14} color="#2563EB" />
                   )}
                 </div>
               );
@@ -219,15 +224,15 @@ export default function CommandPalette({ isOpen, onClose }) {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          padding: '8px 16px',
-          borderTop: '1px solid var(--border-color, #334155)',
-          background: 'rgba(0, 0, 0, 0.2)',
+          padding: '10px 16px',
+          borderTop: '1px solid #E2E8F0',
+          background: '#F8FAFC',
           fontSize: '11px',
-          color: 'var(--text-muted, #94a3b8)'
+          color: '#64748B'
         }}>
-          <span>Navigate with <kbd>↑</kbd> <kbd>↓</kbd></span>
-          <span>Open with <kbd>↵</kbd></span>
-          <span>Close with <kbd>Esc</kbd></span>
+          <span>Navigate with <kbd style={{ padding: '1px 5px', borderRadius: 3, border: '1px solid #CBD5E1', background: '#FFFFFF' }}>↑</kbd> <kbd style={{ padding: '1px 5px', borderRadius: 3, border: '1px solid #CBD5E1', background: '#FFFFFF' }}>↓</kbd></span>
+          <span>Open with <kbd style={{ padding: '1px 5px', borderRadius: 3, border: '1px solid #CBD5E1', background: '#FFFFFF' }}>↵</kbd></span>
+          <span>Close with <kbd style={{ padding: '1px 5px', borderRadius: 3, border: '1px solid #CBD5E1', background: '#FFFFFF' }}>Esc</kbd></span>
         </div>
       </div>
     </div>

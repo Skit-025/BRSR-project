@@ -9,7 +9,6 @@ import {
 import { authApi, orgApi } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import Modal from '../components/Modal';
-import { MOCK_USERS, MOCK_ORG_NODES } from '../mock/mockData';
 
 // All standard roles with display metadata
 export const ROLE_DEFINITIONS = {
@@ -363,7 +362,7 @@ export default function UserManagement() {
   const suspendedUsersCount = users.filter(u => u.is_active === false).length;
 
   return (
-    <div className="page-content anim-fade" style={{ background: '#f8fafc' }}>
+    <div className="page-content anim-fade-up" style={{ background: '#f8fafc' }}>
       {/* ── Status Ticker ── */}
       <div style={{
         display: 'flex', alignItems: 'center', gap: 16, marginBottom: 8,
@@ -371,7 +370,7 @@ export default function UserManagement() {
         fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#64748b'
       }}>
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: '#15803d' }}>
-          <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#15803d', display: 'inline-block' }}></span>
+          <span className="status-beacon-live" style={{ marginRight: 2 }} />
           HIERARCHICAL ACCESS CONTROL
         </span>
         <span style={{ color: '#cbd5e1' }}>/</span>
@@ -405,7 +404,7 @@ export default function UserManagement() {
           {allowedRolesForInvite.length > 0 && (
             <button
               className="btn btn-primary"
-              style={{ borderRadius: 6, background: '#18181b', color: '#fff', border: 'none', fontWeight: 600 }}
+              style={{ borderRadius: 6, background: '#0070F3', color: '#fff', border: 'none', fontWeight: 600 }}
               onClick={handleOpenInvite}
             >
               <UserPlus size={14} />
@@ -422,9 +421,9 @@ export default function UserManagement() {
           borderRadius: '8px',
           fontSize: '13px',
           fontWeight: 600,
-          background: notice.type === 'success' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)',
-          color: notice.type === 'success' ? '#10b981' : '#ef4444',
-          border: `1px solid ${notice.type === 'success' ? '#10b981' : '#ef4444'}`,
+          background: notice.type === 'success' ? '#ecfdf5' : '#fef2f2',
+          color: notice.type === 'success' ? '#065f46' : '#991b1b',
+          border: `1px solid ${notice.type === 'success' ? '#a7f3d0' : '#fca5a5'}`,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
@@ -442,11 +441,11 @@ export default function UserManagement() {
         <div className="credential-success-card anim-slide" style={{ marginBottom: 20 }}>
           <div className="credential-success-header">
             <div className="credential-icon">
-              <CheckCircle2 size={20} color="var(--emerald-400)" />
+              <CheckCircle2 size={20} color="#059669" />
             </div>
             <div>
-              <h3 style={{ color: '#fff', fontSize: '15px' }}>Administrator Invitation Dispatched</h3>
-              <p style={{ color: 'var(--text-secondary)', fontSize: '12px' }}>
+              <h3 style={{ color: '#09090B', fontSize: '15px' }}>Administrator Invitation Dispatched</h3>
+              <p style={{ color: '#64748B', fontSize: '12px' }}>
                 An invitation email has been issued to {lastInvited.email}. The user will set their own secure credentials upon verification.
               </p>
             </div>
@@ -984,7 +983,7 @@ export default function UserManagement() {
                 <input
                   type="email"
                   className="form-control"
-                  placeholder="priya.das@meil.in"
+                  placeholder="priya.das@aarohan.in"
                   value={inviteEmail}
                   onChange={(e) => setInviteEmail(e.target.value)}
                   required

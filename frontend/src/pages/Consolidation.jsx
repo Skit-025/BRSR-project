@@ -49,7 +49,7 @@ const ROLLUP_STAGES = [
   { label: '1. Site / Project Level',  color: '#6366f1', desc: 'Raw operational inputs + Evidence documents' },
   { label: '2. Business Unit (BU) Level', color: '#38bdf8', desc: 'Validated project data + BU aggregation + BU disclosures' },
   { label: '3. Subsidiary Level',      color: '#10b981', desc: 'Validated BU data + Subsidiary Section A/B governance' },
-  { label: '4. Group Level (MEIL)',    color: '#c084fc', desc: 'Enterprise consolidation + Final BRSR report snapshot' },
+  { label: '4. Group Level (Aarohan Group)', color: '#c084fc', desc: 'Enterprise consolidation + Final BRSR report snapshot' },
 ];
 
 export default function Consolidation() {
@@ -75,13 +75,15 @@ export default function Consolidation() {
     [nodes]
   );
 
-  // Auto-select first BU and period if not set
+  // Auto-select first BU and period if not set (Prioritize Solar EPC & Mar 2026 for demo)
   useEffect(() => {
     if (!selectedBuId && buNodes.length > 0) {
-      setSelectedBuId(buNodes[0].id);
+      const solarBu = buNodes.find(b => b.code === 'BU-SOLAR' || b.name.toLowerCase().includes('solar'));
+      setSelectedBuId(solarBu?.id || buNodes[0].id);
     }
     if (!selectedPeriodId && periods.length > 0) {
-      setSelectedPeriodId(periods[0].id);
+      const marPeriod = periods.find(p => p.code === 'FY2025-26-M03');
+      setSelectedPeriodId(marPeriod?.id || periods[0].id);
     }
   }, [buNodes, periods, selectedBuId, selectedPeriodId]);
 
@@ -113,8 +115,8 @@ export default function Consolidation() {
           projects: [
             {
               project_id: 'p-001',
-              project_name: 'Zojila Tunnel EPC Site (Site P-102)',
-              project_code: 'MEIL-ZOJILA',
+              project_name: 'Odisha Solar Park - Site 01 (Site P-102)',
+              project_code: 'AAROHAN-SOLAR-01',
               status: 'BU_APPROVED',
               submitted_at: '2026-10-04T09:45:00Z',
               raw_inputs: [
@@ -129,8 +131,8 @@ export default function Consolidation() {
             },
             {
               project_id: 'p-002',
-              project_name: 'Char Dham Highway Package II',
-              project_code: 'MEIL-CHARDHAM',
+              project_name: 'Rajasthan Solar Cluster Package II',
+              project_code: 'AAROHAN-SOLAR-02',
               status: 'BU_APPROVED',
               submitted_at: '2026-10-04T11:20:00Z',
               raw_inputs: [
@@ -144,8 +146,8 @@ export default function Consolidation() {
             },
             {
               project_id: 'p-003',
-              project_name: 'Polavaram Hydro Canal Works',
-              project_code: 'MEIL-POLAVARAM',
+              project_name: 'Gujarat Wind Farm Phase 1',
+              project_code: 'AAROHAN-WIND-01',
               status: 'SUBMITTED',
               submitted_at: '2026-10-05T14:10:00Z',
               raw_inputs: [
@@ -191,7 +193,7 @@ export default function Consolidation() {
   ];
 
   return (
-    <div className="page-content anim-fade" style={{ background: '#f8fafc' }}>
+    <div className="page-content anim-fade-up" style={{ background: '#f8fafc' }}>
       {/* ── Status Ticker ── */}
       <div style={{
         display: 'flex', alignItems: 'center', gap: 16, marginBottom: 8,
@@ -199,7 +201,7 @@ export default function Consolidation() {
         fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#64748b'
       }}>
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: '#15803d' }}>
-          <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#15803d', display: 'inline-block' }}></span>
+          <span className="status-beacon-live" style={{ marginRight: 2 }} />
           CALCULATION PIPELINE ACTIVE
         </span>
         <span style={{ color: '#cbd5e1' }}>/</span>
@@ -274,8 +276,9 @@ export default function Consolidation() {
             style={{
               flex: 1, padding: '8px 14px', borderRadius: '6px', fontSize: '12.5px', fontWeight: 600,
               border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
-              background: activeTab === t.key ? '#18181b' : 'transparent',
+              background: activeTab === t.key ? '#0070F3' : 'transparent',
               color: activeTab === t.key ? '#fff' : '#64748b',
+              boxShadow: activeTab === t.key ? '0 1px 3px rgba(0, 112, 243, 0.25)' : 'none',
               transition: 'all 0.15s', whiteSpace: 'nowrap'
             }}
           >
@@ -516,10 +519,10 @@ export default function Consolidation() {
                 </thead>
                 <tbody>
                   {[
-                    { name: 'MEIL Hydrocarbon & Energy Ltd', bus: 3, scope1: 685.20, scope2: 412.30, energy: '1,240,500', coverage: 98, status: 'CONSOLIDATED' },
-                    { name: 'Olectra Greentech Limited', bus: 2, scope1: 182.40, scope2: 145.80, energy: '420,000', coverage: 100, status: 'CONSOLIDATED' },
-                    { name: 'Megha City Gas Distribution Ltd', bus: 4, scope1: 414.20, scope2: 210.00, energy: '810,400', coverage: 94, status: 'CONSOLIDATED' },
-                    { name: 'Icomm Tele Limited', bus: 2, scope1: 138.70, scope2: 74.00, energy: '315,200', coverage: 91, status: 'REVIEW_PENDING' },
+                    { name: 'Aarohan Renewable Energy Pvt. Ltd.', bus: 3, scope1: 685.20, scope2: 412.30, energy: '1,240,500', coverage: 98, status: 'CONSOLIDATED' },
+                    { name: 'Aarohan Infrastructure Projects Pvt. Ltd.', bus: 2, scope1: 182.40, scope2: 145.80, energy: '420,000', coverage: 100, status: 'CONSOLIDATED' },
+                    { name: 'Solar EPC Business Unit', bus: 4, scope1: 414.20, scope2: 210.00, energy: '810,400', coverage: 94, status: 'CONSOLIDATED' },
+                    { name: 'Wind Power Business Unit', bus: 2, scope1: 138.70, scope2: 74.00, energy: '315,200', coverage: 91, status: 'REVIEW_PENDING' },
                   ].map((sub, sIdx) => (
                     <tr key={sIdx}>
                       <td style={{ fontWeight: 600 }}>{sub.name}</td>

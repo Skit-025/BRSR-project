@@ -210,6 +210,17 @@ export default function Reporting() {
   const [lineageDrawerOpen, setLineageDrawerOpen] = useState(false);
   const [lineageMetricData, setLineageMetricData] = useState(null);
 
+  React.useEffect(() => {
+    if (!entityId && nodes.length > 0) {
+      const defaultNode = nodes.find(n => n.code === 'AAROHAN-GROUP') || nodes.find(n => n.type === 'group' || n.is_root) || nodes[0];
+      if (defaultNode) setEntityId(defaultNode.id);
+    }
+    if (!periodId && periods.length > 0) {
+      const defaultPeriod = periods.find(p => p.code === 'FY2025-26-M03') || periods[0];
+      if (defaultPeriod) setPeriodId(defaultPeriod.id);
+    }
+  }, [nodes, periods, entityId, periodId]);
+
   const selectedEntity = nodes.find(n => n.id === entityId);
   const selectedPeriod = periods.find(p => p.id === periodId);
 
@@ -407,7 +418,7 @@ export default function Reporting() {
   ];
 
   return (
-    <div className="page-content anim-fade" style={{ background: '#f8fafc' }}>
+    <div className="page-content anim-fade-up" style={{ background: '#f8fafc' }}>
       {/* ── Status Ticker ── */}
       <div style={{
         display: 'flex', alignItems: 'center', gap: 16, marginBottom: 8,
@@ -415,7 +426,7 @@ export default function Reporting() {
         fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#64748b'
       }}>
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: '#15803d' }}>
-          <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#15803d', display: 'inline-block' }}></span>
+          <span className="status-beacon-live" style={{ marginRight: 2 }} />
           SEBI BRSR COMPLIANCE ENGINE
         </span>
         <span style={{ color: '#cbd5e1' }}>/</span>
@@ -443,9 +454,10 @@ export default function Reporting() {
             style={{
               display: 'flex', alignItems: 'center', gap: '6px', padding: '7px 16px', borderRadius: '6px',
               fontSize: '13px', fontWeight: 600,
-              background: (!entityId || !periodId) ? '#e2e8f0' : '#18181b',
+              background: (!entityId || !periodId) ? '#e2e8f0' : '#0070F3',
               color: (!entityId || !periodId) ? '#94a3b8' : '#fff',
               border: 'none', cursor: (!entityId || !periodId) ? 'not-allowed' : 'pointer',
+              boxShadow: (!entityId || !periodId) ? 'none' : '0 1px 2px rgba(0, 112, 243, 0.2)',
               transition: 'all 0.15s ease'
             }}
           >
@@ -458,9 +470,9 @@ export default function Reporting() {
       {notice && (
         <div style={{
           padding: '12px 16px', borderRadius: '8px', marginBottom: '16px', fontSize: '13px', fontWeight: 600,
-          background: notice.type === 'success' ? 'rgba(16,185,129,0.12)' : 'rgba(239,68,68,0.12)',
-          color: notice.type === 'success' ? '#10b981' : '#ef4444',
-          border: `1px solid ${notice.type === 'success' ? '#10b981' : '#ef4444'}`,
+          background: notice.type === 'success' ? '#ecfdf5' : '#fef2f2',
+          color: notice.type === 'success' ? '#065f46' : '#991b1b',
+          border: `1px solid ${notice.type === 'success' ? '#a7f3d0' : '#fca5a5'}`,
           display: 'flex', justifyContent: 'space-between', alignItems: 'center',
         }}>
           <span>{notice.text}</span>
@@ -720,13 +732,13 @@ export default function Reporting() {
               <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-default)', fontWeight: 700, fontSize: '14px' }}>
                 Section A — General Disclosures (SEBI BRSR Format)
               </div>
-              {/* Static MEIL disclosures */}
+              {/* Aarohan disclosures */}
               <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '2px' }}>
                 {[
-                  { field: 'Corporate Identity Number (CIN)', value: report?.section_a?.cin || 'U45309TG1997PLC026167' },
-                  { field: 'Company Name', value: report?.section_a?.name || 'Megha Engineering and Infrastructures Ltd (MEIL)' },
-                  { field: 'Registered Address', value: report?.section_a?.address || 'Plot No. 74, Madhura Nagar, Hyderabad – 500038, Telangana' },
-                  { field: 'Corporate Website', value: report?.section_a?.website || 'www.meil.in' },
+                  { field: 'Corporate Identity Number (CIN)', value: report?.section_a?.cin || 'L40106MH2014PLC258901' },
+                  { field: 'Company Name', value: report?.section_a?.name || 'Aarohan Infrastructure & Energy Group' },
+                  { field: 'Registered Address', value: report?.section_a?.address || 'Aarohan Towers, Plot 14, BKC, Bandra East, Mumbai – 400051, Maharashtra' },
+                  { field: 'Corporate Website', value: report?.section_a?.website || 'www.aarohan-energy.in' },
                   { field: 'Financial Year Reported', value: selectedPeriod?.financial_year || report?.section_a?.fy || '2025-2026' },
                   { field: 'Reporting Currency', value: 'INR (₹)' },
                   { field: 'Reporting Boundary', value: 'Group — Consolidated (all subsidiaries, JVs and associates with operational control)' },
@@ -863,7 +875,7 @@ export default function Reporting() {
           {!reportLoading && section === 'brsr_core' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               <div style={{ padding: '14px 18px', borderRadius: '10px', background: 'rgba(99,102,241,0.07)', border: '1px solid rgba(99,102,241,0.2)', fontSize: '13px', color: 'var(--text-secondary)' }}>
-                <strong style={{ color: 'var(--text-primary)' }}>BRSR Core</strong> — SEBI's mandatory, quantitative, assurance-ready KPIs as per Circular SEBI/HO/CFD/CMD-2/P/CIR/2023/00122. These 9 KPIs must be externally assured from FY2024-25 for Top 150 listed companies by market cap (MEIL equivalent).
+                <strong style={{ color: 'var(--text-primary)' }}>BRSR Core</strong> — SEBI's mandatory, quantitative, assurance-ready KPIs as per Circular SEBI/HO/CFD/CMD-2/P/CIR/2023/00122. These 9 KPIs are externally assured from FY2024-25 for Top 150 listed companies by market capitalization.
               </div>
               <div style={{ background: 'var(--bg-card)', borderRadius: '12px', border: '1px solid var(--border-default)', overflowX: 'auto' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>

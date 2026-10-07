@@ -1,0 +1,7 @@
+TSSPDCL Electricity Bill
+Consumer No: 1002345
+Billing Period: March 2026
+Units Consumed: 64500 kWh
+Contracted Demand: 500 kVA
+Billed Units: 64500
+Total Energy Charges: 451500 INR

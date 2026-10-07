@@ -76,12 +76,12 @@ export default function ProjectSummary() {
 
 
   return (
-    <div className="page-content" style={{ padding: '28px 36px', maxWidth: 1100, margin: '0 auto' }}>
+    <div className="page-content anim-fade-up" style={{ padding: '28px 36px', maxWidth: 1100, margin: '0 auto' }}>
       {/* ── Page Header ── */}
       <div style={{ marginBottom: 24, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 16 }}>
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--brand-500)', fontSize: 13, fontWeight: 700, marginBottom: 4 }}>
-            <Building2 size={16} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#15803d', fontSize: 13, fontWeight: 700, marginBottom: 4 }}>
+            <span className="status-beacon-live" style={{ marginRight: 2 }} />
             <span>PROJECT LEVEL READ-MODEL (SPEC §19, §50)</span>
           </div>
           <h1 style={{ fontSize: 26, fontWeight: 800, margin: 0, color: 'var(--text-primary)' }}>
