@@ -32,37 +32,34 @@ class AIGateway:
 
     def _call_provider_cascade(self, method_name: str, **kwargs) -> tuple[Dict[str, Any], str, bool]:
         """
-        Executes cascade:
-        1. Gemini (if available)
-        2. OpenRouter (if Gemini fails or unavailable)
-        3. Mock Fallback (if both fail or unavailable)
+        Executes cascade according to configured AI_PROVIDER:
+        - If AI_PROVIDER == "openrouter": OpenRouter -> Gemini -> Mock Fallback
+        - If AI_PROVIDER == "gemini":     Gemini -> OpenRouter -> Mock Fallback
         """
-        # Step 1: Gemini
-        if self.gemini_provider.is_available():
-            try:
-                method = getattr(self.gemini_provider, method_name)
-                result = method(**kwargs)
-                return result, "gemini", False
-            except Exception as e:
-                logger.warning(f"AI Gateway: Gemini provider failed: {e}. Falling back to OpenRouter.")
+        primary = getattr(settings, "AI_PROVIDER", "openrouter").lower()
+        if primary == "openrouter":
+            providers = [("openrouter", self.openrouter_provider), ("gemini", self.gemini_provider)]
+        else:
+            providers = [("gemini", self.gemini_provider), ("openrouter", self.openrouter_provider)]
 
-        # Step 2: OpenRouter
-        if self.openrouter_provider.is_available():
-            try:
-                method = getattr(self.openrouter_provider, method_name)
-                result = method(**kwargs)
-                return result, "openrouter", False
-            except Exception as e:
-                logger.warning(f"AI Gateway: OpenRouter provider failed: {e}. Falling back to Mock.")
+        for name, provider in providers:
+            if provider.is_available():
+                try:
+                    method = getattr(provider, method_name)
+                    result = method(**kwargs)
+                    return result, name, False
+                except Exception as e:
+                    logger.warning(f"AI Gateway: {name} provider failed: {e}. Trying next provider in cascade.")
 
-        # Step 3: Mock Fallback
+        # Final Step: Deterministic Mock Fallback
         if settings.AI_AUTO_FALLBACK_ON_ERROR:
             logger.info("AI Gateway: Activating deterministic Mock Fallback.")
             method = getattr(self.mock_provider, method_name)
             result = method(**kwargs)
             return result, "mock-fallback", True
 
-        raise RuntimeError("All AI providers (Gemini, OpenRouter) failed and fallback is disabled.")
+        raise RuntimeError("All AI providers (OpenRouter, Gemini) failed and fallback is disabled.")
+
 
     def run_structured(
         self,

@@ -43,13 +43,69 @@ class ExtractedField(BaseModel):
     bbox: Optional[List[float]] = Field(default=None, description="Optional bounding box [x1, y1, x2, y2]")
     metadata: Optional[Dict[str, Any]] = Field(default_factory=dict, description="E.g. billing_period, meter_id, tariff")
 
+
+class BillDetails(BaseModel):
+    """Rich structured data extracted from a utility bill via Vision LLM."""
+    # Vendor / Discom
+    vendor_name: Optional[str] = None
+    division_office: Optional[str] = None
+    zone: Optional[str] = None
+    # Consumer
+    consumer_name: Optional[str] = None
+    consumer_address: Optional[str] = None
+    # IDs & References
+    ivrs_no: Optional[str] = None
+    service_no: Optional[str] = None
+    bill_no: Optional[str] = None
+    # Billing Period
+    bill_month: Optional[str] = None
+    bill_date: Optional[str] = None
+    due_date_cheque: Optional[str] = None
+    due_date_cash: Optional[str] = None
+    # Tariff & Load
+    tariff_category: Optional[str] = None
+    sanctioned_load: Optional[str] = None
+    # Meter & Readings
+    meter_number: Optional[str] = None
+    reading_date: Optional[str] = None
+    previous_reading: Optional[float] = None
+    current_reading: Optional[float] = None
+    multiplying_factor: Optional[float] = None
+    billed_units: Optional[float] = None  # kWh
+    # Financial Charges
+    energy_charges: Optional[float] = None
+    fixed_charges: Optional[float] = None
+    electricity_duty: Optional[float] = None
+    meter_rent: Optional[float] = None
+    security_deposit_interest: Optional[float] = None
+    subsidy_amount: Optional[float] = None
+    current_bill_amount: Optional[float] = None
+    previous_dues: Optional[float] = None
+    net_payable_amount: Optional[float] = None
+    surcharge: Optional[float] = None
+    gross_amount_after_due_date: Optional[float] = None
+    # Contact
+    contact_phone: Optional[str] = None
+    complaints_phone: Optional[str] = None
+    # Fuel-specific
+    quantity_delivered: Optional[float] = None
+    fuel_type: Optional[str] = None
+    # Water-specific
+    water_consumed_kl: Optional[float] = None
+    # Generic
+    raw_extra: Optional[Dict[str, Any]] = Field(default_factory=dict)
+
+
 class E1ExtractRequest(BaseModel):
     evidence_id: str = Field(..., description="UUID or identifier of the uploaded evidence file")
     file_path: Optional[str] = Field(None, description="Direct file path or presigned URL if testing locally")
     file_bytes: Optional[bytes] = Field(None, description="Raw file bytes for in-memory OCR processing")
+    file_base64: Optional[str] = Field(None, description="Base64 encoded file payload from drag-and-drop file upload")
     filename: Optional[str] = Field(None, description="Original filename, used for extension-based type detection")
     mime_type: Optional[str] = Field(None, description="MIME type of the uploaded file")
     doc_type_hint: Optional[str] = Field(None, description="Hint: electricity_bill, fuel_receipt, waste_manifest, etc.")
+    raw_text: Optional[str] = Field(None, description="Direct text or OCR content for testing and extraction")
+
 
 class E1ExtractResponse(BaseModel):
     run_id: str
@@ -58,6 +114,7 @@ class E1ExtractResponse(BaseModel):
     is_relevant: bool = True
     rejection_reason: Optional[str] = None
     is_fallback: bool = False
+    bill_details: Optional[BillDetails] = Field(default=None, description="Rich structured bill metadata from Vision LLM")
 
 
 # --- E2: Anomaly Engine Schemas ---

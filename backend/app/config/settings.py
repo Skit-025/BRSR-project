@@ -43,4 +43,8 @@ class Settings(BaseSettings):
     AI_MODEL_TEXT: str = "models/gemini-3.8-flash"
     AI_EMBEDDING_MODEL: str = "models/text-embedding-004"
 
+    # Feature Flags
+    AI_ENGINES_V2: bool = False
+    AAROHAN_ENABLED: bool = False
+
 settings = Settings()

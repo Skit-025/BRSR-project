@@ -91,11 +91,13 @@ class OpenRouterProvider(BaseAIProvider):
         messages.append({"role": "user", "content": user_message})
 
         models_to_try = [
-            "openrouter/free",
-            "meta-llama/llama-3.3-70b-instruct",
             settings.OPENROUTER_MODEL_TEXT,
+            "meta-llama/llama-3.3-70b-instruct",
+            "google/gemini-2.0-flash-001",
+            "openrouter/free",
         ]
         models_to_try = list(dict.fromkeys([m for m in models_to_try if m]))
+
 
         last_error = None
         for model in models_to_try:

@@ -9,6 +9,7 @@ import logging
 from typing import Any, Dict, Optional
 
 from app.workers import celery_app
+from app.config.settings import settings
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +20,7 @@ def _get_db():
 
 
 async def _call_ai(prompt: str, model_type: str = "text") -> str:
-    """Dispatch to the active AI provider (Gemini → OpenRouter → Mock fallback)."""
+    """Dispatch to the active AI provider (Gemini -> OpenRouter -> Mock fallback)."""
     from app.ai.engine import get_ai_engine
     engine = get_ai_engine()
     if model_type == "vision":
@@ -49,6 +50,10 @@ def extract_document(
     OCR + structured extraction from an uploaded evidence document.
     Calls the vision AI engine to extract ESG metrics from image/PDF.
     """
+    if getattr(settings, "AI_ENGINES_V2", False):
+        from app.workers.tasks_ai_adapters import E1TaskAdapter
+        return E1TaskAdapter.run(evidence_id, file_url, entity_id, period_id)
+
     import asyncio
     db = _get_db()
     try:
@@ -101,6 +106,10 @@ def detect_anomalies(
     Run AI-powered anomaly detection on approved metric values for the period/entity.
     Flags outliers vs. historical trend and YoY variance thresholds.
     """
+    if getattr(settings, "AI_ENGINES_V2", False):
+        from app.workers.tasks_ai_adapters import E2TaskAdapter
+        return E2TaskAdapter.run(period_id, entity_id)
+
     import asyncio
     from sqlalchemy import text
 
@@ -171,6 +180,10 @@ def generate_narrative(
     Generate an AI-written BRSR narrative for a specific section.
     Used in the reporting module to auto-draft qualitative disclosures.
     """
+    if getattr(settings, "AI_ENGINES_V2", False):
+        from app.workers.tasks_ai_adapters import E5TaskAdapter
+        return E5TaskAdapter.run(period_id, root_entity_id, section, tone)
+
     import asyncio
     from sqlalchemy import text
 
@@ -238,6 +251,10 @@ def analyze_policy_gaps(
     Analyze disclosed values against SEBI BRSR mandatory requirements and
     identify gaps or missing disclosures.
     """
+    if getattr(settings, "AI_ENGINES_V2", False):
+        from app.workers.tasks_ai_adapters import E4TaskAdapter
+        return E4TaskAdapter.run(period_id, entity_id)
+
     import asyncio
     from sqlalchemy import text
 
@@ -264,7 +281,7 @@ def analyze_policy_gaps(
 
         prompt = (
             f"As an ESG compliance expert, analyze these missing mandatory BRSR disclosures "
-            f"for period {period_id}:\n{missing or 'None — all mandatory disclosures present.'}\n\n"
+            f"for period {period_id}:\n{missing or 'None ?" all mandatory disclosures present.'}\n\n"
             f"For each gap: explain the regulatory risk, suggested action, and priority (High/Medium/Low). "
             f"Return JSON: [{{code, risk_level, action, regulatory_reference}}]"
         )

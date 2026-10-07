@@ -11,10 +11,11 @@ import uuid
 import os
 import re
 import io
+import json
 import logging
 from typing import Optional, List, Dict, Any, Tuple
 
-from app.ai.schemas import E1ExtractRequest, E1ExtractResponse, ExtractedField
+from app.ai.schemas import E1ExtractRequest, E1ExtractResponse, ExtractedField, BillDetails
 from app.ai.e1_extract.validators import validate_fields
 
 logger = logging.getLogger(__name__)
@@ -73,7 +74,24 @@ UNRELATED_STRONG_SIGNALS = [
     ("package.json", "Node.js package file"),
     ("<!doctype html", "HTML document"),
     ("<html", "HTML document"),
+    ("railway", "Railway / Train Ticket"),
+    ("train", "Railway / Train Ticket"),
+    ("irctc", "IRCTC Train Ticket"),
+    ("e-ticket", "Travel E-Ticket"),
+    ("pnr", "Travel Ticket / PNR Booking"),
+    ("passenger", "Passenger Travel Ticket"),
+    ("boarding pass", "Airline Boarding Pass"),
+    ("flight", "Flight Ticket"),
+    ("airline", "Airline Ticket"),
+    ("hotel", "Hotel Booking / Hospitality Bill"),
+    ("swiggy", "Food Delivery Receipt"),
+    ("zomato", "Food Delivery Receipt"),
+    ("amazon", "E-commerce Shopping Invoice"),
+    ("flipkart", "E-commerce Shopping Invoice"),
+    ("movie", "Cinema / Event Ticket"),
+    ("bookmyshow", "Cinema Ticket"),
 ]
+
 
 METRIC_MAP = {
     "electricity_bill": ("ENV-ENERGY-001", "kWh"),
@@ -573,137 +591,292 @@ def _extract_with_llm(text: str, doc_type: str, evidence_id: str) -> Optional[Li
 
 
 # ---------------------------------------------------------------------------
-# Helper: Vision LLM extraction for images / scanned PDFs
+# Helper: Comprehensive Vision LLM extraction for any image document
 # ---------------------------------------------------------------------------
 
+DISCOM_EXTRACTION_PROMPT = """
+You are an expert Indian utility bill OCR and data extraction engine.
+Carefully read this bill image and extract ALL visible data into the JSON schema.
+
+For electricity bills (Discom bills like MPPKVVCL, BESCOM, TSSPDCL, APCPDCL, MSEDCL, NBPDCL, etc.):
+- Read vendor / company name (even if in Hindi/regional language, translate to English)
+- Extract consumer name, full address, IVRS No, Service Connection No, Bill No
+- Extract bill month, bill date, due dates
+- Extract tariff category, sanctioned load
+- Extract meter details: meter number, reading date, previous reading, current reading, multiplying factor
+- Calculate billed_units = (current_reading - previous_reading) * multiplying_factor
+- Extract all financial charges: energy charges, fixed charges, electricity duty, meter rent,
+  security deposit interest, government subsidy (negative), current bill, previous dues,
+  net payable amount, surcharge, gross amount after due date
+- Extract contact/complaints phone numbers
+
+For fuel/diesel receipts:
+- Extract vendor, quantity delivered (litres), fuel type, delivery date, vehicle no
+
+For water bills:
+- Extract water board, consumer, water consumed (kL or m3), billing period, amount
+
+Return all numeric fields as plain numbers (not strings).
+Return ONLY what you can actually read from the image — do NOT invent or hallucinate values.
+If a field is not visible, return null for it.
+"""
+
+# Comprehensive schema for the vision LLM
+VISION_RICH_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "doc_type_detected": {"type": "string", "description": "electricity_bill | fuel_receipt | water_manifest | waste_manifest | other"},
+        "is_relevant": {"type": "boolean", "description": "true if this is an ESG utility document"},
+        "rejection_reason": {"type": "string"},
+        # Vendor
+        "vendor_name": {"type": "string"},
+        "division_office": {"type": "string"},
+        "zone": {"type": "string"},
+        # Consumer
+        "consumer_name": {"type": "string"},
+        "consumer_address": {"type": "string"},
+        "ivrs_no": {"type": "string"},
+        "service_no": {"type": "string"},
+        "bill_no": {"type": "string"},
+        # Period
+        "bill_month": {"type": "string"},
+        "bill_date": {"type": "string"},
+        "due_date_cheque": {"type": "string"},
+        "due_date_cash": {"type": "string"},
+        # Tariff
+        "tariff_category": {"type": "string"},
+        "sanctioned_load": {"type": "string"},
+        # Meter
+        "meter_number": {"type": "string"},
+        "reading_date": {"type": "string"},
+        "previous_reading": {"type": "number"},
+        "current_reading": {"type": "number"},
+        "multiplying_factor": {"type": "number"},
+        "billed_units": {"type": "number"},
+        # Financial
+        "energy_charges": {"type": "number"},
+        "fixed_charges": {"type": "number"},
+        "electricity_duty": {"type": "number"},
+        "meter_rent": {"type": "number"},
+        "security_deposit_interest": {"type": "number"},
+        "subsidy_amount": {"type": "number"},
+        "current_bill_amount": {"type": "number"},
+        "previous_dues": {"type": "number"},
+        "net_payable_amount": {"type": "number"},
+        "surcharge": {"type": "number"},
+        "gross_amount_after_due_date": {"type": "number"},
+        # Contact
+        "contact_phone": {"type": "string"},
+        "complaints_phone": {"type": "string"},
+        # Fuel-specific
+        "quantity_delivered": {"type": "number"},
+        "fuel_type": {"type": "string"},
+        # Water-specific
+        "water_consumed_kl": {"type": "number"},
+    }
+}
+
+
+def _extract_with_vision_comprehensive(
+    file_bytes: bytes,
+    mime_type: str,
+    doc_type: str,
+    run_relevance_check: bool = False,
+) -> tuple[bool, str | None, list[ExtractedField], BillDetails | None]:
+    """
+    Primary vision extraction path for images.
+    Uses Gemini Flash Lite (fastest/cheapest, good accuracy) as primary,
+    falls back to OpenRouter vision models.
+    Returns: (is_relevant, rejection_reason, [ExtractedField], BillDetails | None)
+    """
+    result: dict = {}
+
+    # ── Attempt 1: Gemini Flash Lite (works, fast, free) ──────────────────────
+    gemini_ok = False
+    try:
+        from google import genai as _genai
+        from google.genai import types as _gtypes
+        from app.config.settings import settings
+
+        api_key = settings.GEMINI_API_KEY
+        if api_key and not api_key.startswith("mock_"):
+            _client = _genai.Client(api_key=api_key)
+            relevance_instruction = (
+                "Also set is_relevant=true/false: true if this is an ESG utility bill "
+                "(electricity/water/fuel/waste/safety), false if it's something else (train ticket, food bill, etc)."
+            ) if run_relevance_check else (
+                f"This is confirmed as a '{doc_type}' ESG document, so is_relevant=true."
+            )
+            full_prompt = DISCOM_EXTRACTION_PROMPT + "\n\n" + relevance_instruction
+
+            # Try lite models first (faster), then heavier ones
+            gemini_models = [
+                "models/gemini-flash-lite-latest",
+                "models/gemini-3.1-flash-lite",
+                "models/gemini-flash-latest",
+                "models/gemini-3.8-flash",
+                "models/gemini-3.7-flash",
+            ]
+            for gmodel in gemini_models:
+                try:
+                    resp = _client.models.generate_content(
+                        model=gmodel,
+                        contents=[
+                            _gtypes.Part.from_bytes(data=file_bytes, mime_type=mime_type),
+                            f"Extract data matching this schema: {json.dumps(VISION_RICH_SCHEMA)}\n\n{full_prompt}\n\nReturn ONLY valid JSON."
+                        ],
+                        config=_gtypes.GenerateContentConfig(
+                            response_mime_type="application/json"
+                        )
+                    )
+                    raw = getattr(resp, "text", None)
+                    if raw:
+                        try:
+                            from app.ai.providers.openrouter import _parse_json_robust
+                            result = _parse_json_robust(raw)
+                        except Exception:
+                            import re as _re
+                            m = _re.search(r"(\{.*\})", raw, _re.DOTALL)
+                            if m:
+                                try:
+                                    result = json.loads(m.group(1))
+                                except Exception:
+                                    pass
+                        if result:
+                            gemini_ok = True
+                            logger.info(f"Gemini vision '{gmodel}' extracted {len(result)} fields")
+                            break
+                except Exception as ge:
+                    logger.warning(f"Gemini vision model '{gmodel}' failed: {ge}")
+                    continue
+    except Exception as e:
+        logger.warning(f"Gemini vision attempt failed entirely: {e}")
+
+    # ── Attempt 2: OpenRouter vision (fallback) ────────────────────────────────
+    if not gemini_ok:
+        try:
+            from app.ai.providers.openrouter import OpenRouterProvider
+            provider = OpenRouterProvider()
+            if provider.is_available():
+                relevance_instruction = (
+                    "Set is_relevant=true/false: true only for ESG utility bills."
+                ) if run_relevance_check else (
+                    f"This is a '{doc_type}' ESG document, set is_relevant=true."
+                )
+                full_prompt = DISCOM_EXTRACTION_PROMPT + "\n\n" + relevance_instruction
+                result = provider.generate_vision_json(
+                    prompt=full_prompt,
+                    image_bytes=file_bytes,
+                    mime_type=mime_type,
+                    schema_dict=VISION_RICH_SCHEMA
+                )
+                logger.info(f"OpenRouter vision extracted {len(result)} fields")
+        except Exception as e:
+            logger.warning(f"OpenRouter vision fallback also failed: {e}")
+
+    if not result:
+        logger.warning("All vision providers failed — returning empty")
+        return True, None, [], None
+
+    # ── Relevance check ────────────────────────────────────────────────────────
+    if run_relevance_check and result.get("is_relevant") is False:
+        rej = result.get("rejection_reason") or "Document is not a recognized ESG utility bill."
+        return False, rej, [], None
+
+    # ── Build BillDetails from result ──────────────────────────────────────────
+    bill_fields = {
+        "vendor_name", "division_office", "zone", "consumer_name", "consumer_address",
+        "ivrs_no", "service_no", "bill_no", "bill_month", "bill_date",
+        "due_date_cheque", "due_date_cash", "tariff_category", "sanctioned_load",
+        "meter_number", "reading_date", "previous_reading", "current_reading",
+        "multiplying_factor", "billed_units", "energy_charges", "fixed_charges",
+        "electricity_duty", "meter_rent", "security_deposit_interest",
+        "subsidy_amount", "current_bill_amount", "previous_dues",
+        "net_payable_amount", "surcharge", "gross_amount_after_due_date",
+        "contact_phone", "complaints_phone", "quantity_delivered", "fuel_type",
+        "water_consumed_kl"
+    }
+    bd_data = {k: result.get(k) for k in bill_fields if result.get(k) is not None}
+    bill_details = BillDetails(**bd_data) if bd_data else None
+
+    # ── Determine effective doc_type ───────────────────────────────────────────
+    llm_detected_type = result.get("doc_type_detected", "").strip().lower()
+    effective_type = llm_detected_type if llm_detected_type in METRIC_MAP else doc_type
+    metric_code, expected_unit = METRIC_MAP.get(effective_type, ("ENV-ENERGY-001", "kWh"))
+
+    # ── Extract the primary numeric consumption value ──────────────────────────
+    primary_val: float | None = None
+    primary_unit = expected_unit
+
+    if effective_type == "electricity_bill" or effective_type in ("other_bill", "other"):
+        for fk in ("billed_units", "current_reading"):
+            v = result.get(fk)
+            if v is not None:
+                try:
+                    fv = float(v)
+                    if fv > 0:
+                        primary_val = fv
+                        primary_unit = "kWh"
+                        break
+                except Exception:
+                    pass
+    elif effective_type == "fuel_receipt":
+        for fk in ("quantity_delivered",):
+            v = result.get(fk)
+            if v is not None:
+                try:
+                    fv = float(v)
+                    if fv > 0:
+                        primary_val = fv
+                        primary_unit = result.get("fuel_unit") or "Litres"
+                        break
+                except Exception:
+                    pass
+    elif effective_type == "water_manifest":
+        v = result.get("water_consumed_kl")
+        if v is not None:
+            try:
+                primary_val = float(v)
+                primary_unit = "kL"
+            except Exception:
+                pass
+
+    extracted_fields: list[ExtractedField] = []
+    if primary_val is not None and primary_val > 0:
+        meta: dict = {}
+        for k in ("ivrs_no", "service_no", "bill_no", "bill_month", "bill_date",
+                  "consumer_name", "vendor_name", "meter_number", "net_payable_amount",
+                  "tariff_category"):
+            if result.get(k):
+                meta[k] = result[k]
+        confidence = 0.93
+        if not gemini_ok:
+            confidence = 0.85
+        extracted_fields.append(ExtractedField(
+            metric=metric_code,
+            value=primary_val,
+            unit=primary_unit,
+            confidence=confidence,
+            page=1,
+            metadata=meta
+        ))
+        logger.info(f"Vision primary metric: {metric_code} = {primary_val} {primary_unit}")
+
+    return True, None, extracted_fields, bill_details
+
+
+# Keep old _extract_with_vision as thin wrapper for backwards compat
 def _extract_with_vision(
     file_bytes: bytes,
     mime_type: str,
     doc_type: str,
     run_relevance_check: bool = False,
-) -> Tuple[bool, Optional[str], List[ExtractedField]]:
-    """
-    Vision LLM extraction for image files.
-    Returns: (is_relevant, rejection_reason, fields)
-    run_relevance_check=True -> ask the LLM to also verify relevance (for images with no user hint)
-    """
-    from app.ai.providers.openrouter import OpenRouterProvider
-
-    metric_code, expected_unit = METRIC_MAP.get(doc_type, ("UNKNOWN", "units"))
-    provider = OpenRouterProvider()
-    if not provider.is_available():
-        return True, None, []  # Optimistic pass when no vision provider
-
-    vision_schema = {
-        "type": "object",
-        "properties": {
-            "is_relevant": {"type": "boolean"},
-            "rejection_reason": {"type": "string"},
-            "doc_type_detected": {"type": "string"},
-            "vendor_name": {"type": "string"},
-            "consumer_name": {"type": "string"},
-            "account_number": {"type": "string"},
-            "invoice_number": {"type": "string"},
-            "meter_id": {"type": "string"},
-            "bill_date": {"type": "string"},
-            "billing_period": {"type": "string"},
-            "value": {"type": "number"},
-            "units_kwh": {"type": "number"},
-            "unit": {"type": "string"},
-            "amount": {"type": "number"},
-            "confidence": {"type": "number"}
-        }
-    }
-
-    if run_relevance_check:
-        relevance_instruction = (
-            "Determine if this document is an ESG utility document (electricity bill, fuel receipt, "
-            "water bill, waste manifest, or safety log). If NOT, set is_relevant=false and provide rejection_reason. "
-            "If YES, set is_relevant=true and extract all consumption and invoice figures."
-        )
-    else:
-        relevance_instruction = (
-            f"This is confirmed as a '{doc_type}' document. Extract all consumption and billing data."
-        )
-
-    vision_prompt = (
-        f"You are an expert ESG utility bill auditor.\n\n"
-        f"{relevance_instruction}\n\n"
-        f"Expected BRSR metric: {metric_code} ({expected_unit})\n\n"
-        f"Extraction tasks:\n"
-        f"1. Electricity bills: Extract consumption in kWh (look for 'Total Units', 'Billed Units', 'Current Reading - Previous Reading', 'Net kWh').\n"
-        f"2. Fuel/Diesel receipts: Extract total Litres delivered.\n"
-        f"3. Water bills: Extract total kL or cubic meters consumed.\n"
-        f"4. Waste manifests: Extract total metric tonnes disposed.\n"
-        f"5. Safety logs: Extract total lost-time injury incidents.\n"
-        f"6. Also extract: vendor_name (Discom/Supplier), consumer_name, account_number, invoice_number, meter_id, bill_date, billing_period, and net bill amount.\n"
-        f"7. Return numeric consumption in 'value' (or 'units_kwh') and unit in 'unit'. Do NOT invent values."
+) -> tuple[bool, str | None, list[ExtractedField]]:
+    is_rel, rej, fields, _ = _extract_with_vision_comprehensive(
+        file_bytes, mime_type, doc_type, run_relevance_check
     )
+    return is_rel, rej, fields
 
-    try:
-        result = provider.generate_vision_json(
-            prompt=vision_prompt,
-            image_bytes=file_bytes,
-            mime_type=mime_type,
-            schema_dict=vision_schema
-        )
-
-        if run_relevance_check and result.get("is_relevant") is False:
-            rej = result.get("rejection_reason", "Document is not a recognized ESG utility bill.")
-            return False, rej, []
-
-        # Find consumption value from multiple possible model keys
-        raw_val = None
-        for k in ("value", "units_kwh", "consumption", "primary_quantity", "billed_units", "units", "quantity", "litres"):
-            if result.get(k) is not None:
-                raw_val = result[k]
-                break
-
-        val = None
-        if raw_val is not None:
-            try:
-                clean_str = re.sub(r"[^\d.]", "", str(raw_val).strip())
-                if clean_str:
-                    val = float(clean_str)
-            except Exception:
-                val = None
-
-        if val is None or val <= 0:
-            logger.info("Vision extracted no positive consumption value")
-            return True, None, []
-
-        # Use LLM-detected doc_type if provided
-        llm_detected = result.get("doc_type_detected", "").strip().lower()
-        if llm_detected and llm_detected in METRIC_MAP:
-            metric_code, expected_unit = METRIC_MAP[llm_detected]
-
-        unit_str = result.get("unit") or expected_unit
-
-        meta = {}
-        for k in ("invoice_number", "meter_id", "billing_period", "consumer_name", "vendor_name", "account_number", "bill_date", "amount", "total_amount"):
-            if result.get(k):
-                meta[k] = result[k]
-
-        confidence = 0.90
-        try:
-            confidence = float(result.get("confidence", 0.90))
-        except Exception:
-            pass
-
-        field = ExtractedField(
-            metric=metric_code,
-            value=val,
-            unit=unit_str,
-            confidence=confidence,
-            page=1,
-            metadata=meta
-        )
-        logger.info(f"E1 vision successfully extracted: {field.value} {field.unit} (metric={field.metric}, meta={meta})")
-        return True, None, [field]
-
-    except Exception as e:
-        logger.warning(f"E1 vision extraction failed: {e}")
-        return True, None, []  # Don't reject on LLM error
 
 
 # ---------------------------------------------------------------------------
@@ -731,7 +904,32 @@ def run_extraction_pipeline(request: E1ExtractRequest, db_session=None) -> E1Ext
     mime_type = request.mime_type or "application/pdf"
     filename = request.filename or ""
 
+    if request.file_base64:
+        import base64 as _b64
+        b64_str = request.file_base64.strip()
+        if "," in b64_str:
+            header, b64_str = b64_str.split(",", 1)
+            if "image/png" in header:
+                mime_type = "image/png"
+            elif "image/jpeg" in header or "image/jpg" in header:
+                mime_type = "image/jpeg"
+            elif "application/pdf" in header:
+                mime_type = "application/pdf"
+        try:
+            file_bytes = _b64.b64decode(b64_str)
+            logger.info(f"Decoded {len(file_bytes)} bytes from file_base64 payload")
+        except Exception as e:
+            logger.warning(f"Failed to decode file_base64: {e}")
+
+    if request.raw_text and not file_bytes:
+        document_text = request.raw_text
+        file_bytes = request.raw_text.encode("utf-8")
+        if not filename:
+            filename = "sample_document.txt"
+        mime_type = "text/plain"
+
     if not file_bytes and request.file_path and os.path.exists(request.file_path):
+
         with open(request.file_path, "rb") as f:
             file_bytes = f.read()
         fname_lower = request.file_path.lower()
@@ -754,7 +952,9 @@ def run_extraction_pipeline(request: E1ExtractRequest, db_session=None) -> E1Ext
     is_image = mime_type.startswith("image/") or (
         filename.lower().endswith((".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tiff"))
     )
-    document_text = ""
+    if not request.raw_text:
+        document_text = ""
+
 
     if is_image:
         document_text = _extract_image_text(file_bytes)
@@ -839,15 +1039,20 @@ def run_extraction_pipeline(request: E1ExtractRequest, db_session=None) -> E1Ext
 
     if user_hint and user_hint in VALID_DOC_TYPES:
         # ── A: User explicitly selected bill type — cross-validate content ──
-        if document_text and not is_image:
+        if document_text:
             text_lower = combined_text.lower()
             is_match, actual_type = _content_matches_doc_type(text_lower, user_hint)
             if not is_match:
                 if actual_type == "unrelated":
+                    # Find specific rejection label if available
+                    matched_desc = "non-ESG document"
+                    for sig, desc in UNRELATED_STRONG_SIGNALS:
+                        if sig in text_lower:
+                            matched_desc = desc
+                            break
                     rej_msg = (
-                        f"⛔ This document does not appear to be an ESG utility document. "
-                        f"You selected '{HUMAN_DOC_NAMES.get(user_hint, user_hint)}' but the content "
-                        f"does not match any accepted ESG bill type. "
+                        f"⛔ Document Rejected: This document appears to be a '{matched_desc}' and is NOT an accepted ESG utility document. "
+                        f"You selected '{HUMAN_DOC_NAMES.get(user_hint, user_hint)}', but the content contains '{matched_desc}' indicators. "
                         f"Only electricity bills, fuel/diesel receipts, water bills, waste manifests, or safety logs are accepted."
                     )
                 else:
@@ -872,6 +1077,7 @@ def run_extraction_pipeline(request: E1ExtractRequest, db_session=None) -> E1Ext
         is_relevant = True
         rejection_reason = ""
         logger.info(f"E1 user-provided bill type verified: '{doc_type}' for '{filename}'")
+
 
     elif is_image:
         # ── B: Image file, no hint → vision LLM decides ─────────────────
@@ -906,25 +1112,51 @@ def run_extraction_pipeline(request: E1ExtractRequest, db_session=None) -> E1Ext
 
     logger.info(f"E1 accepted '{filename}' as: {doc_type}")
 
-    # ── Step 4: Fast deterministic regex extraction (PDFs and OCR images) ──
     extracted_fields: List[ExtractedField] = []
-    if document_text:
+    bill_details = None
+
+    # ── Step 4A: For IMAGES — always run comprehensive Vision LLM first ────────
+    # (winocr text is too noisy/garbage on phone screenshots; Vision is more accurate)
+    if is_image and file_bytes:
+        effective_mime = mime_type if is_image else "image/jpeg"
+        run_rel_check = not (user_hint and user_hint in VALID_DOC_TYPES)
+        logger.info(f"E1 running comprehensive vision extraction for image '{filename}' (mime={effective_mime})")
+        vis_relevant, vis_rejection, vis_fields, bill_details = _extract_with_vision_comprehensive(
+            file_bytes=file_bytes,
+            mime_type=effective_mime,
+            doc_type=doc_type,
+            run_relevance_check=run_rel_check,
+        )
+        if not vis_relevant:
+            return E1ExtractResponse(
+                run_id=run_id,
+                doc_type="unrelated",
+                fields=[],
+                is_relevant=False,
+                rejection_reason=vis_rejection,
+                is_fallback=False
+            )
+        extracted_fields = vis_fields
+        if extracted_fields:
+            logger.info(f"E1 vision extracted {len(extracted_fields)} field(s) + bill_details={bill_details is not None}")
+
+    # ── Step 4B: For PDFs/text — deterministic regex extraction ─────────────
+    if not is_image and document_text:
         extracted_fields = _extract_deterministic(document_text, doc_type)
         if extracted_fields:
             logger.info(f"E1 deterministic regex extracted {len(extracted_fields)} field(s) for '{doc_type}'")
 
-    # ── Step 5: LLM text extraction fallback for complex documents ─────────
-    if not extracted_fields and document_text:
+    # ── Step 5: LLM text extraction fallback for complex text/PDF documents ──
+    if not extracted_fields and not is_image and document_text:
         logger.info(f"E1 calling LLM text extraction for '{doc_type}'")
         extracted_fields = _extract_with_llm(document_text, doc_type, request.evidence_id) or []
 
-    # ── Step 6: Vision LLM (only for files where no text could be extracted) ───
-    if not extracted_fields and file_bytes and not document_text:
-        need_vision = True
-        effective_mime = mime_type if is_image else "image/jpeg"
-        # run_relevance_check=True only for images where the user gave no hint
-        run_rel_check = is_image and not (user_hint and user_hint in VALID_DOC_TYPES)
-        vis_relevant, vis_rejection, vis_fields = _extract_with_vision(
+    # ── Step 6: Vision fallback for PDFs with no text (scanned PDFs) ───────
+    if not extracted_fields and not is_image and file_bytes and not document_text:
+        effective_mime = "image/jpeg"
+        logger.info(f"E1 PDF has no extractable text — trying vision fallback for '{filename}'")
+        run_rel_check = not (user_hint and user_hint in VALID_DOC_TYPES)
+        vis_relevant, vis_rejection, vis_fields, bill_details = _extract_with_vision_comprehensive(
             file_bytes=file_bytes,
             mime_type=effective_mime,
             doc_type=doc_type,
@@ -943,8 +1175,6 @@ def run_extraction_pipeline(request: E1ExtractRequest, db_session=None) -> E1Ext
 
     if not extracted_fields:
         logger.warning(f"E1 no fields extracted from '{filename}' (type={doc_type})")
-        # No fallback hardcoded data — return empty fields with a helpful message
-        # The document was accepted as relevant, just no values could be parsed
 
     # ── Step 7: Validate ──────────────────────────────────────────────────
     validated = validate_fields(extracted_fields)
@@ -955,5 +1185,6 @@ def run_extraction_pipeline(request: E1ExtractRequest, db_session=None) -> E1Ext
         fields=validated,
         is_relevant=True,
         rejection_reason=None,
-        is_fallback=False
+        is_fallback=False,
+        bill_details=bill_details
     )
