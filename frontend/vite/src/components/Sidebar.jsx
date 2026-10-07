@@ -1,4 +1,4 @@
-﻿import { NavLink, useLocation } from 'react-router-dom';
+import { NavLink, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, Building2, BookOpen, FileText,
   GitBranch, BarChart3, FileBarChart, Settings, Leaf, ChevronRight
@@ -34,7 +34,7 @@ export default function Sidebar() {
         </div>
         <div className="sidebar-logo-text">
           <span className="sidebar-logo-title">MEIL ESG Portal</span>
-          <span className="sidebar-logo-sub">BRSR Â· FY 2024-25</span>
+          <span className="sidebar-logo-sub">BRSR · FY 2024-25</span>
         </div>
       </div>
 

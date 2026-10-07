@@ -1,4 +1,4 @@
-﻿/**
+/**
  * AarohanReview.jsx
  * AI Run Review Dashboard ("Aarohan" – the one who sets things in motion).
  * Accessible to: checker, esg_manager, group_admin, system_admin (ai:review permission).
