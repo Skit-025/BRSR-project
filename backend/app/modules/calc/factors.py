@@ -108,8 +108,42 @@ FUEL_EMISSION_FACTORS: Dict[str, Dict[str, Any]] = {
         "source": "MoPNG PPAC 2023 / MoEFCC",
         "indian_grade": "CNG (IS-15989)",
     },
-    # ── Coal Grades (CEA / Ministry of Coal) ─────────────────────────────
-    # Coal grades are critical — Director explicitly asked for separation
+    "gas_cng": {
+        "unit": "kg",
+        "factor": Decimal("0.00221"),
+        "net_calorific_value_gj_per_unit": Decimal("0.04800"),
+        "source": "MoPNG PPAC 2023 / MoEFCC",
+        "indian_grade": "CNG (IS-15989)",
+    },
+    "gas_png": {
+        "unit": "scm",
+        "factor": Decimal("0.00203"),
+        "net_calorific_value_gj_per_unit": Decimal("0.03850"),
+        "source": "MoPNG PPAC 2023 / CEA",
+        "indian_grade": "PNG (R-LNG/APM)",
+    },
+    "gas_lpg": {
+        "unit": "kg",
+        "factor": Decimal("0.00298"),
+        "net_calorific_value_gj_per_unit": Decimal("0.04731"),
+        "source": "BEE PAT Manual 2023 / MoPNG PPAC",
+        "indian_grade": "LPG (IS-4576)",
+    },
+    "diesel_hsd": {
+        "unit": "litres",
+        "factor": Decimal("0.00268"),
+        "net_calorific_value_gj_per_unit": Decimal("0.03576"),
+        "source": "BEE PAT Manual 2023 / MoPNG PPAC",
+        "indian_grade": "HSD (IS-1460)",
+    },
+    "diesel_ldo": {
+        "unit": "litres",
+        "factor": Decimal("0.00260"),
+        "net_calorific_value_gj_per_unit": Decimal("0.03624"),
+        "source": "BEE PAT Manual 2023",
+        "indian_grade": "LDO (IS-15770)",
+    },
+    # ── Coal Grades (CEA / Ministry of Coal / MoEFCC) ────────────────────
     "coal": {
         "unit": "mt",
         "factor": Decimal("1.85"),               # Bituminous default (backward compat)
@@ -117,12 +151,33 @@ FUEL_EMISSION_FACTORS: Dict[str, Dict[str, Any]] = {
         "source": "CEA / Ministry of Coal 2023",
         "indian_grade": "Bituminous (Grade D/E)",
     },
+    "coal_ant": {
+        "unit": "mt",
+        "factor": Decimal("2.62"),               # tCO2e/MT (2.62 kgCO2e/kg)
+        "net_calorific_value_gj_per_unit": Decimal("28.00"),
+        "source": "MoEFCC / IPCC AR4 India — Anthracite",
+        "indian_grade": "Anthracite Coal (High Rank)",
+    },
+    "anthracite": {
+        "unit": "mt",
+        "factor": Decimal("2.62"),
+        "net_calorific_value_gj_per_unit": Decimal("28.00"),
+        "source": "MoEFCC / IPCC AR4 India — Anthracite",
+        "indian_grade": "Anthracite Coal (High Rank)",
+    },
+    "coal_bit": {
+        "unit": "mt",
+        "factor": Decimal("2.35"),               # tCO2e/MT (2.35 kgCO2e/kg)
+        "net_calorific_value_gj_per_unit": Decimal("20.50"),
+        "source": "MoEFCC / CEA 2023 — Bituminous",
+        "indian_grade": "Bituminous Coal (IS-11893)",
+    },
     "coal_bituminous": {
         "unit": "mt",
-        "factor": Decimal("1.85"),               # tCO2e/MT — Grade D/E (most common in India)
-        "net_calorific_value_gj_per_unit": Decimal("18.80"),
-        "source": "CEA / Ministry of Coal 2023 — Bituminous Grade D/E",
-        "indian_grade": "Bituminous Coal (Grade D/E — IS-11893)",
+        "factor": Decimal("2.35"),               # tCO2e/MT
+        "net_calorific_value_gj_per_unit": Decimal("20.50"),
+        "source": "MoEFCC / CEA 2023 — Bituminous",
+        "indian_grade": "Bituminous Coal (IS-11893)",
     },
     "coal_grade_a": {                            # Premium grade (rare in Indian power sector)
         "unit": "mt",
@@ -145,10 +200,17 @@ FUEL_EMISSION_FACTORS: Dict[str, Dict[str, Any]] = {
         "source": "CEA / Ministry of Coal 2023 — Grade F",
         "indian_grade": "Non-Coking Coal Grade F (2400–3400 kcal/kg)",
     },
+    "coal_lig": {
+        "unit": "mt",
+        "factor": Decimal("1.55"),               # tCO2e/MT (1.55 kgCO2e/kg)
+        "net_calorific_value_gj_per_unit": Decimal("11.50"),
+        "source": "CEA / NLC India / MoEFCC 2023",
+        "indian_grade": "Lignite / Brown Coal",
+    },
     "lignite": {
         "unit": "mt",
-        "factor": Decimal("1.10"),               # tCO2e/MT
-        "net_calorific_value_gj_per_unit": Decimal("9.80"),
+        "factor": Decimal("1.55"),               # tCO2e/MT
+        "net_calorific_value_gj_per_unit": Decimal("11.50"),
         "source": "CEA / NLC India / MoEFCC 2023",
         "indian_grade": "Lignite (Tamil Nadu / Rajasthan deposits)",
     },
@@ -174,7 +236,35 @@ FUEL_EMISSION_FACTORS: Dict[str, Dict[str, Any]] = {
         "source": "IPCC 2006 / DGCA India",
         "indian_grade": "ATF (IS-1571)",
     },
+    "coal_anthracite": {
+        "unit": "mt",
+        "factor": Decimal("2.62"),
+        "net_calorific_value_gj_per_unit": Decimal("28.00"),
+        "source": "MoEFCC / IPCC AR4 India — Anthracite Coal",
+        "indian_grade": "Anthracite Coal (High Rank)",
+    },
+    "coal_noncoking": {
+        "unit": "mt",
+        "factor": Decimal("1.66"),
+        "net_calorific_value_gj_per_unit": Decimal("14.50"),
+        "source": "CEA / Ministry of Coal 2023 — Non-Coking Grade E",
+        "indian_grade": "Non-Coking Coal Grade E / Pit-Grade",
+    },
+    "coal_pit_grade": {
+        "unit": "mt",
+        "factor": Decimal("1.66"),
+        "net_calorific_value_gj_per_unit": Decimal("14.50"),
+        "source": "CEA / Ministry of Coal 2023 — Non-Coking Pit-Grade",
+        "indian_grade": "Non-Coking Coal Grade E / Pit-Grade",
+    },
     # ── Fugitive Emission Factors (AR4 GWP — MoEFCC India uses IPCC AR4) ─
+    "r22": {
+        "unit": "kg",
+        "factor": Decimal("1.810"),
+        "net_calorific_value_gj_per_unit": Decimal("0"),
+        "source": "IPCC AR4 — GWP 100yr (1810) / MoEFCC India",
+        "indian_grade": "HCFC-22 (Refrigerant)",
+    },
     "r22_refrigerant": {
         "unit": "kg",
         "factor": Decimal("1.810"),              # tCO2e/kg (GWP: 1810)
@@ -182,12 +272,26 @@ FUEL_EMISSION_FACTORS: Dict[str, Dict[str, Any]] = {
         "source": "IPCC AR4 — GWP 100yr / MoEFCC India",
         "indian_grade": "HCFC-22 (Refrigerant)",
     },
+    "r32": {
+        "unit": "kg",
+        "factor": Decimal("0.675"),
+        "net_calorific_value_gj_per_unit": Decimal("0"),
+        "source": "IPCC AR4 — GWP 100yr (675) / MoEFCC India",
+        "indian_grade": "HFC-32 (Refrigerant)",
+    },
     "r32_refrigerant": {
         "unit": "kg",
         "factor": Decimal("0.675"),              # tCO2e/kg (GWP: 675)
         "net_calorific_value_gj_per_unit": Decimal("0"),
         "source": "IPCC AR4 / MoEFCC India",
         "indian_grade": "HFC-32 (Refrigerant)",
+    },
+    "r410a": {
+        "unit": "kg",
+        "factor": Decimal("2.088"),
+        "net_calorific_value_gj_per_unit": Decimal("0"),
+        "source": "IPCC AR4 — GWP 100yr (2088) / MoEFCC India",
+        "indian_grade": "HFC-410A (AC Refrigerant)",
     },
     "r410a_refrigerant": {
         "unit": "kg",
@@ -200,7 +304,14 @@ FUEL_EMISSION_FACTORS: Dict[str, Dict[str, Any]] = {
         "unit": "kg",
         "factor": Decimal("22.800"),             # tCO2e/kg (GWP: 22,800)
         "net_calorific_value_gj_per_unit": Decimal("0"),
-        "source": "IPCC AR4 / MoEFCC India",
+        "source": "IPCC AR4 — GWP 100yr (22800) / MoEFCC India",
+        "indian_grade": "SF6 (Sulphur Hexafluoride — HV Switchgear)",
+    },
+    "sf6_switchgear": {
+        "unit": "kg",
+        "factor": Decimal("22.800"),
+        "net_calorific_value_gj_per_unit": Decimal("0"),
+        "source": "IPCC AR4 — GWP 100yr (22800) / MoEFCC India",
         "indian_grade": "SF6 (Sulphur Hexafluoride — HV Switchgear)",
     },
 }

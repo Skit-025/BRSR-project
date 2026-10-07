@@ -79,3 +79,23 @@ class CustomEmissionFactor(Base, TimestampMixin, SoftDeleteMixin):
     unit = Column(String(50), nullable=False)           # "tCO2e/MWh", "tCO2e/kL"
     source_reference = Column(String(255), nullable=True)
     is_verified = Column(Numeric(1, 0), default=0)
+
+
+class EmissionFactor(Base, UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin):
+    """
+    Standard Government-approved Emission Factors (CEA, BEE, MoPNG, MoEFCC).
+    Supports versioning, Indian context citation, and granular fuel sub-types.
+    Matches Director's required catalog:
+    COAL-ANT, COAL-BIT, COAL-LIG, DIESEL-HSD, DIESEL-LDO,
+    GAS-CNG, GAS-PNG, GAS-LPG, PETROL, GRID-CEA, TRAVEL-FLIGHT.
+    """
+    __tablename__ = "emission_factors"
+
+    code = Column(String(50), unique=True, index=True, nullable=False)     # e.g. "DIESEL-HSD"
+    category = Column(String(50), nullable=False, index=True)             # "Coal", "Diesel", "Gas", "Electricity", "Travel"
+    subtype = Column(String(100), nullable=False)                          # "High Speed Diesel", "Anthracite"
+    unit = Column(String(50), nullable=False)                              # "L", "kg", "kWh", "passenger-km"
+    co2e_factor = Column(Numeric(precision=20, scale=8), nullable=False)  # value per unit
+    source = Column(String(255), nullable=False)                           # "BEE / MoPNG 2023"
+    effective_year = Column(String(20), default="2023-24", nullable=False)
+    is_active = Column(Boolean, default=True, nullable=False)

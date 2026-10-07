@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { 
   Building2, ChevronRight, Plus, Calendar, Layers, 
   Globe, AlertCircle, CheckCircle2, X, RefreshCw, Filter, Search, Lock, Unlock,
-  Info, Eye, ExternalLink, ShieldCheck, Clock, FileText, Edit3, ShieldAlert
+  Info, Eye, ExternalLink, ShieldCheck, Clock, FileText, Edit3, ShieldAlert, Sparkles
 } from 'lucide-react';
 import { useOrgNodes, useOrgPeriods, useCreateNode, useCreatePeriod, useUpdateNode, useUpdatePeriod } from '../hooks/useApi';
 import { useAuth } from '../context/AuthContext';
@@ -10,13 +10,12 @@ import { authApi } from '../api/client';
 import Modal from '../components/Modal';
 
 const NODE_TYPES = [
-  { value: 'group', label: 'Group (Level 1)', cls: 'badge-brand' },
-  { value: 'subsidiary', label: 'Subsidiary (Level 2)', cls: 'badge-emerald' },
-  { value: 'associate', label: 'Associate Entity (Level 3)', cls: 'badge-sky' },
-  { value: 'jv', label: 'Joint Venture / JV (Level 4)', cls: 'badge-amber' },
-  { value: 'business_unit', label: 'Business Unit / BU (Level 5)', cls: 'badge-indigo' },
-  { value: 'project', label: 'Project (Level 6)', cls: 'badge-purple' },
-  { value: 'site', label: 'Operational Site (Level 7)', cls: 'badge-teal' },
+  { value: 'group', label: 'Group (Level 1 Root)', cls: 'badge-brand' },
+  { value: 'company', label: 'Company (Level 2)', cls: 'badge-emerald' },
+  { value: 'business_unit', label: 'Business Unit / BU (Level 3)', cls: 'badge-indigo' },
+  { value: 'project', label: 'Project (Level 4 - Data Entry)', cls: 'badge-purple' },
+  { value: 'subsidiary', label: 'Subsidiary (Legacy Company)', cls: 'badge-emerald' },
+  { value: 'site', label: 'Operational Site (Legacy Project)', cls: 'badge-teal' },
 ];
 
 const PROJECT_TYPES = [
@@ -69,9 +68,66 @@ export default function OrgHierarchy() {
     control_type: 'operational_control',
     boundary: true,
     project_type: 'corporate',
+    project_description: '',
     location_state: '',
     location_country: 'India',
   });
+
+  const [classificationResult, setClassificationResult] = useState(null);
+
+  const runClassifier = (text) => {
+    if (!text || !text.trim()) return;
+    const lower = text.toLowerCase();
+    let matchedType = 'corporate';
+    let template = 'GENERAL_OPERATIONS_V1';
+    let activities = ['Office operations', 'IT equipment', 'Business travel'];
+    let params = 8;
+
+    if (lower.includes('tunnel') || lower.includes('boring') || lower.includes('shotcrete') || lower.includes('underground')) {
+      matchedType = 'tunnel';
+      template = 'HIGHWAY_TUNNEL_CONSTRUCTION_V1';
+      activities = ['Tunnel Boring', 'Shotcrete', 'Heavy Diesel Excavators', 'Rock Blasting', 'Ventilation'];
+      params = 14;
+    } else if (lower.includes('irrigation') || lower.includes('canal') || lower.includes('pump') || lower.includes('lift')) {
+      matchedType = 'irrigation';
+      template = 'LIFT_IRRIGATION_V1';
+      activities = ['Canal Excavation', 'Pumping Station', 'High-Voltage Grid', 'Earthworks'];
+      params = 12;
+    } else if (lower.includes('solar') || lower.includes('pv') || lower.includes('inverter') || lower.includes('renewable')) {
+      matchedType = 'solar';
+      template = 'SOLAR_PLANT_OPS_V1';
+      activities = ['Module Cleaning (Water)', 'Grid Inverters', 'Vegetation Control', 'Substation'];
+      params = 9;
+    } else if (lower.includes('road') || lower.includes('highway') || lower.includes('expressway') || lower.includes('paving') || lower.includes('bridge')) {
+      matchedType = 'road';
+      template = 'ROAD_CONSTRUCTION_V1';
+      activities = ['Earthmoving', 'Hot Mix Asphalt', 'Compaction', 'Water Spraying'];
+      params = 13;
+    } else if (lower.includes('bus') || lower.includes('ev') || lower.includes('fleet') || lower.includes('depot')) {
+      matchedType = 'ev_bus';
+      template = 'EV_BUS_MOBILITY_V1';
+      activities = ['EV Fleet Charging', 'Depot Maintenance', 'Battery Handling', 'Driver Training'];
+      params = 10;
+    } else if (lower.includes('oil') || lower.includes('gas') || lower.includes('lng') || lower.includes('refinery') || lower.includes('hydrocarbon')) {
+      matchedType = 'hydrocarbon';
+      template = 'HYDROCARBON_OPS_V1';
+      activities = ['Drilling', 'Pipeline', 'Flaring / Venting', 'Fuel Storage', 'Effluent Treatment'];
+      params = 18;
+    }
+
+    setClassificationResult({
+      project_type: matchedType,
+      template,
+      activities,
+      params
+    });
+
+    setNodeForm(prev => ({
+      ...prev,
+      project_type: matchedType,
+      project_description: text.trim(),
+    }));
+  };
 
   // Period form
   const [periodForm, setPeriodForm] = useState({
@@ -241,14 +297,17 @@ export default function OrgHierarchy() {
   });
 
   return (
-    <div className="page-content anim-fade">
+    <div className="page-content anim-fade-up">
       {/* Page Header */}
       <div className="page-header">
         <div>
-          <div className="page-tag">ENTERPRISE STRUCTURE & AUDIT BOUNDARY</div>
+          <div className="page-tag" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <span className="status-beacon-live" style={{ marginRight: 2 }} />
+            ENTERPRISE STRUCTURE &amp; AUDIT BOUNDARY
+          </div>
           <h1 className="page-title">7-Tier Organization Hierarchy & Reporting Periods</h1>
           <p className="page-subtitle">
-            Define corporate nodes, subsidiaries, projects, and operational reporting periods across MEIL Group.
+            Define corporate nodes, subsidiaries, projects, and operational reporting periods across Aarohan Group.
           </p>
         </div>
         <div className="header-actions">
@@ -521,7 +580,7 @@ export default function OrgHierarchy() {
                       </div>
                       <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: 16, lineHeight: 1.5 }}>
                         {nodeList.length === 0 
-                          ? 'Start by creating your Root Group Entity (e.g. MEIL-GROUP) or subsidiary units to establish statutory audit boundaries.'
+                          ? 'Start by creating your Root Group Entity (e.g. AAROHAN-GROUP) or subsidiary units to establish statutory audit boundaries.'
                           : 'Try changing your search term or filtering options.'}
                       </p>
                       {nodeList.length === 0 && (
@@ -630,7 +689,7 @@ export default function OrgHierarchy() {
                 <div>
                   <h3 style={{ fontSize: '16px', color: '#fff' }}>Add Organization Unit</h3>
                   <p style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-                    Create a new node within MEIL's 7-tier hierarchy structure
+                    Create a new node within Aarohan's 7-tier hierarchy structure
                   </p>
                 </div>
               </div>
@@ -652,7 +711,7 @@ export default function OrgHierarchy() {
                 <input
                   type="text"
                   className="form-control"
-                  placeholder="e.g. MEIL-HYDRO-02, PRJ-KALESH-PUMP, SITE-04"
+                  placeholder="e.g. AAROHAN-SOLAR-02, PRJ-SOLAR-PARK, SITE-04"
                   value={nodeForm.code}
                   onChange={(e) => setNodeForm({ ...nodeForm, code: e.target.value })}
                   required
@@ -700,6 +759,60 @@ export default function OrgHierarchy() {
                   </select>
                 </div>
               </div>
+
+              {(nodeForm.type === 'project' || nodeForm.type === 'site') && (
+                <div style={{
+                  margin: '14px 0', padding: '14px 16px', background: 'linear-gradient(135deg, #f8faff, #f0fdf4)',
+                  border: '1px solid #c7d2fe', borderRadius: 10
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700, color: '#4338ca' }}>
+                      <Sparkles size={14} />
+                      <span>Smart Project Classification Engine (Spec §6)</span>
+                    </div>
+                    <span style={{ fontSize: 10, color: '#6366f1', fontWeight: 600 }}>AI / Rule-Assisted</span>
+                  </div>
+                  <div className="form-group" style={{ marginBottom: 10 }}>
+                    <label style={{ fontSize: 11 }}>Project Operational Activities</label>
+                    <textarea
+                      rows={2}
+                      className="form-control"
+                      placeholder="e.g. 14km high-altitude twin tube tunnel excavation, shotcrete, rock blasting with DG sets..."
+                      value={nodeForm.project_description || ''}
+                      onChange={(e) => {
+                        setNodeForm({ ...nodeForm, project_description: e.target.value });
+                        runClassifier(e.target.value);
+                      }}
+                    />
+                    <span className="form-help">Type project activities to automatically match templates and pre-select applicable ESG indicators.</span>
+                  </div>
+                  {classificationResult && (
+                    <div style={{
+                      padding: '10px 14px', background: '#ffffff', borderRadius: 8,
+                      border: '1px solid #e0e7ff', fontSize: 12
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                        <span style={{ fontWeight: 700, color: '#059669' }}>
+                          ✓ Matched Template: <code>{classificationResult.template}</code>
+                        </span>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: '#4338ca', background: '#e0e7ff', padding: '1px 6px', borderRadius: 99 }}>
+                          {classificationResult.params} parameters
+                        </span>
+                      </div>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                        {classificationResult.activities.map((act, i) => (
+                          <span key={i} style={{
+                            fontSize: 10, padding: '2px 6px', borderRadius: 4,
+                            background: '#ecfdf5', color: '#065f46', border: '1px solid #a7f3d0', fontWeight: 600
+                          }}>
+                            {act}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
                 <div className="form-group">

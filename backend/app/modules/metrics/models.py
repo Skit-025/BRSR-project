@@ -2,12 +2,34 @@ import enum
 from sqlalchemy import Column, String, Integer, Boolean, Text, ForeignKey, JSON
 from app.db.base import Base, UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin
 
+
+class EntryLevel(str, enum.Enum):
+    """Defines at which org hierarchy level this metric's raw data is entered."""
+    PROJECT    = "project"       # Site engineer enters (raw fuel, electricity, waste)
+    BU         = "business_unit" # BU finance/HR enters (business travel, commuting)
+    SUBSIDIARY = "subsidiary"    # Subsidiary admin enters (Section A/B, purchased goods)
+    GROUP      = "group"         # No manual entry — pure aggregation from children
+
 class AggregationType(str, enum.Enum):
     SUM = "sum"
-    RATIO = "ratio"
+    COUNT = "count"
+    AVERAGE = "average"
+    WEIGHTED_AVERAGE = "weighted_average"
     WEIGHTED_PCT = "weighted_pct"
+    RATIO = "ratio"
+    DERIVED = "derived"
+    MIN = "min"
+    MAX = "max"
     LATEST = "latest"
     NON_AGGREGABLE = "non_aggregable"
+    NOT_AGGREGATABLE = "not_aggregatable"
+
+class CalculationRole(str, enum.Enum):
+    RAW_INPUT = "raw_input"
+    DERIVED = "derived"
+    CALCULATED = "calculated"
+    AGGREGATED = "aggregated"
+    REPORTED = "reported"
 
 class IndicatorType(str, enum.Enum):
     ESSENTIAL = "essential"
@@ -54,5 +76,13 @@ class Metric(Base, UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin):
     evidence_rule = Column(String(50), default=EvidenceRule.MANDATORY.value, nullable=False)
     frequency = Column(String(50), default="monthly", nullable=False)
     owner_role = Column(String(50), default="maker", nullable=False)
+
+    # Entry level routing — which org level is responsible for entering this metric's raw data
+    entry_level = Column(String(50), default=EntryLevel.PROJECT.value, nullable=False, index=True)
+
+    # UI Guidance Cards — shown to data entry users so they know what to enter and why
+    guidance_text = Column(Text, nullable=True)   # Plain-language description of what to enter
+    why_needed = Column(Text, nullable=True)       # Regulatory / audit reason this is required
+    document_hint = Column(Text, nullable=True)    # "Upload your IOCL fuel delivery challan or DG logbook"
 
     calc_formula_code = Column(String(100), nullable=True)

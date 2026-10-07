@@ -111,3 +111,47 @@ class AdminUpdateUserRequest(BaseModel):
     new_password: Optional[str] = None
     admin_password: Optional[str] = None
 
+
+class UserInvitationRequest(BaseModel):
+    email: EmailStr
+    full_name: str
+    role: str
+    org_node_id: Optional[str] = None
+    phone: Optional[str] = None
+
+
+class UserInvitationRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    email: str
+    full_name: str
+    role: str
+    org_node_id: Optional[str] = None
+    invited_by_id: str
+    status: str
+    invitation_token: str
+    expires_at: datetime
+    created_at: Optional[datetime] = None
+
+
+class AdminDeactivateUserRequest(BaseModel):
+    reason: Optional[str] = "Administrative deactivation"
+    preserve_records: bool = True
+
+
+class AdminAuditEntryRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    actor_id: Optional[str] = None
+    actor_name: str
+    actor_role: str
+    action: str
+    target_user_id: Optional[str] = None
+    target_name: Optional[str] = None
+    target_role: Optional[str] = None
+    target_scope_id: Optional[str] = None
+    created_at: Optional[datetime] = None
+
+

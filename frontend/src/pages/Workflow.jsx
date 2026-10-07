@@ -1,8 +1,10 @@
 import React, { useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   GitBranch, CheckCircle, XCircle, Clock, RefreshCw,
   User, MessageSquare, Lock, TrendingUp, Activity,
-  BarChart2, PieChart as PieIcon, AlertTriangle, Send
+  BarChart2, PieChart as PieIcon, AlertTriangle, Send,
+  ChevronRight, Building2, FileText, Paperclip, Eye
 } from 'lucide-react';
 import {
   PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer,
@@ -10,23 +12,24 @@ import {
   LineChart, Line, Area, AreaChart
 } from 'recharts';
 import { useWorkflowQueue, useReviewSubmission } from '../hooks/useApi';
-import { workflowApi } from '../api/client';
+import { workflowApi, collectionApi } from '../api/client';
 import { useQueryClient } from '@tanstack/react-query';
+import { useAuth } from '../context/AuthContext';
 
 const STATUS_STYLES = {
-  DRAFT:               { label: 'Draft',           color: '#64748b', bg: 'rgba(100,116,139,0.15)' },
-  SUBMITTED:           { label: 'Submitted',       color: '#f59e0b', bg: 'rgba(245,158,11,0.15)' },
-  UNDER_BU_REVIEW:     { label: 'BU Review',       color: '#38bdf8', bg: 'rgba(56,189,248,0.15)' },
-  BU_APPROVED:         { label: 'BU Approved',     color: '#10b981', bg: 'rgba(16,185,129,0.15)' },
-  SUBSIDIARY_APPROVED: { label: 'Sub. Approved',   color: '#6366f1', bg: 'rgba(99,102,241,0.15)' },
-  CONSOLIDATED:        { label: 'Consolidated',    color: '#a78bfa', bg: 'rgba(167,139,250,0.15)' },
-  RETURNED:            { label: 'Returned',        color: '#ef4444', bg: 'rgba(239,68,68,0.15)' },
+  DRAFT:               { label: 'Draft',           color: '#475569', bg: '#f1f5f9' },
+  SUBMITTED:           { label: 'Submitted',       color: '#b45309', bg: '#fef3c7' },
+  UNDER_BU_REVIEW:     { label: 'BU Review',       color: '#0369a1', bg: '#e0f2fe' },
+  BU_APPROVED:         { label: 'BU Approved',     color: '#15803d', bg: '#dcfce7' },
+  SUBSIDIARY_APPROVED: { label: 'Sub. Approved',   color: '#1e293b', bg: '#e2e8f0' },
+  CONSOLIDATED:        { label: 'Consolidated',    color: '#4338ca', bg: '#e0e7ff' },
+  RETURNED:            { label: 'Returned',        color: '#b91c1c', bg: '#fee2e2' },
 };
 
 const STATUS_COLORS = {
-  DRAFT: '#64748b', SUBMITTED: '#f59e0b', UNDER_BU_REVIEW: '#38bdf8',
-  BU_APPROVED: '#10b981', SUBSIDIARY_APPROVED: '#6366f1',
-  CONSOLIDATED: '#a78bfa', RETURNED: '#ef4444',
+  DRAFT: '#64748b', SUBMITTED: '#f59e0b', UNDER_BU_REVIEW: '#0284c7',
+  BU_APPROVED: '#10b981', SUBSIDIARY_APPROVED: '#1e293b',
+  CONSOLIDATED: '#6366f1', RETURNED: '#ef4444',
 };
 
 // Custom tooltip for pie chart
@@ -71,7 +74,9 @@ const PIPELINE_STAGES = [
 ];
 
 export default function Workflow() {
+  const navigate = useNavigate();
   const qc = useQueryClient();
+  const { user } = useAuth();
   const { data: queue = [], isLoading, refetch, isRefetching } = useWorkflowQueue();
   const reviewMutation = useReviewSubmission();
 
@@ -81,6 +86,8 @@ export default function Workflow() {
   const [lockingPeriod, setLockingPeriod] = useState('');
   const [notice, setNotice]               = useState(null);
   const [activeTab, setActiveTab]         = useState('overview');
+  const [packDetail, setPackDetail]       = useState(null);  // loaded data points for selected pack
+  const [loadingDetail, setLoadingDetail] = useState(false);
 
   // ── Derived analytics from queue data ──────────────────────────
   const statusCounts = useMemo(() => {
@@ -133,24 +140,49 @@ export default function Workflow() {
   [statusCounts]);
 
   // ── Actions ─────────────────────────────────────────────────────
-  const handleReview = async (action) => {
-    if (!selected) return;
+  const handleReview = async (decision) => {
+    if (!selected || !user?.id) return;
     setNotice(null);
+    // Backend expects uppercase enum values: APPROVE → ReviewDecision.APPROVE
+    const backendDecision = decision === 'approve' ? 'APPROVE' : decision === 'return' ? 'RETURN' : decision.toUpperCase();
     try {
       await reviewMutation.mutateAsync({
         submissionId: selected.submission_id,
-        data: { action, comments: reviewComment },
+        data: {
+          decision: backendDecision,
+          reviewer_id: user.id,
+          comment: reviewComment,
+        },
       });
       setNotice({
         type: 'success',
-        text: `Pack ${action === 'approve' ? 'APPROVED ✓' : 'RETURNED ↩'} successfully. Immutable audit trail recorded.`,
+        text: `Pack ${backendDecision === 'APPROVE' ? 'APPROVED ✓' : 'RETURNED ↩'} successfully. Segregation of Duties validated. Automated calculation & boundary consolidation triggered!`,
+        action: backendDecision
       });
       setSelected(null);
+      setPackDetail(null);
       setReviewComment('');
       setReviewAction('');
       refetch();
     } catch (err) {
       setNotice({ type: 'error', text: err.response?.data?.detail || 'Review action failed.' });
+    }
+  };
+
+  // Load data-point detail for a submission (drill-down §15, §29)
+  const loadPackDetail = async (item) => {
+    setSelected(item);
+    setPackDetail(null);
+    setReviewComment('');
+    if (!item.entity_id || !item.period_id) return;
+    setLoadingDetail(true);
+    try {
+      const res = await collectionApi.getPack(item.entity_id, item.period_id);
+      setPackDetail(res.data);
+    } catch (e) {
+      setPackDetail(null);
+    } finally {
+      setLoadingDetail(false);
     }
   };
 
@@ -179,78 +211,126 @@ export default function Workflow() {
   ];
 
   return (
-    <div className="page-content anim-fade">
+    <div className="page-content anim-fade-up" style={{ background: '#f8fafc' }}>
+      {/* ── Status Ticker ── */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 16, marginBottom: 8,
+        fontSize: 11, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+        fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#64748b'
+      }}>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: '#15803d' }}>
+          <span className="status-beacon-live" style={{ marginRight: 2 }} />
+          REVIEW QUEUE ACTIVE
+        </span>
+        <span style={{ color: '#cbd5e1' }}>/</span>
+        <span>FOUR-EYES MAKER-CHECKER SOD ENFORCED</span>
+      </div>
+
       {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
         <div>
-          <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--brand-400)', letterSpacing: '1.5px', textTransform: 'uppercase', marginBottom: '4px' }}>
-            FOUR-EYES MAKER-CHECKER
-          </div>
-          <h1 style={{ fontSize: '24px', fontWeight: '700', color: 'var(--text-primary)', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <GitBranch size={24} color="var(--brand-400)" />
-            Workflow & Approval Engine
+          <h1 style={{ fontSize: '26px', fontWeight: 700, color: '#09090b', margin: 0, letterSpacing: '-0.02em', display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <GitBranch size={24} color="#09090b" />
+            Reviews &amp; Workflow Engine
           </h1>
-          <p style={{ color: 'var(--text-secondary)', fontSize: '13px', margin: '4px 0 0 0' }}>
-            SoD-enforced approval queue, period locking, and immutable audit trail.
+          <p style={{ color: '#64748b', fontSize: '13px', margin: '4px 0 0 0' }}>
+            Segregation of duties (SoD) enforced approval queue, BU aggregations, and immutable period locks.
           </p>
         </div>
         <button
           onClick={() => refetch()}
           disabled={isRefetching}
           className="btn btn-secondary"
-          style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '7px 14px' }}
+          style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '7px 14px', borderRadius: 6, border: '1px solid #e2e8f0', background: '#fff', color: '#09090b', fontWeight: 600 }}
         >
           <RefreshCw size={13} className={isRefetching ? 'spin' : ''} />
-          Refresh
+          Refresh Queue
         </button>
       </div>
 
       {/* Notice */}
       {notice && (
         <div style={{
-          padding: '12px 16px', borderRadius: '8px', marginBottom: '20px', fontSize: '13px', fontWeight: 600,
-          background: notice.type === 'success' ? 'rgba(16,185,129,0.12)' : 'rgba(239,68,68,0.12)',
-          color: notice.type === 'success' ? '#10b981' : '#ef4444',
-          border: `1px solid ${notice.type === 'success' ? '#10b981' : '#ef4444'}`,
+          padding: '12px 16px', borderRadius: '6px', marginBottom: '20px', fontSize: '13px', fontWeight: 600,
+          background: notice.type === 'success' ? '#f0fdf4' : '#fef2f2',
+          color: notice.type === 'success' ? '#15803d' : '#b91c1c',
+          border: `1px solid ${notice.type === 'success' ? '#bbf7d0' : '#fca5a5'}`,
           display: 'flex', justifyContent: 'space-between', alignItems: 'center',
         }}>
-          <span>{notice.text}</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <span>{notice.text}</span>
+            {notice.action === 'APPROVE' && (
+              <button
+                onClick={() => navigate('/consolidation')}
+                style={{
+                  padding: '5px 12px',
+                  borderRadius: 6,
+                  border: 'none',
+                  background: '#15803d',
+                  color: '#fff',
+                  fontSize: 12,
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap'
+                }}
+              >
+                Inspect Calculation Pipeline →
+              </button>
+            )}
+          </div>
           <button onClick={() => setNotice(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'inherit', fontSize: '16px' }}>×</button>
         </div>
       )}
 
-      {/* KPI Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '12px', marginBottom: '20px' }}>
+      {/* KPI Cards — Matching Reference */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '14px', marginBottom: '20px' }}>
         {[
-          { label: 'Total Packs',    value: totalPacks,    color: 'var(--brand-400)', icon: <Activity size={18} /> },
-          { label: 'Pending Review', value: pendingCount,  color: '#f59e0b',          icon: <Clock size={18} /> },
-          { label: 'Approved',       value: approvedCount, color: '#10b981',          icon: <CheckCircle size={18} /> },
-          { label: 'Returned',       value: returnedCount, color: '#ef4444',          icon: <XCircle size={18} /> },
-        ].map(({ label, value, color, icon }) => (
-          <div key={label} style={{ background: 'var(--bg-card)', borderRadius: '12px', border: '1px solid var(--border-default)', padding: '16px', display: 'flex', alignItems: 'center', gap: '14px' }}>
-            <div style={{ width: 40, height: 40, borderRadius: '10px', background: `${color}18`, display: 'flex', alignItems: 'center', justifyContent: 'center', color, flexShrink: 0 }}>
-              {icon}
+          { label: 'TOTAL SUBMISSIONS', value: totalPacks, badge: `${totalPacks} registered`, badgeType: 'gray', sub: 'Across active entities' },
+          { label: 'PENDING BU REVIEW', value: pendingCount, badge: pendingCount > 0 ? `${pendingCount} urgent` : '0 backlog', badgeType: pendingCount > 0 ? 'red' : 'green', sub: 'Maker-Checker gate' },
+          { label: 'APPROVED PACKS',    value: approvedCount, badge: 'Validated', badgeType: 'green', sub: 'Ready for aggregation' },
+          { label: 'RETURNED FOR EDIT', value: returnedCount, badge: returnedCount > 0 ? 'Action req.' : 'All clear', badgeType: returnedCount > 0 ? 'red' : 'gray', sub: 'Correction required' },
+        ].map((kpi) => (
+          <div key={kpi.label} style={{
+            background: '#ffffff', borderRadius: '8px', border: '1px solid #e2e8f0',
+            padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: '8px',
+            boxShadow: '0 1px 2px rgba(0,0,0,0.02)'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ fontSize: '11px', fontWeight: 600, color: '#64748b', fontFamily: 'ui-monospace, monospace', letterSpacing: '0.04em' }}>
+                {kpi.label}
+              </span>
+              <span style={{
+                fontSize: '11px', fontWeight: 600, padding: '2px 8px', borderRadius: '99px',
+                background: kpi.badgeType === 'green' ? '#dcfce7' : kpi.badgeType === 'red' ? '#fee2e2' : '#f1f5f9',
+                color: kpi.badgeType === 'green' ? '#15803d' : kpi.badgeType === 'red' ? '#b91c1c' : '#475569',
+                fontFamily: 'ui-monospace, monospace'
+              }}>
+                {kpi.badge}
+              </span>
             </div>
-            <div>
-              <div style={{ fontSize: '26px', fontWeight: 800, color: 'var(--text-primary)', lineHeight: 1 }}>{value}</div>
-              <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '2px' }}>{label}</div>
+            <div style={{ fontSize: '32px', fontWeight: 700, color: '#09090b', fontFamily: 'Inter, sans-serif', letterSpacing: '-0.02em', lineHeight: 1 }}>
+              <span style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>{kpi.value}</span>
+            </div>
+            <div style={{ fontSize: '11.5px', color: '#64748b', marginTop: 'auto' }}>
+              {kpi.sub}
             </div>
           </div>
         ))}
       </div>
 
       {/* Tabs */}
-      <div style={{ display: 'flex', gap: '4px', marginBottom: '20px', background: 'var(--bg-card)', padding: '4px', borderRadius: '10px', border: '1px solid var(--border-default)' }}>
+      <div style={{ display: 'flex', gap: '6px', marginBottom: '20px', background: '#ffffff', padding: '4px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
         {tabs.map((t) => (
           <button
             key={t.key}
             onClick={() => setActiveTab(t.key)}
             style={{
-              flex: 1, padding: '8px 12px', borderRadius: '7px', fontSize: '13px', fontWeight: 600,
+              flex: 1, padding: '8px 14px', borderRadius: '6px', fontSize: '13px', fontWeight: 600,
               border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
-              background: activeTab === t.key ? 'var(--brand-400)' : 'transparent',
-              color: activeTab === t.key ? '#fff' : 'var(--text-secondary)',
-              transition: 'all 0.2s',
+              background: activeTab === t.key ? '#0070F3' : 'transparent',
+              color: activeTab === t.key ? '#ffffff' : '#64748b',
+              boxShadow: activeTab === t.key ? '0 1px 3px rgba(0, 112, 243, 0.25)' : 'none',
+              transition: 'all 0.15s ease',
             }}
           >
             {t.icon} {t.label}
@@ -435,35 +515,45 @@ export default function Workflow() {
                         key={item.submission_id}
                         style={{
                           borderBottom: '1px solid var(--border-default)',
-                          background: isSelected ? 'var(--bg-elevated)' : 'transparent',
+                          background: isSelected ? '#f0f4ff' : 'transparent',
                           transition: 'background 0.15s',
                         }}
                       >
                         <td style={{ padding: '12px 16px', fontFamily: 'monospace', fontSize: '11px', color: 'var(--brand-400)' }}>
                           {item.submission_id?.slice(0, 8)}…
                         </td>
-                        <td style={{ padding: '12px 16px', fontWeight: 600 }}>{item.entity_name || item.entity_id}</td>
-                        <td style={{ padding: '12px 16px', color: 'var(--text-secondary)' }}>{item.period_code || item.period_id?.slice(0, 8)}</td>
+                        <td style={{ padding: '12px 16px' }}>
+                          <div style={{ fontWeight: 700, fontSize: 13, color: '#0f172a' }}>{item.entity_name || item.entity_id}</div>
+                          {item.hierarchy_path && (
+                            <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 2 }}>
+                              <Building2 size={9} style={{ display: 'inline', marginRight: 3 }} />
+                              {item.hierarchy_path}
+                            </div>
+                          )}
+                        </td>
+                        <td style={{ padding: '12px 16px', color: 'var(--text-secondary)', fontSize: 12 }}>{item.period_code || item.period_id?.slice(0, 8)}</td>
                         <td style={{ padding: '12px 16px' }}>
                           <span style={{ padding: '3px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 700, color: s.color, background: s.bg }}>
                             {s.label}
                           </span>
                         </td>
-                        <td style={{ padding: '12px 16px', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                          <User size={12} /> {item.maker_email || 'Maker'}
+                        <td style={{ padding: '12px 16px', color: 'var(--text-secondary)', fontSize: 12 }}>
+                          <User size={11} style={{ display: 'inline', marginRight: 3 }} />
+                          {item.maker_email || 'Maker'}
                         </td>
-                        <td style={{ padding: '12px 16px', color: 'var(--text-secondary)' }}>{item.total_data_points || 0}</td>
+                        <td style={{ padding: '12px 16px', color: 'var(--text-secondary)', fontSize: 12 }}>{item.total_data_points || '—'}</td>
                         <td style={{ padding: '12px 16px', textAlign: 'center' }}>
                           <button
-                            onClick={() => { setSelected(isSelected ? null : item); setReviewComment(''); }}
+                            onClick={() => isSelected ? (setSelected(null), setPackDetail(null)) : loadPackDetail(item)}
                             style={{
-                              padding: '5px 14px', borderRadius: '5px', fontSize: '12px', fontWeight: 600,
-                              background: isSelected ? 'var(--brand-400)' : 'var(--bg-elevated)',
-                              border: `1px solid ${isSelected ? 'var(--brand-400)' : 'var(--border-default)'}`,
-                              color: isSelected ? '#fff' : 'var(--text-primary)', cursor: 'pointer',
+                              padding: '6px 14px', borderRadius: '7px', fontSize: '12px', fontWeight: 700,
+                              background: isSelected ? '#6366f1' : '#f0f4ff',
+                              border: `1px solid ${isSelected ? '#6366f1' : '#c7d2fe'}`,
+                              color: isSelected ? '#fff' : '#4f46e5', cursor: 'pointer',
+                              display: 'inline-flex', alignItems: 'center', gap: 5
                             }}
                           >
-                            {isSelected ? 'Cancel' : 'Review'}
+                            <Eye size={12} />{isSelected ? 'Close' : 'Review'}
                           </button>
                         </td>
                       </tr>
@@ -474,40 +564,134 @@ export default function Workflow() {
             </table>
           </div>
 
-          {/* Review Action Panel */}
+          {/* ── Review Detail Panel (spec §15 — parameter-by-parameter review) ── */}
           {selected && (
-            <div style={{ padding: '20px', background: 'var(--bg-card)', borderRadius: '12px', border: '1px solid var(--brand-400)', animation: 'slideIn 0.2s ease' }}>
-              <h3 style={{ fontSize: '15px', fontWeight: '700', color: 'var(--brand-400)', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <MessageSquare size={16} /> Review Decision — {selected.entity_name} · {selected.period_code}
-              </h3>
-              <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '14px', padding: '8px 12px', background: 'rgba(99,102,241,0.06)', borderRadius: '6px', borderLeft: '3px solid #6366f1' }}>
-                ⚠ SoD Enforced: reviewer must differ from submitter ({selected.maker_email || 'maker'})
-              </p>
+            <div style={{ background: '#fff', borderRadius: 14, border: '2px solid #6366f1', padding: 24, animation: 'fadeIn 0.2s ease' }}>
+              {/* Header */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
+                <div>
+                  <div style={{ fontSize: 11, color: '#6366f1', fontWeight: 700, marginBottom: 4 }}>REVIEW DECISION</div>
+                  <h3 style={{ margin: 0, fontSize: 17, fontWeight: 800, color: '#0f172a' }}>
+                    {selected.entity_name}
+                  </h3>
+                  {selected.hierarchy_path && (
+                    <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 3 }}>
+                      <Building2 size={10} style={{ display: 'inline', marginRight: 4 }} />
+                      {selected.hierarchy_path}
+                    </div>
+                  )}
+                  <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>
+                    Period: <strong>{selected.period_code}</strong> · Status: <strong>{selected.status}</strong>
+                  </div>
+                </div>
+                <button onClick={() => { setSelected(null); setPackDetail(null); }}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', fontSize: 18, padding: 4 }}>×</button>
+              </div>
+
+              {/* SoD notice */}
+              <div style={{ padding: '10px 14px', background: 'rgba(99,102,241,0.06)', borderRadius: 8, borderLeft: '3px solid #6366f1', fontSize: 12, color: '#4f46e5', marginBottom: 18 }}>
+                ⚠ <strong>SoD Enforced:</strong> You must be a different user than the submitter. Violation attempts are logged to the immutable audit trail.
+              </div>
+
+              {/* Data-point breakdown */}
+              <div style={{ marginBottom: 18 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: '#374151', marginBottom: 10 }}>
+                  SUBMITTED DATA POINTS
+                </div>
+                {loadingDetail ? (
+                  <div style={{ textAlign: 'center', padding: '20px', color: '#64748b', fontSize: 12 }}>
+                    <div className="spinner" style={{ margin: '0 auto 8px', width: 24, height: 24 }} />
+                    Loading data points…
+                  </div>
+                ) : packDetail?.data_points?.length > 0 ? (
+                  <div style={{ maxHeight: 300, overflowY: 'auto', border: '1px solid #e2e8f0', borderRadius: 10 }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                      <thead>
+                        <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+                          <th style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 700, color: '#64748b' }}>Metric</th>
+                          <th style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700, color: '#64748b' }}>Value</th>
+                          <th style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 700, color: '#64748b' }}>Unit</th>
+                          <th style={{ padding: '8px 12px', textAlign: 'center', fontWeight: 700, color: '#64748b' }}>Evidence</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {packDetail.data_points.map((dp, i) => (
+                          <tr key={i} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                            <td style={{ padding: '8px 12px', fontWeight: 600, color: '#0f172a' }}>
+                              <div>{dp.metric_code}</div>
+                              {dp.metric_name && <div style={{ fontSize: 10, color: '#94a3b8' }}>{dp.metric_name}</div>}
+                            </td>
+                            <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700, color: '#1e293b' }}>
+                              {dp.value_numeric ?? dp.value_text ?? '—'}
+                            </td>
+                            <td style={{ padding: '8px 12px', color: '#475569' }}>{dp.unit || '—'}</td>
+                            <td style={{ padding: '8px 12px', textAlign: 'center' }}>
+                              {dp.evidence_count > 0 ? (
+                                <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 99, background: '#f0fdf4', color: '#15803d', fontWeight: 700 }}>
+                                  <Paperclip size={9} style={{ display: 'inline', marginRight: 2 }} />
+                                  {dp.evidence_count} file{dp.evidence_count > 1 ? 's' : ''}
+                                </span>
+                              ) : (
+                                <span style={{ fontSize: 10, color: '#f59e0b' }}>No evidence</span>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : packDetail ? (
+                  <div style={{ color: '#64748b', fontSize: 12, padding: '12px' }}>No data points found in this submission.</div>
+                ) : null}
+              </div>
+
+              {/* Comment box */}
               <textarea
                 value={reviewComment}
                 onChange={(e) => setReviewComment(e.target.value)}
                 placeholder="Review comments (mandatory for RETURN, recommended for APPROVE)…"
                 rows={3}
-                style={{ width: '100%', padding: '10px', borderRadius: '6px', background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', color: 'var(--text-primary)', fontSize: '13px', resize: 'vertical', boxSizing: 'border-box', marginBottom: '12px' }}
+                style={{
+                  width: '100%', padding: '10px 14px', borderRadius: 8, fontSize: 13,
+                  background: '#f8fafc', border: '1px solid #cbd5e1', color: '#0f172a',
+                  resize: 'vertical', boxSizing: 'border-box', marginBottom: 14,
+                  fontFamily: 'Inter, system-ui, sans-serif'
+                }}
               />
-              <div style={{ display: 'flex', gap: '10px' }}>
+
+              {/* Actions */}
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                 <button
                   onClick={() => handleReview('approve')}
                   disabled={reviewMutation.isPending}
-                  style={{ padding: '9px 20px', borderRadius: '7px', fontSize: '13px', fontWeight: 700, background: '#10b981', color: '#fff', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
+                  style={{
+                    padding: '10px 22px', borderRadius: 9, fontSize: 13, fontWeight: 700,
+                    background: 'linear-gradient(135deg, #059669, #10b981)', color: '#fff',
+                    border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 7,
+                    boxShadow: '0 4px 12px rgba(16,185,129,0.3)'
+                  }}
                 >
-                  <CheckCircle size={14} /> Approve
+                  <CheckCircle size={14} /> Approve & Dispatch Calculation
                 </button>
                 <button
                   onClick={() => handleReview('return')}
                   disabled={reviewMutation.isPending || !reviewComment}
-                  style={{ padding: '9px 20px', borderRadius: '7px', fontSize: '13px', fontWeight: 700, background: '#ef4444', color: '#fff', border: 'none', cursor: !reviewComment ? 'not-allowed' : 'pointer', opacity: !reviewComment ? 0.6 : 1, display: 'flex', alignItems: 'center', gap: '6px' }}
+                  style={{
+                    padding: '10px 22px', borderRadius: 9, fontSize: 13, fontWeight: 700,
+                    background: '#ef4444', color: '#fff', border: 'none',
+                    cursor: !reviewComment ? 'not-allowed' : 'pointer',
+                    opacity: !reviewComment ? 0.6 : 1, display: 'flex', alignItems: 'center', gap: 7
+                  }}
                 >
                   <XCircle size={14} /> Return with Comments
                 </button>
                 <button
-                  onClick={() => setSelected(null)}
-                  style={{ padding: '9px 20px', borderRadius: '7px', fontSize: '13px', fontWeight: 600, background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', color: 'var(--text-secondary)', cursor: 'pointer' }}
+                  onClick={() => { setSelected(null); setPackDetail(null); }}
+                  style={{
+                    padding: '10px 18px', borderRadius: 9, fontSize: 13, fontWeight: 600,
+                    background: '#f1f5f9', border: '1px solid #e2e8f0',
+                    color: '#475569', cursor: 'pointer'
+                  }}
                 >
                   Cancel
                 </button>

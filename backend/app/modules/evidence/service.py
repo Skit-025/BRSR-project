@@ -52,6 +52,7 @@ def process_and_store_evidence(
         size_bytes=len(file_bytes),
         sha256=server_sha256,
         uploader_id=uploader_id,
+        doc_type=doc_type_hint or "OTHER",
         scan_status=ScanStatus.CLEAN.value
     )
     db.add(evidence)

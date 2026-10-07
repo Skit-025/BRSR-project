@@ -25,6 +25,32 @@ class OrgService:
         if existing:
             raise ValueError(f"Organization node with code '{node_in.code}' already exists.")
 
+        node_type_val = node_in.type.value if hasattr(node_in.type, "value") else str(node_in.type)
+        if node_in.parent_id:
+            parent = self.repo.get_node_by_id(node_in.parent_id)
+            if not parent:
+                raise ValueError(f"Parent node with ID '{node_in.parent_id}' does not exist.")
+            parent_type = parent.type
+            allowed_parents = {
+                "company": ["group"],
+                "subsidiary": ["group"],
+                "associate": ["group", "company"],
+                "jv": ["group", "company"],
+                "business_unit": ["company", "subsidiary", "group"],
+                "project": ["business_unit", "company", "subsidiary", "group"],
+                "site": ["business_unit", "project", "company", "subsidiary", "group"],
+            }
+            if node_type_val in allowed_parents and parent_type not in allowed_parents[node_type_val]:
+                raise ValueError(
+                    f"Invalid hierarchy: Node of type '{node_type_val}' cannot be a child of '{parent_type}'. "
+                    f"Expected parent type to be one of: {', '.join(allowed_parents[node_type_val])}."
+                )
+        elif node_type_val != "group":
+            existing_nodes = self.repo.list_nodes(active_only=True)
+            if existing_nodes:
+                root = next((n for n in existing_nodes if n.type == "group"), existing_nodes[0])
+                node_in.parent_id = root.id
+
         path = build_materialized_path(self.db, node_in.parent_id, node_in.code)
         node = OrgNode(
             code=node_in.code,

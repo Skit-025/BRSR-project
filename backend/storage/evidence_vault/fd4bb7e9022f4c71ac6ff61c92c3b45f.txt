@@ -1,0 +1,6 @@
+TSSPDCL Electricity Bill
+Units consumed: 45000 kWh
+Consumer: Aarohan Solar Site
+Billing Month: August 2024
+Meter Reading: 124500
+Total Amount: INR 3,15,000

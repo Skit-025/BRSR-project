@@ -61,3 +61,6 @@ import app.modules.notifications.models  # noqa: F401
 # ── AI Governance & Runs ─────────────────────────────────────────
 import app.ai.models                         # noqa: F401
 
+# ── Type 3 Org-Level Disclosures & Calc Pipeline ─────────────────
+import app.modules.disclosures.models         # noqa: F401
+

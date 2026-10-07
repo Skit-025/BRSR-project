@@ -86,6 +86,17 @@ def init_db() -> None:
         conn.execute(text("CREATE EXTENSION IF NOT EXISTS pgcrypto"))
         logger.info("PostgreSQL extensions enabled (ltree, uuid-ossp, pg_trgm, pgcrypto)")
 
-
     Base.metadata.create_all(bind=engine)
+
+    with engine.begin() as conn:
+        # Schema migration checks: ensure new columns exist
+        conn.execute(text("ALTER TABLE evidence_files ADD COLUMN IF NOT EXISTS doc_type VARCHAR(50) DEFAULT 'OTHER' NOT NULL;"))
+        conn.execute(text("ALTER TABLE org_nodes ADD COLUMN IF NOT EXISTS project_description TEXT;"))
+        conn.execute(text("ALTER TABLE org_nodes ADD COLUMN IF NOT EXISTS enabled_activity_categories JSONB DEFAULT '[]'::jsonb NOT NULL;"))
+        conn.execute(text("ALTER TABLE metrics ADD COLUMN IF NOT EXISTS entry_level VARCHAR(50) DEFAULT 'project' NOT NULL;"))
+        conn.execute(text("ALTER TABLE metrics ADD COLUMN IF NOT EXISTS guidance_text TEXT;"))
+        conn.execute(text("ALTER TABLE metrics ADD COLUMN IF NOT EXISTS why_needed TEXT;"))
+        conn.execute(text("ALTER TABLE metrics ADD COLUMN IF NOT EXISTS document_hint TEXT;"))
+        conn.execute(text("ALTER TABLE metrics ADD COLUMN IF NOT EXISTS calc_formula_code VARCHAR(100);"))
+        conn.execute(text("ALTER TABLE reports ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'READY' NOT NULL;"))
     logger.info("✅ All database tables initialised.")

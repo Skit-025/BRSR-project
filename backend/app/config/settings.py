@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     )
 
     # Application
-    APP_NAME: str = "MEIL ESG-BRSR Reporting Portal"
+    APP_NAME: str = "Aarohan ESG Platform"
     APP_ENV: str = "development"
     DEBUG: bool = True
     API_V1_STR: str = "/api/v1"
@@ -23,7 +23,7 @@ class Settings(BaseSettings):
     S3_ENDPOINT: str = "http://localhost:9000"
     S3_ACCESS_KEY: str = "minioadmin"
     S3_SECRET_KEY: str = "minioadmin"
-    S3_BUCKET_NAME: str = "meil-evidence-vault"
+    S3_BUCKET_NAME: str = "aarohan-evidence-vault"
     S3_REGION: str = "us-east-1"
 
     # Security & Auth

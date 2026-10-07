@@ -24,12 +24,16 @@ class ReviewQueueItem(BaseModel):
     entity_id: str
     entity_code: str
     entity_name: str
+    entity_type: Optional[str] = "project"   # group | company | business_unit | project
+    hierarchy_path: Optional[str] = None     # e.g. "MEIL > Infra BU > Highway P-001"
     period_id: str
     period_code: str
     status: str
     maker_id: Optional[str] = None
     submitted_at: Optional[datetime] = None
     version: int
+    data_point_count: Optional[int] = 0
+    evidence_count: Optional[int] = 0
 
 class PeriodLockResponse(BaseModel):
     period_id: str

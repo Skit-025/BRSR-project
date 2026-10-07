@@ -8,6 +8,14 @@ class ReportType(str, enum.Enum):
     BRSR_FULL = "BRSR_FULL"
     BRSR_CORE = "BRSR_CORE"
 
+
+class ReportStatus(str, enum.Enum):
+    DRAFT      = "DRAFT"
+    READY      = "READY"
+    STALE      = "STALE"
+    SUPERSEDED = "SUPERSEDED"
+
+
 class Report(Base, UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin):
     """
     F26-F29 Reports and Disclosures table:
@@ -18,7 +26,9 @@ class Report(Base, UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin):
     entity_id = Column(PG_UUID(as_uuid=False), ForeignKey("org_nodes.id"), nullable=False, index=True)
     period_id = Column(PG_UUID(as_uuid=False), ForeignKey("reporting_periods.id"), nullable=False, index=True)
     report_type = Column(String(50), default=ReportType.BRSR_FULL.value, nullable=False)
+    status = Column(String(50), default=ReportStatus.READY.value, nullable=False, index=True)
     snapshot_hash = Column(String(64), nullable=False, index=True)  # Seal for reasonable assurance
     generated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
     generated_by = Column(String(255), default="system", nullable=False)
     content_json = Column(JSON, nullable=False, default=dict)
+

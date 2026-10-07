@@ -11,6 +11,7 @@ class DataPointInput(BaseModel):
     status: ValueStatus = ValueStatus.ACTUAL
     entry_method: EntryMethod = EntryMethod.MANUAL_FORM
     notes: Optional[str] = None
+    evidence_file_ids: Optional[List[str]] = None
 
 class DataPointRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
