@@ -1,9 +1,9 @@
-import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
+﻿import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
 import { authApi } from '../api/client';
 
 const AuthContext = createContext(null);
 
-// ─── Permission Matrix (mirrors backend app/security/rbac.py) ──────────────────
+// â”€â”€â”€ Permission Matrix (mirrors backend app/security/rbac.py) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const ROLE_PERMISSIONS = {
   system_admin: new Set([
     'user:manage', 'user:create', 'user:delete',
@@ -17,6 +17,7 @@ const ROLE_PERMISSIONS = {
     'calc:run',
     'report:compile', 'report:read',
     'period:lock', 'audit:read', 'assurance:write',
+    'ai:review',
   ]),
   group_admin: new Set([
     'org:read',
@@ -28,6 +29,7 @@ const ROLE_PERMISSIONS = {
     'report:read',
     'period:lock',
     'audit:read',
+    'ai:review',
   ]),
   esg_manager: new Set([
     'org:read', 'org:write',
@@ -40,6 +42,7 @@ const ROLE_PERMISSIONS = {
     'calc:run',
     'report:compile', 'report:read',
     'period:lock', 'audit:read',
+    'ai:review',
   ]),
   subsidiary_admin: new Set([
     'org:read',
@@ -68,6 +71,7 @@ const ROLE_PERMISSIONS = {
     'consolidation:read',
     'report:read',
     'audit:read',
+    'ai:review',
   ]),
   auditor: new Set([
     'org:read',
@@ -87,16 +91,16 @@ const ROLE_PERMISSIONS = {
   ]),
 };
 
-// ─── Role display metadata ─────────────────────────────────────────────────────
+// â”€â”€â”€ Role display metadata â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export const ROLE_META = {
-  system_admin:     { label: 'System Admin',     color: '#f43f5e', icon: '🛡️' },
-  group_admin:      { label: 'Group Admin',       color: '#8b5cf6', icon: '🏛️' },
-  esg_manager:      { label: 'ESG Manager',       color: '#10b981', icon: '🌱' },
-  subsidiary_admin: { label: 'Subsidiary Admin',  color: '#6366f1', icon: '🏢' },
-  maker:            { label: 'Maker',             color: '#f59e0b', icon: '✏️' },
-  checker:          { label: 'Checker',           color: '#0ea5e9', icon: '✅' },
-  auditor:          { label: 'Auditor',           color: '#14b8a6', icon: '🔍' },
-  viewer:           { label: 'Viewer',            color: '#94a3b8', icon: '👁️' },
+  system_admin:     { label: 'System Admin',     color: '#f43f5e', icon: 'ðŸ›¡ï¸' },
+  group_admin:      { label: 'Group Admin',       color: '#8b5cf6', icon: 'ðŸ›ï¸' },
+  esg_manager:      { label: 'ESG Manager',       color: '#10b981', icon: 'ðŸŒ±' },
+  subsidiary_admin: { label: 'Subsidiary Admin',  color: '#6366f1', icon: 'ðŸ¢' },
+  maker:            { label: 'Maker',             color: '#f59e0b', icon: 'âœï¸' },
+  checker:          { label: 'Checker',           color: '#0ea5e9', icon: 'âœ…' },
+  auditor:          { label: 'Auditor',           color: '#14b8a6', icon: 'ðŸ”' },
+  viewer:           { label: 'Viewer',            color: '#94a3b8', icon: 'ðŸ‘ï¸' },
 };
 
 export const isMock = () => localStorage.getItem('brsr_mock_mode') === 'true';
@@ -189,10 +193,10 @@ export function AuthProvider({ children }) {
     localStorage.removeItem('brsr_mock_mode');
   };
 
-  // ─── RBAC helpers ─────────────────────────────────────────────────────────
+  // â”€â”€â”€ RBAC helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const role = user?.role || null;
 
-  /** Check if current user has a specific permission string — System Admin has all permissions */
+  /** Check if current user has a specific permission string â€” System Admin has all permissions */
   const hasPermission = useMemo(() => (permission) => {
     if (!role) return false;
     if (role === 'system_admin') return true;
@@ -231,7 +235,7 @@ export function AuthProvider({ children }) {
   /** True for roles with audit read access */
   const canAudit = hasPermission('audit:read');
 
-  const roleMeta = ROLE_META[role] || { label: role || 'Unknown', color: '#94a3b8', icon: '👤' };
+  const roleMeta = ROLE_META[role] || { label: role || 'Unknown', color: '#94a3b8', icon: 'ðŸ‘¤' };
 
   return (
     <AuthContext.Provider value={{
@@ -250,3 +254,5 @@ export function AuthProvider({ children }) {
 }
 
 export const useAuth = () => useContext(AuthContext);
+
+

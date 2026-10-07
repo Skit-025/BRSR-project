@@ -1,6 +1,6 @@
 """
 app/security/rbac.py
-Role-Based Access Control — permission matrix and enforcement helpers.
+Role-Based Access Control â€” permission matrix and enforcement helpers.
 Roles follow the principle of least privilege.
 """
 from enum import Enum
@@ -56,9 +56,10 @@ class Permission(str, Enum):
     PERIOD_LOCK    = "period:lock"
     AUDIT_READ     = "audit:read"
     ASSURANCE_WRITE = "assurance:write"
+    AI_REVIEW      = "ai:review"
 
 
-# Role → set of allowed permissions
+# Role â†’ set of allowed permissions
 ROLE_PERMISSIONS: dict[Role, Set[Permission]] = {
     Role.SYSTEM_ADMIN: set(Permission),  # System Admin has access to all features, writes, overrides, and controls
 
@@ -73,6 +74,7 @@ ROLE_PERMISSIONS: dict[Role, Set[Permission]] = {
         Permission.REPORT_READ,
         Permission.PERIOD_LOCK,
         Permission.AUDIT_READ,
+        Permission.AI_REVIEW,
     },
 
     Role.ESG_MANAGER: {
@@ -87,6 +89,7 @@ ROLE_PERMISSIONS: dict[Role, Set[Permission]] = {
         Permission.CALC_RUN,
         Permission.REPORT_COMPILE, Permission.REPORT_READ,
         Permission.PERIOD_LOCK, Permission.AUDIT_READ,
+        Permission.AI_REVIEW,
     },
 
     Role.SUBSIDIARY_ADMIN: {
@@ -118,6 +121,7 @@ ROLE_PERMISSIONS: dict[Role, Set[Permission]] = {
         Permission.CONSOLIDATION_READ,
         Permission.REPORT_READ,
         Permission.AUDIT_READ,
+        Permission.AI_REVIEW,
     },
 
     Role.AUDITOR: {
@@ -158,4 +162,5 @@ def assert_permission(role: str, permission: Permission) -> None:
         raise PermissionError(
             f"Role '{role}' does not have permission '{permission.value}'"
         )
+
 

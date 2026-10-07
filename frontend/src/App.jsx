@@ -1,8 +1,8 @@
-import React from 'react';
+﻿import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
-// ─── Global Error Boundary ───────────────────────────────────────────────────
+// â”€â”€â”€ Global Error Boundary â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 class ErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
@@ -24,7 +24,7 @@ class ErrorBoundary extends React.Component {
           background: '#06070f', color: '#f1f5f9', fontFamily: 'Inter, system-ui, sans-serif',
           textAlign: 'center', gap: '16px',
         }}>
-          <div style={{ fontSize: '48px' }}>⚠️</div>
+          <div style={{ fontSize: '48px' }}>âš ï¸</div>
           <h2 style={{ margin: 0, fontSize: '22px', color: '#f43f5e' }}>Application Error</h2>
           <p style={{ maxWidth: '500px', color: '#94a3b8', fontSize: '14px', lineHeight: 1.6 }}>
             An unexpected error occurred. Please refresh the page or contact a System Administrator.
@@ -67,6 +67,7 @@ import EvidenceVault  from './pages/EvidenceVault';
 import Workflow       from './pages/Workflow';
 import Consolidation  from './pages/Consolidation';
 import Reporting      from './pages/Reporting';
+import AarohanReview  from './pages/AarohanReview';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -78,7 +79,7 @@ const queryClient = new QueryClient({
   },
 });
 
-// ─── Renders a "Not Authorised" screen ───────────────────────────────────────
+// â”€â”€â”€ Renders a "Not Authorised" screen â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function AccessDenied() {
   const { roleMeta, role } = useAuth();
   return (
@@ -87,7 +88,7 @@ function AccessDenied() {
       justifyContent: 'center', height: '100%', gap: '16px',
       padding: '40px', textAlign: 'center',
     }}>
-      <div style={{ fontSize: '48px' }}>🔒</div>
+      <div style={{ fontSize: '48px' }}>ðŸ”’</div>
       <h2 style={{ color: 'var(--text-primary)', margin: 0 }}>Access Denied</h2>
       <p style={{ color: 'var(--text-secondary)', maxWidth: '420px', margin: 0 }}>
         Your role <strong style={{ color: roleMeta?.color }}>
@@ -101,7 +102,7 @@ function AccessDenied() {
   );
 }
 
-// ─── Guards a route by one or more permissions (any match = allowed) ─────────
+// â”€â”€â”€ Guards a route by one or more permissions (any match = allowed) â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function PermissionGuard({ perms = [], children }) {
   const { hasPermission, user } = useAuth();
   if (!user) return <Navigate to="/landing" replace />;
@@ -111,7 +112,7 @@ function PermissionGuard({ perms = [], children }) {
   return children;
 }
 
-// ─── Main app shell ──────────────────────────────────────────────────────────
+// â”€â”€â”€ Main app shell â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function ProtectedLayout() {
   const { user, token, loading } = useAuth();
 
@@ -171,17 +172,17 @@ export default function App() {
 
               {/* Authenticated Workspace Routes */}
               <Route element={<ProtectedLayout />}>
-                {/* Dashboard — all authenticated users */}
+                {/* Dashboard â€” all authenticated users */}
                 <Route path="/dashboard" element={<Dashboard />} />
 
-                {/* Administration — system_admin only */}
+                {/* Administration â€” system_admin only */}
                 <Route path="/admin/users" element={
                   <PermissionGuard perms={['user:manage']}>
                     <UserManagement />
                   </PermissionGuard>
                 } />
 
-                {/* Configuration — org:read */}
+                {/* Configuration â€” org:read */}
                 <Route path="/org" element={
                   <PermissionGuard perms={['org:read']}>
                     <OrgHierarchy />
@@ -193,7 +194,7 @@ export default function App() {
                   </PermissionGuard>
                 } />
 
-                {/* Data Collection — makers & esg_managers */}
+                {/* Data Collection â€” makers & esg_managers */}
                 <Route path="/collection" element={
                   <PermissionGuard perms={['form:submit', 'submission:create']}>
                     <DataEntry />
@@ -205,14 +206,14 @@ export default function App() {
                   </PermissionGuard>
                 } />
 
-                {/* Assurance — checkers, auditors, esg_managers, admins */}
+                {/* Assurance â€” checkers, auditors, esg_managers, admins */}
                 <Route path="/workflow" element={
                   <PermissionGuard perms={['submission:review', 'form:review', 'submission:read']}>
                     <Workflow />
                   </PermissionGuard>
                 } />
 
-                {/* Reporting — all with report:read */}
+                {/* Reporting â€” all with report:read */}
                 <Route path="/consolidation" element={
                   <PermissionGuard perms={['consolidation:read']}>
                     <Consolidation />
@@ -221,6 +222,13 @@ export default function App() {
                 <Route path="/reporting" element={
                   <PermissionGuard perms={['report:read']}>
                     <Reporting />
+                  </PermissionGuard>
+                } />
+
+                {/* Aarohan AI Review - checker, esg_manager, group_admin, system_admin */}
+                <Route path="/ai-review" element={
+                  <PermissionGuard perms={['ai:review']}>
+                    <AarohanReview />
                   </PermissionGuard>
                 } />
               </Route>
@@ -234,3 +242,6 @@ export default function App() {
     </ErrorBoundary>
   );
 }
+
+
+
