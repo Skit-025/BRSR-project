@@ -484,6 +484,17 @@ export default function ProjectWizard() {
             </div>
           )}
 
+          {/* ── Error Display ── */}
+          {createError && (
+            <div style={{
+              marginTop: 16, padding: '12px 16px', borderRadius: 8,
+              background: '#fef2f2', border: '1px solid #fca5a5',
+              color: '#991b1b', fontSize: 13, fontWeight: 600,
+            }}>
+              ❌ {createError}
+            </div>
+          )}
+
           {/* ── Navigation ── */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 32, paddingTop: 20, borderTop: '1px solid var(--border)', position: 'relative' }}>
             <button

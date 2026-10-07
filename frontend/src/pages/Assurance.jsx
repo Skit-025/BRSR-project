@@ -29,6 +29,7 @@ export default function Assurance() {
 
   // Sample results state
   const [sampleResults, setSampleResults] = useState(null);
+  const [notice, setNotice] = useState(null);
 
   const { data: periods = [] } = useOrgPeriods();
   const { data: nodes = [] } = useOrgNodes();
@@ -133,8 +134,9 @@ export default function Assurance() {
       document.body.appendChild(downloadAnchor);
       downloadAnchor.click();
       downloadAnchor.remove();
+      setNotice({ type: 'success', text: `Assurance workpaper exported successfully.` });
     } catch (err) {
-      alert("Failed to export workpaper dossier: " + (err.response?.data?.detail || err.message));
+      setNotice({ type: 'error', text: "Failed to export workpaper dossier: " + (err.response?.data?.detail || err.message) });
     }
   };
 
@@ -178,6 +180,20 @@ export default function Assurance() {
           </button>
         </div>
       </div>
+
+      {/* Notice Banner */}
+      {notice && (
+        <div style={{
+          padding: '12px 16px', borderRadius: '8px', marginBottom: '20px', fontSize: '13px', fontWeight: 600,
+          background: notice.type === 'success' ? '#ecfdf5' : '#fef2f2',
+          color: notice.type === 'success' ? '#059669' : '#dc2626',
+          border: `1px solid ${notice.type === 'success' ? '#a7f3d0' : '#fca5a5'}`,
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        }}>
+          <span>{notice.text}</span>
+          <button onClick={() => setNotice(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'inherit', fontSize: '16px' }}>×</button>
+        </div>
+      )}
 
       {/* Overview Cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 24 }}>

@@ -17,7 +17,8 @@ export default function MetricCatalogue() {
   const [selectedMetric, setSelectedMetric] = useState(null);
 
   const queryParams = {};
-  if (categoryFilter !== 'All') queryParams.category = categoryFilter;
+  // Backend stores categories as lowercase ('environment', 'social', 'governance')
+  if (categoryFilter !== 'All') queryParams.category = categoryFilter.toLowerCase();
   if (principleFilter !== 'All') queryParams.principle = parseInt(principleFilter, 10);
   if (coreOnly) queryParams.brsr_core = true;
 

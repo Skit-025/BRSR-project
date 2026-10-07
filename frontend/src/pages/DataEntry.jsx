@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useCallback } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
-  CheckCircle2, Clock, AlertTriangle, ChevronRight, Info,
+  CheckCircle2, Clock, AlertTriangle, AlertCircle, ChevronRight, Info,
   Send, Save, RefreshCw, Eye, MessageSquare, Lock,
   Leaf, Droplets, Trash2, Shield, Users, Flame, Zap, BarChart3,
   HelpCircle, FileText, Building2, ArrowRight, X, ChevronDown,
@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 import { useOrgNodes, useOrgPeriods, useScopedForm, useSavePack, useSubmitPack, useFuelCatalog } from "../hooks/useApi";
 import { useAuth } from "../context/AuthContext";
-import { collectionApi, evidenceApi, calcApi } from "../api/client";
+import { collectionApi, evidenceApi, calcApi, validationApi } from "../api/client";
 
 
 // ── Domain colour map ─────────────────────────────────────────────────────────
@@ -156,9 +156,10 @@ function GuidanceCard({ field, open, onToggle }) {
 }
 
 // ─── Pre-Submission Review Checklist Modal (Spec §18) ──────────────────────
-function PreSubmissionModal({ open, onClose, onConfirm, submitting, stats }) {
+function PreSubmissionModal({ open, onClose, onConfirm, submitting, stats, validationSummary, validationLoading }) {
   if (!open) return null;
   const isComplete = stats.filledCount === stats.totalFields;
+  const hasErrors = (validationSummary?.error_count ?? 0) > 0;
 
   return (
     <div style={{
@@ -167,7 +168,7 @@ function PreSubmissionModal({ open, onClose, onConfirm, submitting, stats }) {
       zIndex: 1000, padding: 20
     }}>
       <div style={{
-        background: '#fff', borderRadius: 8, maxWidth: 520, width: '100%',
+        background: '#fff', borderRadius: 8, maxWidth: 540, width: '100%',
         boxShadow: '0 20px 40px rgba(0,0,0,0.12)', border: '1px solid #e2e8f0', overflow: 'hidden'
       }}>
         <div style={{ padding: '16px 20px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -179,7 +180,7 @@ function PreSubmissionModal({ open, onClose, onConfirm, submitting, stats }) {
         </div>
 
         <div style={{ padding: '24px' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 20 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
             <div style={{ padding: '14px', borderRadius: 10, background: '#f8fafc', border: '1px solid #e2e8f0' }}>
               <div style={{ fontSize: 12, color: '#64748b', fontWeight: 600 }}>Parameters Completed</div>
               <div style={{ fontSize: 22, fontWeight: 800, color: isComplete ? '#059669' : '#d97706', marginTop: 4 }}>
@@ -197,8 +198,51 @@ function PreSubmissionModal({ open, onClose, onConfirm, submitting, stats }) {
             </div>
           </div>
 
+          {/* Validation Engine Status */}
+          {validationLoading && (
+            <div style={{ padding: '12px 16px', borderRadius: 10, background: '#f8fafc', border: '1px solid #e2e8f0', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 10 }}>
+              <RefreshCw size={15} className="spin" color="#6366f1" />
+              <span style={{ fontSize: 12.5, color: '#475569', fontWeight: 500 }}>Running statutory validation rules against engine…</span>
+            </div>
+          )}
+
+          {!validationLoading && hasErrors && (
+            <div style={{ padding: '12px 16px', borderRadius: 10, background: '#fef2f2', border: '1px solid #fca5a5', marginBottom: 16 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#b91c1c', fontWeight: 700, fontSize: 13, marginBottom: 4 }}>
+                <AlertCircle size={16} />
+                Validation Error Gate: {validationSummary.error_count} hard error(s) detected
+              </div>
+              <div style={{ fontSize: 12, color: '#991b1b', lineHeight: 1.5, maxHeight: 110, overflowY: 'auto' }}>
+                {validationSummary.results?.filter(r => r.severity === 'ERROR' || r.severity === 'error')?.map((err, i) => (
+                  <div key={i} style={{ marginTop: 3 }}>• <strong>{err.metric_code}:</strong> {err.message}</div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {!validationLoading && !hasErrors && (validationSummary?.warning_count ?? 0) > 0 && (
+            <div style={{ padding: '12px 16px', borderRadius: 10, background: '#fffbeb', border: '1px solid #fde68a', marginBottom: 16 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#b45309', fontWeight: 700, fontSize: 13, marginBottom: 4 }}>
+                <AlertTriangle size={16} />
+                {validationSummary.warning_count} Advisory Warning(s)
+              </div>
+              <div style={{ fontSize: 12, color: '#92400e', lineHeight: 1.5, maxHeight: 80, overflowY: 'auto' }}>
+                {validationSummary.results?.filter(r => r.severity === 'WARNING' || r.severity === 'warning')?.map((w, i) => (
+                  <div key={i} style={{ marginTop: 2 }}>• {w.metric_code}: {w.message}</div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {!validationLoading && validationSummary && !hasErrors && (
+            <div style={{ padding: '10px 14px', borderRadius: 8, background: '#f0fdf4', border: '1px solid #bbf7d0', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <CheckCircle2 size={16} color="#15803d" />
+              <span style={{ fontSize: 12.5, color: '#15803d', fontWeight: 600 }}>Validation Engine: All business rule checks passed</span>
+            </div>
+          )}
+
           {!isComplete && (
-            <div style={{ padding: '12px 16px', borderRadius: 10, background: '#fffbeb', border: '1px solid #fde68a', marginBottom: 20, display: 'flex', gap: 10 }}>
+            <div style={{ padding: '12px 16px', borderRadius: 10, background: '#fffbeb', border: '1px solid #fde68a', marginBottom: 16, display: 'flex', gap: 10 }}>
               <AlertTriangle size={18} color="#d97706" style={{ flexShrink: 0, marginTop: 2 }} />
               <div style={{ fontSize: 12.5, color: '#92400e', lineHeight: 1.5 }}>
                 <strong>{stats.totalFields - stats.filledCount} parameter(s) incomplete:</strong>
@@ -207,7 +251,7 @@ function PreSubmissionModal({ open, onClose, onConfirm, submitting, stats }) {
             </div>
           )}
 
-          <div style={{ fontSize: 13, color: '#475569', lineHeight: 1.6, marginBottom: 20 }}>
+          <div style={{ fontSize: 12.5, color: '#475569', lineHeight: 1.6, marginBottom: 20 }}>
             Once submitted, this monthly pack will freeze and enter the <strong>BU Review Queue</strong>. You will not be able to modify numbers until the reviewer either approves or returns with comments.
           </div>
 
@@ -223,17 +267,17 @@ function PreSubmissionModal({ open, onClose, onConfirm, submitting, stats }) {
             </button>
             <button
               onClick={onConfirm}
-              disabled={submitting}
+              disabled={submitting || hasErrors || validationLoading}
               style={{
                 display: 'flex', alignItems: 'center', gap: 6,
                 padding: '9px 20px', borderRadius: 8, border: 'none',
-                background: 'linear-gradient(135deg, #6366f1, #4f46e5)', color: '#fff',
-                fontSize: 13, fontWeight: 700, cursor: 'pointer',
-                boxShadow: '0 4px 12px rgba(99,102,241,0.3)'
+                background: hasErrors ? '#94a3b8' : 'linear-gradient(135deg, #6366f1, #4f46e5)', color: '#fff',
+                fontSize: 13, fontWeight: 700, cursor: (submitting || hasErrors || validationLoading) ? 'not-allowed' : 'pointer',
+                boxShadow: hasErrors ? 'none' : '0 4px 12px rgba(99,102,241,0.3)'
               }}
             >
-              {submitting ? <RefreshCw size={14} className="spin" /> : <Send size={14} />}
-              {submitting ? 'Submitting…' : 'Confirm & Submit to BU'}
+              {submitting ? <RefreshCw size={14} className="spin" /> : hasErrors ? <AlertCircle size={14} /> : <Send size={14} />}
+              {submitting ? 'Submitting…' : hasErrors ? 'Resolve Errors to Submit' : 'Confirm & Submit to BU'}
             </button>
           </div>
         </div>
@@ -758,8 +802,47 @@ export default function DataEntry() {
     }
   };
 
-  const handleOpenPreSubmit = () => {
+  const [valChecking, setValChecking] = useState(false);
+  const [valSummary, setValSummary] = useState(null);
+
+  const handleOpenPreSubmit = async () => {
     setShowPreSubmitModal(true);
+    setValSummary(null);
+    let subId = form?.submission_id || activeSubmissionId;
+    if (!subId) {
+      try {
+        const dataPoints = Object.entries(values).map(([metric_code, val]) => ({
+          metric_code,
+          value_numeric: typeof val === "number" || (val && !isNaN(Number(val))) ? Number(val) : null,
+          value_text: typeof val === "string" && isNaN(Number(val)) ? val : null,
+          unit: form?.sections?.flatMap(s => s.fields || []).find(f => f.metric_code === metric_code)?.unit || "",
+          status: "ACTUAL",
+          entry_method: "manual_form",
+        }));
+        const res = await savePack({
+          entity_id: selectedEntity,
+          period_id: selectedPeriod,
+          submission_id: null,
+          version: 1,
+          data_points: dataPoints,
+        });
+        subId = res?.data?.id || res?.id || res?.data?.submission_id;
+        if (subId) setActiveSubmissionId(subId);
+      } catch {
+        // Proceed even if background save had an issue
+      }
+    }
+    if (subId) {
+      setValChecking(true);
+      try {
+        const res = await validationApi.check(subId);
+        setValSummary(res.data);
+      } catch {
+        // Fallback gracefully if validation endpoint has no data yet
+      } finally {
+        setValChecking(false);
+      }
+    }
   };
 
   const handleConfirmSubmit = async () => {
@@ -1110,6 +1193,8 @@ export default function DataEntry() {
           onConfirm={handleConfirmSubmit}
           submitting={submitting}
           stats={{ filledCount, totalFields, completionPct }}
+          validationSummary={valSummary}
+          validationLoading={valChecking}
         />
       </div>
     </div>

@@ -59,7 +59,8 @@ export default function Consolidation() {
   const { data: periods = [] } = useOrgPeriods();
   const runMutation = useConsolidationRun();
 
-  const [runParams, setRunParams] = useState({ entity_id: '', period_id: '', run_ai_variance: true });
+  // runParams now aligned with backend ConsolidationRunRequest: { period_id, root_node_id }
+  const [runParams, setRunParams] = useState({ root_node_id: '', period_id: '' });
   const [notice, setNotice]       = useState(null);
   const [activeTab, setActiveTab] = useState('bu_drilldown');
 
@@ -607,8 +608,8 @@ export default function Consolidation() {
                   Root Node (blank = Full Group Enterprise)
                 </label>
                 <select
-                  value={runParams.entity_id}
-                  onChange={(e) => setRunParams(p => ({ ...p, entity_id: e.target.value }))}
+                  value={runParams.root_node_id}
+                  onChange={(e) => setRunParams(p => ({ ...p, root_node_id: e.target.value }))}
                   className="form-control"
                   style={{ height: 38 }}
                 >

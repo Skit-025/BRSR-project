@@ -276,7 +276,7 @@ function OverviewTab({ project, navigate }) {
         <div className="card">
           <div className="card-header">
             <span className="card-title">ESG Data Coverage</span>
-            <button onClick={() => {}} style={{ fontSize: 12, color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 500 }}>
+            <button onClick={() => navigate(`/collection?nodeId=${project.id}&periodId=`)} style={{ fontSize: 12, color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 500 }}>
               View ESG Data →
             </button>
           </div>

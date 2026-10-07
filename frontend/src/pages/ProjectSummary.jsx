@@ -10,9 +10,14 @@ import { useAuth } from '../context/AuthContext';
 function extractMetricValue(pack, metricCodePrefix) {
   if (!pack?.data_points) return null;
   const dp = pack.data_points.find(d =>
-    d.metric_code && d.metric_code.startsWith(metricCodePrefix) && d.value !== null && d.value !== undefined
+    d.metric_code && d.metric_code.startsWith(metricCodePrefix) &&
+    (d.value_numeric !== null && d.value_numeric !== undefined) || (d.value_text !== null && d.value_text !== undefined)
   );
-  return dp ? { value: dp.value, unit: dp.unit } : null;
+  if (!dp) return null;
+  const displayVal = dp.value_numeric !== null && dp.value_numeric !== undefined
+    ? dp.value_numeric
+    : dp.value_text;
+  return { value: displayVal, unit: dp.unit };
 }
 
 function fmt(v, decimals = 0) {

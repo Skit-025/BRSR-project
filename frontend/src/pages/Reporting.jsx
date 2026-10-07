@@ -125,12 +125,31 @@ const BRSR_FRAMEWORK = [
 
 const TOTAL_INDICATORS = BRSR_FRAMEWORK.reduce((s, p) => s + p.indicators.length, 0);
 
+function getPrincipleCompleteness(report, principleStr) {
+  if (!report) return 0;
+  if (report.principles?.[principleStr]?.completeness_pct != null) {
+    return report.principles[principleStr].completeness_pct;
+  }
+  const pNum = parseInt(principleStr.replace(/\D/g, ''), 10);
+  const items = (report.section_c || report.section_c_data || []).filter(
+    (d) => d.principle === pNum || d.principle === principleStr
+  );
+  if (!items.length) {
+    // If report is compiled and has overall completeness, fallback gracefully
+    return report.completeness_pct ?? 0;
+  }
+  const filled = items.filter(
+    (d) => d.disclosed_value != null || d.value != null || d.evidence_verified
+  ).length;
+  return Math.round((filled / items.length) * 100);
+}
+
 // Radar chart data — derived from live report or defaults
 function makeRadarData(report) {
   return BRSR_FRAMEWORK.map((p) => ({
     principle: p.principle,
     label: p.label.split(' ')[0],
-    value: report?.principles?.[p.principle]?.completeness_pct ?? 0,
+    value: getPrincipleCompleteness(report, p.principle),
     fullMark: 100,
   }));
 }
@@ -225,7 +244,7 @@ export default function Reporting() {
     BRSR_FRAMEWORK.map((p) => ({
       name: p.principle,
       label: p.label.split(' & ')[0].split(' ').slice(0, 2).join(' '),
-      value: report?.principles?.[p.principle]?.completeness_pct ?? 0,
+      value: getPrincipleCompleteness(report, p.principle),
       color: p.color,
       indicators: p.indicators.length,
     })),
@@ -350,7 +369,7 @@ export default function Reporting() {
       const res = await snapshotsApi.diff(diffBaseId, diffTargetId);
       setDiffResult(res.data);
     } catch (err) {
-      alert("Failed to compute snapshot diff: " + (err.response?.data?.detail || err.message));
+      setNotice({ type: 'error', text: "Failed to compute snapshot diff: " + (err.response?.data?.detail || err.message) });
     } finally {
       setDiffLoading(false);
     }
@@ -733,7 +752,7 @@ export default function Reporting() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               {BRSR_FRAMEWORK.map((p) => {
                 const isOpen = expandedP[p.principle];
-                const livePct = report?.principles?.[p.principle]?.completeness_pct ?? null;
+                const livePct = report ? getPrincipleCompleteness(report, p.principle) : null;
                 return (
                   <div key={p.principle} style={{ background: 'var(--bg-card)', borderRadius: '12px', border: '1px solid var(--border-default)', overflow: 'hidden' }}>
                     <button
