@@ -269,6 +269,10 @@ class CalculationService:
 def seed_emission_factors(db: Session):
     """Seeds statutory Indian government emission factors into the database."""
     from app.modules.calc.models import EmissionFactor
+    # Fast check: skip if factors are already seeded
+    if db.query(EmissionFactor.id).first() is not None:
+        return
+
     INITIAL_FACTORS = [
         {"code": "COAL-ANT", "category": "Coal", "subtype": "Anthracite", "unit": "kg", "co2e_factor": Decimal("2.62000000"), "source": "MoEFCC / IPCC AR4 India", "effective_year": "2023-24"},
         {"code": "COAL-BIT", "category": "Coal", "subtype": "Bituminous", "unit": "kg", "co2e_factor": Decimal("2.35000000"), "source": "MoEFCC / CEA 2023", "effective_year": "2023-24"},

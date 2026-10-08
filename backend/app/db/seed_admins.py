@@ -31,15 +31,21 @@ def seed_system_admins():
     """Ensure the 2 system admin accounts exist and have current credentials."""
     db = SessionLocal()
     try:
+        # Fast path: check if both admins already exist in a single query
+        existing_count = db.query(User.id).filter(
+            User.email.in_([a["username"] for a in INITIAL_ADMINS])
+        ).count()
+        if existing_count >= len(INITIAL_ADMINS):
+            return  # Already seeded, zero overhead!
+
         for admin_data in INITIAL_ADMINS:
             username = admin_data["username"]
             user = db.query(User).filter(
                 (User.email == username) | (User.email.ilike(username))
             ).first()
 
-            hashed_pwd = get_password_hash(admin_data["password"])
-
             if not user:
+                hashed_pwd = get_password_hash(admin_data["password"])
                 logger.info(f"Seeding System Admin: {username}")
                 user = User(
                     email=username,
@@ -58,7 +64,6 @@ def seed_system_admins():
                     role=admin_data["role"],
                     entity_id=None,
                     assigned_by_id=user.id,
-                    is_active=True,
                 )
                 db.add(assignment)
                 db.commit()

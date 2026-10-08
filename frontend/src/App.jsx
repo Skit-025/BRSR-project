@@ -76,6 +76,7 @@ import AuditLog       from './pages/AuditLog';
 import ValueChain     from './pages/ValueChain';
 import Assurance      from './pages/Assurance';
 import BackgroundJobs from './pages/BackgroundJobs';
+import AarohanAI      from './pages/AarohanAI';
 
 // ── Disclosure pages (Type 3 forms — spec §46) ────────────────────────────────
 // BU Disclosures: targets, initiatives, BU-specific data (spec §23)
@@ -364,6 +365,13 @@ export default function App() {
                 <Route path="/admin/jobs" element={
                   <PermissionGuard perms={['user:manage', 'consolidation:read']}>
                     <BackgroundJobs />
+                  </PermissionGuard>
+                } />
+
+                {/* Ask AAROHAN AI — visible when any AI permission exists */}
+                <Route path="/aarohan" element={
+                  <PermissionGuard perms={['ai:e1:use', 'ai:e2:use', 'ai:e3:use', 'ai:e4:use', 'ai:e5:use', 'ai:e6:use', 'ai:e7:use']}>
+                    <AarohanAI />
                   </PermissionGuard>
                 } />
 

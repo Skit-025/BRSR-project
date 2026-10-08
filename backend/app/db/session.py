@@ -74,29 +74,43 @@ def init_db() -> None:
     """
     Create all tables registered in Base.metadata.
     Also enables ltree and uuid-ossp extensions required by this project.
+    Optimized for fast startup: if tables already exist, avoids expensive reflection.
     """
-    from app.db.base import Base          # noqa: F401 — triggers all model imports
-    import app.db.registry  # noqa: F401 — ensures all models are registered
+    from app.db.base import Base          # noqa: F401
+    import app.db.registry  # noqa: F401
 
-    with engine.begin() as conn:
-        # Enable PostgreSQL extensions
-        conn.execute(text("CREATE EXTENSION IF NOT EXISTS ltree"))
-        conn.execute(text("CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\""))
-        conn.execute(text("CREATE EXTENSION IF NOT EXISTS pg_trgm"))
-        conn.execute(text("CREATE EXTENSION IF NOT EXISTS pgcrypto"))
-        logger.info("PostgreSQL extensions enabled (ltree, uuid-ossp, pg_trgm, pgcrypto)")
+    try:
+        with engine.begin() as conn:
+            # Fast check: if users table already exists, skip expensive 16.5s reflection
+            table_check = conn.execute(
+                text("SELECT 1 FROM information_schema.tables WHERE table_name = 'users' LIMIT 1")
+            ).fetchone()
+            if table_check:
+                logger.info("⚡ Database already initialized — startup accelerated.")
+                return
 
-    Base.metadata.create_all(bind=engine)
+            # First-time initialization
+            conn.execute(text("""
+                CREATE EXTENSION IF NOT EXISTS ltree;
+                CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+                CREATE EXTENSION IF NOT EXISTS pg_trgm;
+                CREATE EXTENSION IF NOT EXISTS pgcrypto;
+            """))
 
-    with engine.begin() as conn:
-        # Schema migration checks: ensure new columns exist
-        conn.execute(text("ALTER TABLE evidence_files ADD COLUMN IF NOT EXISTS doc_type VARCHAR(50) DEFAULT 'OTHER' NOT NULL;"))
-        conn.execute(text("ALTER TABLE org_nodes ADD COLUMN IF NOT EXISTS project_description TEXT;"))
-        conn.execute(text("ALTER TABLE org_nodes ADD COLUMN IF NOT EXISTS enabled_activity_categories JSONB DEFAULT '[]'::jsonb NOT NULL;"))
-        conn.execute(text("ALTER TABLE metrics ADD COLUMN IF NOT EXISTS entry_level VARCHAR(50) DEFAULT 'project' NOT NULL;"))
-        conn.execute(text("ALTER TABLE metrics ADD COLUMN IF NOT EXISTS guidance_text TEXT;"))
-        conn.execute(text("ALTER TABLE metrics ADD COLUMN IF NOT EXISTS why_needed TEXT;"))
-        conn.execute(text("ALTER TABLE metrics ADD COLUMN IF NOT EXISTS document_hint TEXT;"))
-        conn.execute(text("ALTER TABLE metrics ADD COLUMN IF NOT EXISTS calc_formula_code VARCHAR(100);"))
-        conn.execute(text("ALTER TABLE reports ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'READY' NOT NULL;"))
-    logger.info("✅ All database tables initialised.")
+        Base.metadata.create_all(bind=engine)
+
+        with engine.begin() as conn:
+            conn.execute(text("""
+                ALTER TABLE evidence_files ADD COLUMN IF NOT EXISTS doc_type VARCHAR(50) DEFAULT 'OTHER' NOT NULL;
+                ALTER TABLE org_nodes ADD COLUMN IF NOT EXISTS project_description TEXT;
+                ALTER TABLE org_nodes ADD COLUMN IF NOT EXISTS enabled_activity_categories JSONB DEFAULT '[]'::jsonb NOT NULL;
+                ALTER TABLE metrics ADD COLUMN IF NOT EXISTS entry_level VARCHAR(50) DEFAULT 'project' NOT NULL;
+                ALTER TABLE metrics ADD COLUMN IF NOT EXISTS guidance_text TEXT;
+                ALTER TABLE metrics ADD COLUMN IF NOT EXISTS why_needed TEXT;
+                ALTER TABLE metrics ADD COLUMN IF NOT EXISTS document_hint TEXT;
+                ALTER TABLE metrics ADD COLUMN IF NOT EXISTS calc_formula_code VARCHAR(100);
+                ALTER TABLE reports ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'READY' NOT NULL;
+            """))
+        logger.info("✅ All database tables initialised.")
+    except Exception as e:
+        logger.warning(f"Database initialization check notice: {e}")

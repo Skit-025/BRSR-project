@@ -18,6 +18,7 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+<<<<<<< HEAD
 // ── 401 Refresh-then-retry / 403 surface interceptor ──
 let _isRefreshing = false;
 let _refreshSubscribers = [];
@@ -93,6 +94,62 @@ api.interceptors.response.use(
         _onRefreshFailed();
         return Promise.reject(refreshErr);
       }
+=======
+export function getFriendlyErrorMessage(err, fallback = 'Unable to complete the operation. Please try again.') {
+  if (!err) return fallback;
+  if (typeof err === 'string') {
+    if (/(traceback|noneType|sqlalchemy|psycopg|exception|syntaxerror|runtimeerror|unhandled|500|pydantic|keyerror|indexerror|uuid|algorithm|internal server error)/i.test(err)) {
+      return 'The system encountered an issue while processing your request. Please try again.';
+    }
+    return err;
+  }
+  const status = err.response?.status;
+  const rawDetail = err.response?.data?.detail;
+
+  if (status === 404) {
+    if (typeof rawDetail === 'string' && rawDetail.length < 80 && !/(traceback|noneType|sqlalchemy|psycopg|uuid)/i.test(rawDetail)) {
+      return rawDetail;
+    }
+    return 'The requested record or resource was not found.';
+  }
+  if (status === 403) return 'You do not have permission to perform this action.';
+  if (status === 401) return 'Your session has expired. Please log in again.';
+  if (status === 429) return 'Service is currently busy. Please wait a few moments and try again.';
+  if (status >= 500) return 'A temporary processing issue occurred on the server. Please try again in a moment.';
+
+  if (err.code === 'ECONNABORTED' || err.message?.includes('timeout')) {
+    return 'The request timed out. Please verify your connection and try again.';
+  }
+  if (!err.response && (err.message?.includes('Network Error') || err.code === 'ERR_NETWORK')) {
+    return 'Network connection unavailable. Please check your internet connection.';
+  }
+
+  if (typeof rawDetail === 'string') {
+    if (/(traceback|noneType|sqlalchemy|psycopg|exception|syntaxerror|runtimeerror|unhandled|500|pydantic|keyerror|indexerror|uuid|algorithm|internal server error)/i.test(rawDetail)) {
+      return 'The system encountered an issue while processing your request. Please try again.';
+    }
+    return rawDetail;
+  }
+  return fallback;
+}
+
+// ── Global Error Interceptor ──
+api.interceptors.response.use(
+  (res) => res,
+  (err) => {
+    // Sanitize technical messages to protect implementation details
+    const friendly = getFriendlyErrorMessage(err);
+    err.friendlyMessage = friendly;
+    if (err.response?.data && typeof err.response.data === 'object') {
+      const raw = err.response.data.detail;
+      if (typeof raw === 'string' && /(traceback|noneType|sqlalchemy|psycopg|exception|syntaxerror|runtimeerror|unhandled|500|pydantic|keyerror|indexerror|uuid|algorithm|internal server error)/i.test(raw)) {
+        err.response.data.detail = friendly;
+      }
+    }
+    // If unauthorized, clear token only on protected paths
+    if (err.response?.status === 401 && !err.config?.url?.includes('/auth/login')) {
+      console.warn('Authentication token expired or invalid.');
+>>>>>>> fb144b3257474853ffec8c66d1033c848d3186c1
     }
 
     // ── 403: Forbidden — surface with a clear tag for pages to handle ──
@@ -211,6 +268,7 @@ export const collectionApi = {
 export const evidenceApi = {
   list: () => api.get('/evidence'),
   get: (id) => api.get(`/evidence/${id}`),
+  bySha: (sha256) => api.get(`/evidence/by-sha/${encodeURIComponent(sha256)}`),
   upload: (formData) =>
     api.post('/evidence/upload', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
@@ -281,6 +339,14 @@ export const aiApi = {
   estimateValueChain: (data) => api.post('/ai/estimate-valuechain', data),
   explainNumber: (data) => api.post('/ai/explain-number', data),
   submitDecision: (runId, data) => api.post(`/ai/runs/${runId}/decision`, data),
+};
+
+export const aarohanApi = {
+  listEngines: () => api.get('/aarohan/engines'),
+  runEngine: (engine, data) => api.post(`/aarohan/run/${encodeURIComponent(engine)}`, data),
+  listRuns: () => api.get('/aarohan/runs'),
+  getRun: (runId) => api.get(`/aarohan/runs/${encodeURIComponent(runId)}`),
+  submitDecision: (runId, data) => api.post(`/aarohan/runs/${encodeURIComponent(runId)}/decision`, data),
 };
 
 // ─────────────────────────────────────────────────────────────────

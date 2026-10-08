@@ -1246,7 +1246,7 @@ export default function OrgHierarchy() {
                 <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>SEBI BRSR Statutory Governance</span>
               </div>
               <p style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: 0, lineHeight: 1.5 }}>
-                This period covers all 39 BRSR indicators across 7 hierarchy tiers. Maker data entries submitted during this window are cryptographically hashed and gated by Four-Eyes Checker verification.
+                This period covers all 38 BRSR indicators across 7 hierarchy tiers. Maker data entries submitted during this window are cryptographically hashed and gated by Four-Eyes Checker verification.
               </p>
             </div>
           </div>

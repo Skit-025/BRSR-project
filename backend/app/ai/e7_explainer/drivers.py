@@ -15,7 +15,7 @@ def extract_drivers(lineage_data: Dict[str, Any]) -> List[DriverContribution]:
     if not drivers_raw:
         # Default representative data if lineage is not wired yet
         return [
-            DriverContribution(entity="Aarohan Solar Park (Site 01)", delta=410.0, share=0.62),
+            DriverContribution(entity="Hydrocarbon Project H4", delta=410.0, share=0.62),
             DriverContribution(entity="Rajasthan Solar Cluster", delta=180.0, share=0.27),
             DriverContribution(entity="Kutch Wind Farm Site 02", delta=73.0, share=0.11),
         ]

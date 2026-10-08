@@ -86,6 +86,12 @@ export default function Sidebar() {
           hasPermission('audit:read') && { to: '/audit', label: 'Audit Trail', icon: Shield },
         ].filter(Boolean)
       },
+      (hasPermission('ai:e1:use') || hasPermission('ai:e2:use') || hasPermission('ai:e3:use') || hasPermission('ai:e4:use') || hasPermission('ai:e5:use') || hasPermission('ai:e6:use') || hasPermission('ai:e7:use')) && {
+        section: 'AI ASSISTANCE',
+        items: [
+          { to: '/aarohan', label: 'Ask AAROHAN AI', icon: Command },
+        ]
+      },
       (hasPermission('user:manage') || hasPermission('consolidation:read')) && {
         section: 'ADMINISTRATION',
         items: [
