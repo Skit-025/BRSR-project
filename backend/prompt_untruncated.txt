@@ -1,0 +1,1875 @@
+<USER_REQUEST>
+MASTER IMPLEMENTATION PROMPT — ESG FORM DOCUMENT ATTACHMENT + AI VALIDATION + EVIDENCE VAULT
+
+ROLE
+
+You are a senior full-stack engineer working inside an existing, live ESG/BRSR application.
+
+Your task is to extend the existing ESG Data Entry / Evidence workflow without breaking any currently working functionality.
+
+ABSOLUTE PRIORITIES
+
+1. Do not break existing working functionality.
+2. Do not redesign unrelated UI.
+3. Reuse the existing architecture, components, APIs, database models, authentication, RBAC, Evidence Vault, storage system, and AI engines wherever possible.
+4. Do not create fake/mock AI behavior.
+5. The existing real E1 AI engine/backend must be used for AI-based document processing.
+6. Existing Evidence Vault records must remain usable.
+7. New evidence records must contain all required metadata.
+8. Existing evidence records must be migrated/backfilled safely.
+9. Backend authorization must enforce security; frontend restrictions alone are insufficient.
+10. Do not silently invent missing functionality. First inspect the repository and integrate with what already exists.
+
+============================================================
+1. FEATURE OBJECTIVE
+============================================================
+
+Currently, the ESG form allows the Project Admin/Data Entry user to attach an image/document to a data field, but the attachment workflow assumes the document is a bill and currently provides only an upload mechanism.
+
+Change this into a generalized Document Evidence Attachment workflow.
+
+A document attached to an ESG field may be:
+
+- Bill
+- Report
+
+The user must explicitly select the document type.
+
+The selected document type must persist for subsequent attachments until the user manually changes it.
+
+This behavior must apply consistently to all applicable ESG data columns/fields that support evidence attachment.
+
+IMPORTANT:
+
+Do not force the user to select the document type every time they upload a new document.
+
+Example:
+
+First attachment:
+    User selects Bill
+
+Second attachment:
+    Bill remains selected
+
+User manually changes it to Report
+
+Third attachment:
+    Report remains selected
+
+It should only change when the user deliberately changes the selector.
+
+============================================================
+2. DOCUMENT TYPE SELECTION
+============================================================
+
+For every ESG data field/column that supports evidence attachment, provide a document-type selector containing:
+
+    Bill
+    Report
+
+The selector should integrate into the existing ESG form UI and existing design system.
+
+Do not redesign the entire ESG form.
+
+The selected value should be maintained according to the existing frontend architecture/session/form state.
+
+Do not persist one user's selection globally for all users.
+
+Do not infer the document type from the filename.
+
+Do not silently override a manually selected document type.
+
+============================================================
+3. DRAG-AND-DROP DOCUMENT UPLOAD
+============================================================
+
+The current attachment interface only supports a normal upload button.
+
+Extend it to support both:
+
+1. Normal file picker upload
+2. Drag-and-drop upload
+
+The attachment area should clearly communicate that the user can:
+
+    Drag & drop a document here
+    OR
+    Click to upload
+
+The existing Upload button must continue working.
+
+At minimum, support the document formats already supported by the application, including:
+
+    PDF
+    JPG
+    JPEG
+    PNG
+
+If the existing application supports additional valid formats, do not unnecessarily remove them.
+
+The frontend should validate file type and size for usability.
+
+The backend must independently validate:
+
+- MIME type
+- File extension
+- File size
+- Filename safety
+- Upload integrity
+- Existing application security restrictions
+
+Never rely exclusively on frontend validation.
+
+============================================================
+4. IMMEDIATE ATTACHMENT BEHAVIOR
+============================================================
+
+Once the user selects or drops a file:
+
+    File selected
+        ↓
+    Immediately register/attach the document
+        ↓
+    Show filename/document state
+        ↓
+    Show:
+        [ Continue with AI ]
+        [ Continue without AI ]
+
+Do not force the user through an unnecessary additional upload screen.
+
+The document must be associated with the appropriate:
+
+- ESG field/column
+- Project
+- Authenticated user
+- Selected document type
+
+according to the existing backend architecture.
+
+The backend must remain the authoritative source for the association.
+
+============================================================
+5. TWO PROCESSING PATHS
+============================================================
+
+After a document is attached, provide exactly these two logical options:
+
+    Continue with AI
+
+    Continue without AI
+
+These options must be integrated into the existing ESG data-entry workflow.
+
+============================================================
+6. CONTINUE WITH AI
+============================================================
+
+When the user selects:
+
+    Continue with AI
+
+the document must be processed through the EXISTING REAL E1 AI ENGINE/BACKEND.
+
+IMPORTANT:
+
+Do NOT:
+
+- create a fake OCR engine
+- create mock extraction results
+- hardcode extracted values
+- simulate E1 responses
+- replace E1 with another implementation
+- create a parallel AI pipeline when E1 already exists
+
+First inspect the repository and locate the currently working E1 engine and its integration points.
+
+Use the actual E1 backend.
+
+If the existing project has an established service/API/client for E1, reuse it.
+
+============================================================
+7. AI DOCUMENT RELEVANCE VALIDATION
+============================================================
+
+The AI workflow must determine whether the uploaded document is relevant to the ESG field/column to which it was attached.
+
+The target field/indicator context must be passed to the E1 processing pipeline where the existing architecture supports it.
+
+Example:
+
+If the ESG field is:
+
+    Electricity Consumption
+
+and the user uploads:
+
+    electricity_bill.pdf
+
+the document should be considered relevant if the E1 validation confirms it.
+
+If the user uploads an unrelated document, the AI workflow must reject it as unrelated.
+
+Expected logical flow:
+
+    Document
+        ↓
+    Identify target ESG field/indicator
+        ↓
+    E1 relevance validation
+        ↓
+    Is document relevant?
+        ↓
+    NO → Reject
+        ↓
+    YES → Continue to OCR/extraction
+
+If the document is unrelated, do not treat it as valid evidence for that ESG field simply because OCR succeeded.
+
+The user should receive a clear error/message such as:
+
+    This document does not appear to be relevant to this ESG field.
+    Please upload a relevant supporting document.
+
+Do not silently accept unrelated documents.
+
+============================================================
+8. BILL-SPECIFIC AI EXTRACTION
+============================================================
+
+When:
+
+    Document Type = Bill
+
+the E1 workflow should process the bill using the existing capabilities.
+
+Conceptual flow:
+
+    Bill
+      ↓
+    E1
+      ↓
+    OCR
+      ↓
+    Relevance validation
+      ↓
+    Extraction
+      ↓
+    Validation
+      ↓
+    Extracted value
+      ↓
+    User confirmation/edit
+      ↓
+    ESG field
+
+The implementation must use the existing field/indicator mappings and E1 capabilities already present in the repository.
+
+Do not invent new BRSR mappings if existing mappings already exist.
+
+============================================================
+9. REPORT PROCESSING
+============================================================
+
+When:
+
+    Document Type = Report
+
+the workflow must not incorrectly force the document through bill-specific extraction.
+
+The document should still be:
+
+- Uploaded
+- Associated with the ESG field
+- Validated for relevance when AI is selected
+- Added to the Evidence Vault
+
+If the existing E1 engine supports relevant report processing/extraction, integrate with that existing capability.
+
+If the current E1 engine only performs bill-specific extraction for a given field, do not fake report extraction.
+
+The report should still be usable as supporting evidence through the manual path.
+
+============================================================
+10. USER CONFIRMATION OF AI-EXTRACTED VALUE
+============================================================
+
+Never automatically trust an AI-extracted value without user confirmation.
+
+After extraction, display the extracted value to the user.
+
+Example:
+
+    AI Extracted Value
+
+    Extracted value:
+    [ 12,450 kWh ]
+
+    Is this value correct?
+
+    [ Confirm & Use Value ]
+    [ Edit Value ]
+
+The user must be able to modify the extracted value before confirmation.
+
+Example:
+
+AI extracts:
+
+    12,450
+
+User changes it to:
+
+    12,520
+
+The final value inserted into the ESG field must be:
+
+    12,520
+
+not the original AI output.
+
+The final ESG value is therefore:
+
+    AI extraction
+        ↓
+    Validation
+        ↓
+    User review
+        ↓
+    Optional user correction
+        ↓
+    User confirmation
+        ↓
+    ESG field
+
+AI output is assistive, not authoritative.
+
+============================================================
+11. CONTINUE WITHOUT AI
+============================================================
+
+When the user selects:
+
+    Continue without AI
+
+do NOT invoke E1.
+
+The user must manually enter the ESG field value.
+
+Flow:
+
+    Document uploaded
+        ↓
+    Continue without AI
+        ↓
+    User enters value manually
+        ↓
+    Submit/save
+        ↓
+    Evidence remains attached
+
+AI processing must be optional.
+
+Evidence creation must not depend on AI processing.
+
+============================================================
+12. UNIQUE EVIDENCE ID
+============================================================
+
+Every newly uploaded document must receive a unique Evidence ID.
+
+The ID must be generated authoritatively by the backend.
+
+Do NOT:
+
+- use the original filename as the ID
+- allow the frontend to determine the authoritative ID
+- reuse an existing Evidence ID
+- create predictable IDs if the existing application already has a UUID/secure identifier mechanism
+
+Prefer the existing project's identifier strategy if one already exists.
+
+Every new evidence record must have guaranteed uniqueness.
+
+============================================================
+13. DOCUMENT / EVIDENCE NAME
+============================================================
+
+Each uploaded document must have a stored document/evidence name.
+
+The Evidence Vault should be able to identify the evidence using:
+
+    Evidence ID
+    Document Name
+
+Do not destroy the original filename.
+
+If the current Evidence Vault already has a naming mechanism, reuse it where appropriate.
+
+============================================================
+14. EVIDENCE VAULT CHANGES
+============================================================
+
+The Evidence Vault must be extended to capture the new metadata.
+
+For newly uploaded evidence, ensure the following information is available:
+
+    Evidence ID
+    Document Name
+    Document Type
+    Bill Type
+    Attached By
+    Attached By Role
+    Project
+    ESG Field / Column / Indicator
+    Attachment Timestamp
+
+Also preserve all existing Evidence Vault metadata and functionality.
+
+Do not remove existing columns or existing evidence information unless absolutely required by the current schema.
+
+============================================================
+15. DOCUMENT TYPE VS BILL TYPE
+============================================================
+
+These are two separate concepts.
+
+DOCUMENT TYPE:
+
+    Bill
+    Report
+
+BILL TYPE:
+
+Only meaningful when the document is a bill.
+
+Existing bill categories in the application may include:
+
+    Electricity
+    Fuel
+    Petrol
+    Diesel
+    CNG
+    Coal
+    Other
+
+Reuse the existing bill-type implementation and mappings.
+
+If the user has not provided a bill type:
+
+    Bill Type = Unknown
+
+For Report documents, do not incorrectly assign a specific bill type.
+
+Unless the existing schema already has a better explicit representation such as NULL/N/A, use the agreed fallback:
+
+    Unknown
+
+Do not fabricate bill-type information.
+
+If the user chooses:
+
+    Other
+
+preserve the existing application's mechanism for specifying the actual bill type.
+
+============================================================
+16. ATTACHED-BY INFORMATION
+============================================================
+
+Every newly uploaded evidence record must record who attached it.
+
+Store:
+
+    Attached By
+
+and:
+
+    Attached By Role
+
+The role must come from the authenticated backend user/session.
+
+Do not allow the frontend to arbitrarily specify another user's role.
+
+The current runtime roles are EXACTLY:
+
+    system_admin
+    group_admin
+    subsidiary_admin
+    bu_admin
+    project_admin
+
+Do not reintroduce obsolete roles.
+
+DO NOT recreate:
+
+    group_esg_manager
+    subsidiary_esg_manager
+    bu_esg_manager
+    bu_reviewer
+    project_data_entry_user
+    auditor
+    read_only_viewer
+
+or legacy aliases:
+
+    super_admin
+    esg_manager
+    maker
+    checker
+    viewer
+
+The role stored with new evidence must be the actual valid runtime role of the authenticated user.
+
+============================================================
+17. PROJECT ASSOCIATION
+============================================================
+
+Every newly uploaded evidence record must be associated with the project from which the upload occurred.
+
+The Evidence Vault must be able to answer:
+
+    Which project does this evidence belong to?
+
+The project association must be validated by the backend.
+
+Do not blindly trust a project_id supplied by the frontend.
+
+The backend must verify that the authenticated user has permission to access and attach evidence to that project.
+
+============================================================
+18. ESG FIELD / COLUMN ASSOCIATION
+============================================================
+
+Evidence must also retain which ESG data field/column/indicator it supports.
+
+Example:
+
+    Project
+        ↓
+    ESG Form
+        ↓
+    ENV-ENERGY-001
+        ↓
+    Electricity Consumption
+        ↓
+    Evidence
+
+The evidence should retain sufficient context to identify the target ESG field/indicator.
+
+This association is also important for AI relevance validation.
+
+Do not create evidence that is only associated with a project while losing the field-level context if the existing architecture supports field-level evidence.
+
+Reuse the project's existing ESG indicator/key structure.
+
+============================================================
+19. EXISTING EVIDENCE RECORDS
+============================================================
+
+This is critical.
+
+DO NOT break existing Evidence Vault records.
+
+Existing evidence files and records must remain accessible.
+
+The new metadata columns must be introduced safely.
+
+For historical records where information is genuinely unavailable, use a safe fallback.
+
+Examples:
+
+    Document Type → Unknown
+    Bill Type → Unknown
+    Attached By → Unknown or __
+    Attached By Role → Unknown or __
+    Project → Existing project if reliably available, otherwise __
+    ESG Field → Existing field if reliably available, otherwise __
+
+IMPORTANT:
+
+Do not fabricate historical information.
+
+If the original evidence does not contain the information needed for the new field, do not invent a user, role, project, bill type, or document type.
+
+Use:
+
+    Unknown
+
+or:
+
+    __
+
+according to the final migration convention.
+
+Preserve any information that can be reliably derived from existing records.
+
+Do not modify the actual historical evidence files unnecessarily.
+
+============================================================
+20. DATABASE MIGRATION
+============================================================
+
+Before changing the database:
+
+1. Inspect the existing Evidence Vault model.
+2. Inspect all existing evidence-related tables.
+3. Inspect relationships.
+4. Inspect database migrations.
+5. Inspect evidence APIs.
+6. Inspect storage references.
+7. Inspect frontend consumers.
+8. Determine how existing evidence IDs are generated.
+9. Determine how existing project/user relationships work.
+
+Then create a proper migration.
+
+The migration must:
+
+- Add required fields safely.
+- Preserve existing records.
+- Preserve existing evidence files.
+- Preserve existing identifiers.
+- Backfill safe values.
+- Preserve foreign keys.
+- Avoid destructive operations.
+- Avoid dropping/recreating the Evidence Vault table.
+- Avoid data loss.
+
+If a NOT NULL field is required for new records but historical records cannot provide it, design the migration appropriately rather than destroying data.
+
+============================================================
+21. BACKEND API / SERVICE DESIGN
+============================================================
+
+Reuse existing APIs/services where possible.
+
+Do not create duplicate upload/evidence functionality if the application already has it.
+
+Potential responsibilities include:
+
+    Upload / attach evidence
+    Retrieve evidence metadata
+    Process evidence through E1
+    Validate document relevance
+    Extract value
+    Return extracted value
+    Confirm extracted value
+    Update evidence metadata
+
+Use the existing project's API conventions.
+
+Backend must enforce:
+
+    Authentication
+    RBAC
+    Project scope
+    File validation
+    Evidence ownership/scope
+    ESG field access
+    AI processing authorization where applicable
+
+============================================================
+22. SECURITY
+============================================================
+
+The frontend is NOT a security boundary.
+
+The backend must validate:
+
+    authenticated user
+        ↓
+    valid runtime role
+        ↓
+    project access
+        ↓
+    ESG field access
+        ↓
+    file validity
+        ↓
+    evidence creation
+        ↓
+    metadata assignment
+
+Prevent users from attaching evidence to projects they do not have access to.
+
+Prevent users from assigning evidence metadata to another user.
+
+The backend should derive authoritative values such as:
+
+    attached_by
+    attached_by_role
+    project scope
+
+from authenticated context wherever possible.
+
+Never trust client-supplied role information.
+
+Never store sensitive authentication information inside evidence metadata.
+
+============================================================
+23. SCOPE / ROLE COMPATIBILITY
+============================================================
+
+Do not weaken the existing five-role RBAC architecture.
+
+The runtime roles remain exactly:
+
+    system_admin
+    group_admin
+    subsidiary_admin
+    bu_admin
+    project_admin
+
+Evidence attachment must respect each user's authorized project scope.
+
+Do not reintroduce old maker/checker roles.
+
+Separation of duties must continue to be enforced using:
+
+    authenticated user identity
+    creator/submitter IDs
+    reviewer/approver IDs
+    workflow state
+    approval history
+
+Do not resurrect obsolete roles just to implement workflow security.
+
+============================================================
+24. FRONTEND REQUIREMENTS
+============================================================
+
+Do not redesign the ESG form.
+
+Modify only the existing document/evidence attachment workflow.
+
+Use existing:
+
+- UI components
+- styling
+- dialogs/modals
+- buttons
+- form controls
+- upload components
+- notification system
+- loading states
+
+where possible.
+
+The conceptual interface should become:
+
+    +-----------------------------------------+
+    | Document Type                           |
+    | [ Bill ▼ ]                              |
+    |                                         |
+    | +-------------------------------------+ |
+    | | Drag & drop document here           | |
+    | |               OR                    | |
+    | |            [ Upload ]               | |
+    | +-------------------------------------+ |
+    +-----------------------------------------+
+
+After upload:
+
+    +-----------------------------------------+
+    | ✓ electricity_bill.pdf                  |
+    |                                         |
+    | [ Continue with AI ]                   |
+    | [ Continue without AI ]                |
+    +-----------------------------------------+
+
+After AI extraction:
+
+    +-----------------------------------------+
+    | AI Extracted Value                      |
+    |                                         |
+    | 12,450 kWh                              |
+    |                                         |
+    | [ Confirm & Use Value ]                |
+    | [ Edit Value ]                         |
+    +-----------------------------------------+
+
+The final UI must match the existing application's visual design.
+
+Do not introduce a separate unrelated design system.
+
+============================================================
+25. DRAG-AND-DROP UX
+============================================================
+
+Implement proper drag-and-drop behavior.
+
+Handle at minimum:
+
+    dragenter
+    dragover
+    dragleave
+    drop
+
+The drop zone should provide visual feedback while a file is being dragged over it.
+
+After a valid drop:
+
+    process file immediately
+
+After an invalid drop:
+
+    display a clear validation error
+
+Do not allow invalid files to silently enter the workflow.
+
+============================================================
+26. FILE UPLOAD STATES
+============================================================
+
+Handle appropriate states:
+
+    idle
+    dragging
+    uploading
+    uploaded
+    processing
+    AI validation
+    extraction
+    user confirmation
+    manual entry
+    submitted
+    error
+
+Do not allow duplicate submissions caused by repeated clicks.
+
+Use existing loading/progress mechanisms if available.
+
+============================================================
+27. AI ERROR HANDLING
+============================================================
+
+Handle at minimum:
+
+1. E1 unavailable
+2. E1 timeout
+3. OCR failure
+4. Extraction failure
+5. Validation failure
+6. Document irrelevant to ESG field
+7. Unsupported document
+8. Malformed document
+9. Corrupt document
+10. Backend processing failure
+
+Never claim that AI succeeded when it did not.
+
+If AI fails and the existing workflow allows manual entry, the user should be able to continue through:
+
+    Continue without AI
+
+where appropriate.
+
+Do not silently switch to fake AI output.
+
+============================================================
+28. EVIDENCE VAULT DISPLAY
+============================================================
+
+Update the Evidence Vault UI to expose the new metadata.
+
+For newly uploaded evidence, display at minimum:
+
+    Evidence ID
+    Document Name
+    Document Type
+    Bill Type
+    Attached By
+    Attached By Role
+    Project
+    ESG Field / Indicator
+    Date / Time
+
+Do not remove existing Evidence Vault information.
+
+Do not break:
+
+- search
+- filtering
+- preview
+- download
+- document access
+- existing evidence details
+- existing relationships
+
+If the Evidence Vault already supports filtering, extend it rather than replacing the existing filter system.
+
+============================================================
+29. DOCUMENT TYPE PERSISTENCE EXAMPLE
+============================================================
+
+The implementation must behave like this:
+
+FIRST ATTACHMENT:
+
+    User opens ESG form.
+
+    Document Type:
+        Bill
+
+    Upload:
+        electricity_bill.pdf
+
+NEXT ATTACHMENT:
+
+    Document Type should still be:
+        Bill
+
+USER CHANGES TYPE:
+
+    User manually changes:
+        Bill → Report
+
+NEXT ATTACHMENT:
+
+    Document Type should now be:
+        Report
+
+NEXT ATTACHMENT:
+
+    Document Type should remain:
+        Report
+
+The system must NOT automatically reset to Bill after every upload.
+
+The system must NOT automatically infer the type from the filename.
+
+============================================================
+30. BILL TYPE EXAMPLE
+============================================================
+
+Example:
+
+    Document Type:
+        Bill
+
+    Bill Type:
+        Electricity
+
+    File:
+        electricity_april_2026.pdf
+
+Evidence record:
+
+    Evidence ID:
+        backend-generated unique ID
+
+    Document Name:
+        electricity_april_2026.pdf
+
+    Document Type:
+        Bill
+
+    Bill Type:
+        Electricity
+
+    Attached By:
+        authenticated user
+
+    Attached By Role:
+        project_admin
+
+    Project:
+        actual project
+
+    ESG Field:
+        actual ESG field/indicator
+
+============================================================
+31. REPORT EXAMPLE
+============================================================
+
+Example:
+
+    Document Type:
+        Report
+
+    File:
+        sustainability_report.pdf
+
+Evidence record:
+
+    Evidence ID:
+        backend-generated unique ID
+
+    Document Name:
+        sustainability_report.pdf
+
+    Document Type:
+        Report
+
+    Bill Type:
+        Unknown
+
+    Attached By:
+        authenticated user
+
+    Attached By Role:
+        project_admin
+
+    Project:
+        actual project
+
+    ESG Field:
+        actual ESG field/indicator
+
+============================================================
+32. CONTINUE WITHOUT AI EXAMPLE
+============================================================
+
+User uploads:
+
+    report.pdf
+
+Selects:
+
+    Report
+
+Clicks:
+
+    Continue without AI
+
+Then:
+
+    User manually enters ESG value
+
+Then:
+
+    User submits
+
+The document must still be stored in the Evidence Vault with:
+
+    Evidence ID
+    Document Name
+    Document Type = Report
+    Bill Type = Unknown
+    Attached By
+    Attached By Role
+    Project
+    ESG Field
+    Timestamp
+
+No E1 request should be made.
+
+============================================================
+33. AI PATH EXAMPLE
+============================================================
+
+User uploads:
+
+    electricity_bill.pdf
+
+Selects:
+
+    Bill
+
+Clicks:
+
+    Continue with AI
+
+Flow:
+
+    Upload
+        ↓
+    Create/attach evidence
+        ↓
+    E1
+        ↓
+    Relevance validation
+        ↓
+    Relevant?
+        ↓
+    Yes
+        ↓
+    OCR
+        ↓
+    Extract electricity value
+        ↓
+    Validate
+        ↓
+    Show extracted value
+        ↓
+    User checks
+        ↓
+    User confirms/edits
+        ↓
+    Populate ESG field
+        ↓
+    User submits
+
+If unrelated:
+
+    Upload
+        ↓
+    E1
+        ↓
+    Relevance validation
+        ↓
+    Not relevant
+        ↓
+    Reject for this ESG field
+        ↓
+    Ask user to upload relevant evidence
+
+============================================================
+34. DO NOT AUTOMATICALLY TRUST OCR
+============================================================
+
+OCR output is not automatically correct.
+
+The system must distinguish:
+
+    Raw OCR
+    AI extraction
+    Validated extraction
+    User-confirmed value
+
+The final ESG field must contain the user-confirmed value.
+
+If the AI extracts an incorrect number, the user must be able to correct it.
+
+============================================================
+35. AUDITABILITY
+============================================================
+
+Where the existing application already maintains audit logs/history, integrate this workflow into the existing mechanism.
+
+Important events may include:
+
+    Evidence uploaded
+    Evidence attached to ESG field
+    AI processing requested
+    AI relevance validation result
+    AI extraction result
+    User corrected extracted value
+    Evidence submitted
+    Evidence metadata changed
+
+Do not create a completely separate audit architecture if an existing one is already present.
+
+Do not log sensitive information unnecessarily.
+
+============================================================
+36. EXISTING BRSR / ESG LOGIC
+============================================================
+
+Do not change existing:
+
+- BRSR mappings
+- ESG calculations
+- Scope 1/2/3 logic
+- Energy conversion logic
+- GHG calculations
+- Dashboard calculations
+- Report generation
+
+unless the new confirmed ESG field value naturally enters those existing calculations through the existing data flow.
+
+The new feature should feed the existing data pipeline rather than creating a second calculation system.
+
+============================================================
+37. REPOSITORY AUDIT BEFORE IMPLEMENTATION
+============================================================
+
+Before writing code, inspect the repository.
+
+Identify the actual implementation of:
+
+1. ESG form
+2. ESG field components
+3. Existing upload component
+4. Existing attachment logic
+5. Evidence Vault frontend
+6. Evidence Vault backend
+7. Evidence database model
+8. Evidence API/service
+9. File storage
+10. Existing upload validation
+11. Existing E1 AI engine
+12. E1 API/client/service
+13. OCR implementation
+14. ESG field/indicator mapping
+15. Project model
+16. User model
+17. RBAC implementation
+18. Authentication
+19. Database migrations
+20. Audit/history system
+21. Existing tests
+
+Do not guess filenames, APIs, database fields, or services.
+
+Find and reuse the real implementations.
+
+============================================================
+38. IMPLEMENTATION STRATEGY
+============================================================
+
+Follow this order:
+
+PHASE 1 — AUDIT
+
+Inspect the repository and map the current architecture.
+
+PHASE 2 — DATA MODEL
+
+Determine the minimum database changes required for:
+
+    document_type
+    bill_type
+    attached_by
+    attached_by_role
+    project
+    ESG field/indicator
+    evidence ID/name
+
+Reuse existing columns if they already exist.
+
+PHASE 3 — MIGRATION
+
+Create a safe migration.
+
+Backfill existing records with reliable information where possible.
+
+Use Unknown/__ where historical information genuinely does not exist.
+
+PHASE 4 — BACKEND
+
+Extend the existing evidence/upload services.
+
+Implement:
+
+    document type
+    unique evidence ID
+    metadata
+    project association
+    ESG field association
+    backend authorization
+    E1 integration
+
+PHASE 5 — E1
+
+Integrate with the actual existing E1 engine.
+
+Implement:
+
+    relevance validation
+    OCR
+    extraction
+    validation
+    response handling
+
+Do not create mock AI behavior.
+
+PHASE 6 — FRONTEND
+
+Extend the existing attachment component.
+
+Add:
+
+    Bill/Report selector
+    sticky selection
+    drag-and-drop
+    upload state
+    Continue with AI
+    Continue without AI
+    extraction review
+    extraction correction
+    confirmation
+
+PHASE 7 — EVIDENCE VAULT
+
+Display the new metadata while preserving all existing functionality.
+
+PHASE 8 — TESTING
+
+Run backend/frontend/database/integration tests.
+
+PHASE 9 — FINAL AUDIT
+
+Search the repository for:
+
+    old evidence schemas
+    duplicated upload logic
+    incorrect role references
+    broken API consumers
+    hardcoded values
+    mock E1 logic
+    unsafe metadata assignment
+
+============================================================
+39. TESTING REQUIREMENTS
+============================================================
+
+Test DOCUMENT TYPE:
+
+- Bill selected
+- Report selected
+- Bill remains selected
+- Report remains selected
+- Manual change works
+- Selection does not leak between users
+
+Test UPLOAD:
+
+- Normal upload
+- Drag/drop
+- PDF
+- JPG
+- JPEG
+- PNG
+- Existing supported formats
+- Invalid format
+- Oversized file
+- Corrupt file
+
+Test AI:
+
+- Relevant document
+- Irrelevant document
+- OCR
+- Extraction
+- Validation
+- User confirmation
+- User correction
+- E1 failure
+- E1 timeout
+
+Test MANUAL:
+
+- Continue without AI
+- Manual value entry
+- Evidence still created
+- E1 is not called
+
+Test EVIDENCE:
+
+Verify new evidence contains:
+
+    Evidence ID
+    Document Name
+    Document Type
+    Bill Type
+    Attached By
+    Attached By Role
+    Project
+    ESG Field
+    Timestamp
+
+Test EXISTING EVIDENCE:
+
+- Existing records still load
+- Existing files still open
+- Existing files still download
+- Existing IDs remain valid
+- Existing metadata remains intact
+- New fields have safe fallback values
+- No historical information is fabricated
+
+Test RBAC:
+
+    system_admin
+    group_admin
+    subsidiary_admin
+    bu_admin
+    project_admin
+
+Verify project scope and evidence permissions.
+
+Do not test or restore obsolete runtime roles.
+
+============================================================
+40. PERFORMANCE / UX
+============================================================
+
+Do not block the entire ESG form unnecessarily during AI processing.
+
+Use the existing asynchronous/loading pattern if available.
+
+The user should always understand:
+
+    Uploading
+    Processing
+    Validating
+    Extracting
+    Waiting for confirmation
+    Completed
+    Failed
+
+Avoid duplicate requests caused by repeated clicks.
+
+Prevent duplicate evidence records caused by accidental double submission.
+
+============================================================
+41. DATA INTEGRITY
+============================================================
+
+The following must always remain consistent:
+
+    Evidence ID
+        ↕
+    Stored document
+        ↕
+    Project
+        ↕
+    ESG field/indicator
+        ↕
+    Attaching user
+        ↕
+    Document type
+        ↕
+    Bill type
+        ↕
+    Workflow state
+
+Do not allow orphaned evidence records unless the existing architecture intentionally supports them.
+
+If the document is uploaded but subsequent AI processing fails, preserve the evidence appropriately rather than losing the document.
+
+Use the existing transaction/storage strategy where possible.
+
+============================================================
+42. BACKWARD COMPATIBILITY
+============================================================
+
+Existing ESG forms must continue to work.
+
+Existing evidence must continue to work.
+
+Existing APIs must not be broken unnecessarily.
+
+If an API response changes, inspect all frontend consumers before changing the response contract.
+
+If backward-compatible additions are possible, prefer them.
+
+Do not remove old fields from API responses unless they are demonstrably unused and removal is safe.
+
+============================================================
+43. NO UNRELATED CHANGES
+============================================================
+
+Do not modify unrelated:
+
+- Dashboard UI
+- Authentication
+- User registration
+- Project hierarchy
+- BRSR mappings
+- Report generation
+- GHG calculations
+- Energy calculations
+- RBAC architecture
+- Existing AI engines
+- Existing database tables unrelated to evidence
+- Existing styling system
+
+Only make changes required to implement this feature safely.
+
+============================================================
+44. FINAL ACCEPTANCE CRITERIA
+============================================================
+
+The implementation is complete only when ALL of the following are true:
+
+[ ] Every applicable ESG field supports document attachment.
+
+[ ] User can select Bill or Report.
+
+[ ] Selected document type remains selected for subsequent uploads until manually changed.
+
+[ ] Drag-and-drop upload works.
+
+[ ] Existing upload button continues working.
+
+[ ] Supported existing file types continue working.
+
+[ ] Uploaded document is immediately registered/displayed.
+
+[ ] Continue with AI is available.
+
+[ ] Continue without AI is available.
+
+[ ] AI path uses the real E1 backend.
+
+[ ] E1 checks whether the document is relevant to the target ESG field.
+
+[ ] Irrelevant documents are rejected.
+
+[ ] Relevant documents continue through the existing OCR/extraction/validation process.
+
+[ ] AI-extracted values are shown to the user.
+
+[ ] User can confirm the value.
+
+[ ] User can edit/correct the value.
+
+[ ] Confirmed/corrected value populates the ESG field.
+
+[ ] Continue without AI does not invoke E1.
+
+[ ] Manual entry works.
+
+[ ] Evidence is still created when AI is skipped.
+
+[ ] Every newly uploaded document receives a unique backend-generated Evidence ID.
+
+[ ] Document name is preserved.
+
+[ ] Document type is stored.
+
+[ ] Bill type is stored.
+
+[ ] Missing bill type becomes Unknown.
+
+[ ] Attached user is stored.
+
+[ ] Attached user's actual runtime role is stored.
+
+[ ] Project is stored.
+
+[ ] ESG field/indicator is stored.
+
+[ ] Timestamp is stored.
+
+[ ] Existing Evidence Vault records remain functional.
+
+[ ] Existing evidence files remain accessible.
+
+[ ] Existing evidence metadata is preserved.
+
+[ ] Historical missing metadata is safely represented as Unknown/__.
+
+[ ] No historical information is fabricated.
+
+[ ] Evidence Vault UI displays the new metadata.
+
+[ ] Existing Evidence Vault functionality remains intact.
+
+[ ] Backend enforces authentication.
+
+[ ] Backend enforces project scope.
+
+[ ] Backend derives/validates user and role information.
+
+[ ] Exactly five runtime roles remain.
+
+[ ] No obsolete roles are reintroduced.
+
+[ ] Existing SoD/workflow security remains intact.
+
+[ ] Database migration succeeds.
+
+[ ] Backend starts successfully.
+
+[ ] Frontend builds successfully.
+
+[ ] Relevant tests pass.
+
+[ ] No mock/fake E1 behavior has been introduced.
+
+============================================================
+45. FINAL REPOSITORY SEARCH
+============================================================
+
+After implementation, perform a repository-wide search for:
+
+- duplicate evidence upload logic
+- old evidence model references
+- hardcoded document types
+- hardcoded bill types
+- frontend-only role assignments
+- client-controlled attached_by values
+- client-controlled attached_by_role values
+- unsafe project assignment
+- mock E1 responses
+- fake OCR
+- hardcoded extracted values
+- obsolete runtime roles
+
+For this feature specifically, ensure there is no implementation where the frontend can simply submit:
+
+    attached_by = another user
+    attached_by_role = another role
+    project_id = unauthorized project
+
+and have the backend accept it without verification.
+
+============================================================
+46. FINAL IMPLEMENTATION REPORT
+============================================================
+
+After completing the implementation, provide a concise but technically detailed report with these sections:
+
+1. FILES CHANGED
+
+List the actual files modified/created.
+
+2. DATABASE CHANGES
+
+List:
+
+- New fields
+- Modified fields
+- Migration
+- Backfill strategy
+- Existing evidence handling
+
+3. FRONTEND CHANGES
+
+Explain:
+
+- Document type selector
+- Sticky Bill/Report selection
+- Drag-and-drop
+- Upload flow
+- AI/manual buttons
+- AI extraction confirmation/editing
+
+4. BACKEND CHANGES
+
+Explain:
+
+- Evidence creation
+- Metadata
+- Project association
+- ESG field association
+- Authorization
+- Unique ID generation
+
+5. E1 INTEGRATION
+
+Explain exactly:
+
+- Which existing E1 engine was used
+- How the document is passed to it
+- How relevance validation works
+- How OCR/extraction works
+- How validation works
+- How the result reaches the ESG form
+
+6. EVIDENCE VAULT
+
+Explain:
+
+- New columns
+- New metadata
+- Display changes
+- Existing record compatibility
+
+7. SECURITY
+
+Explain:
+
+- Authentication
+- RBAC
+- Project scope
+- Metadata ownership
+- SoD compatibility
+
+8. TESTING
+
+List the tests actually executed and their results.
+
+9. UNRESOLVED ISSUES
+
+If any requirement could not be implemented because the existing repository lacks a required capability, DO NOT fabricate a solution.
+
+Instead report:
+
+    File/component:
+    Current behavior:
+    Missing capability:
+    Impact:
+    Recommended implementation:
+
+============================================================
+FINAL RULE
+============================================================
+
+Implement this as an extension of the existing ESG Data Entry and Evidence Vault architecture, NOT as a replacement system.
+
+The final workflow must be:
+
+    PROJECT ADMIN
+         |
+         v
+    ESG DATA FIELD
+         |
+         +-----------------------------+
+         |                             |
+         v                             v
+    Select Document Type           Existing value
+         |
+         +-------------+
+         |             |
+       Bill          Report
+         |
+         v
+    Drag & Drop / Upload
+         |
+         v
+    Document Immediately Registered
+         |
+         +-----------------------------+
+         |                             |
+         v                             v
+    Continue with AI            Continue without AI
+         |                             |
+         v                             v
+    Real E1 Engine               Manual Entry
+         |
+         v
+    Relevance Validation
+         |
+       +---+---+
+       |       |
+      NO      YES
+       |       |
+       v       v
+    Reject   OCR / Extraction
+                |
+                v
+             Validation
+                |
+                v
+        Show Extracted Value
+                |
+          +-----+-----+
+          |           |
+          v           v
+       Confirm      Edit
+          |           |
+          +-----+-----+
+                |
+                v
+        Populate ESG Field
+                |
+                v
+             Submit
+                |
+                v
+       Generate Evidence ID
+                |
+                v
+          Evidence Vault
+                |
+                +-- Evidence ID
+                +-- Document Name
+                +-- Document Type
+                +-- Bill Type
+                +-- Attached By
+                +-- Attached By Role
+                +-- Project
+                +-- ESG Field
+                +-- Timestamp
+
+The implementation must be end-to-end.
+
+Do not consider the task complete merely because the upload UI works.
+
+The database, Evidence Vault, real E1 integration, document relevance validation, OCR/extraction, user confirmation, metadata, historical evidence compatibility, authorization, project association, ESG field association, and complete data-entry workflow must all work together.
+
+Most importantly:
+
+DO NOT BREAK ANYTHING THAT CURRENTLY WORKS.
+DO NOT CREATE MOCK AI BEHAVIOR.
+DO NOT REINTRODUCE THE OLD RBAC ROLES.
+DO NOT FABRICATE HISTORICAL EVIDENCE METADATA.
+DO NOT TRUST FRONTEND-SUPPLIED SECURITY METADATA.
+INSPECT THE EXISTING CODEBASE FIRST, THEN IMPLEMENT THE MINIMUM SAFE CHANGES REQUIRED. ============================================================
+MANDATORY EVIDENCE ID CREATION — NON-OPTIONAL
+============================================================
+
+EVERY successful document attachment MUST create an Evidence
+record and MUST receive a unique Evidence ID generated by the
+backend.
+
+This is mandatory even when:
+
+- Continue without AI is selected
+- Continue with AI is selected
+- AI processing fails
+- OCR fails
+- The document is a Report
+- The document is a Bill
+
+The Evidence ID must NOT depend on successful AI processing.
+
+The moment the backend successfully creates/registers the
+evidence attachment, it must generate and persist the unique
+Evidence ID.
+
+The Evidence ID must:
+
+1. Be generated server-side.
+2. Be unique across all evidence records.
+3. Never be generated solely by the frontend.
+4. Never be reused.
+5. Remain permanently associated with that evidence record.
+6. Be returned by the backend after evidence creation.
+7. Be displayed in the Evidence Vault.
+8. Be available in the evidence details/view screen.
+9. Be included in relevant evidence API responses.
+10. Be preserved when the evidence is later processed by AI.
+11. Be preserved when the user edits/confirms an AI-extracted value.
+12. Be preserved when the document is downloaded/viewed.
+
+Example:
+
+User uploads:
+    electricity_april.pdf
+
+Backend creates:
+
+    Evidence ID: EVD-XXXXXXXX
+    Document Name: electricity_april.pdf
+    Document Type: Bill
+    Bill Type: Electricity
+    Attached By: <authenticated user>
+    Attached By Role: project_admin
+    Project: <actual project>
+    ESG Field: <actual ESG field>
+
+The Evidence Vault MUST display:
+
+    Evidence ID
+    EVD-XXXXXXXX
+
+The Evidence ID must NOT change when:
+
+    - AI processing occurs
+    - OCR occurs
+    - AI extracts a value
+    - User edits the extracted value
+    - User confirms the value
+    - Evidence metadata is viewed
+    - Evidence is downloaded
+
+If AI processing fails, the Evidence ID must still exist because
+the evidence attachment itself was successfully created.
+
+If evidence creation fails, DO NOT display or fabricate an
+Evidence ID on the frontend. The backend must return the actual
+creation error.
+
+There must never be a successfully attached evidence document
+without an Evidence ID.
+</USER_REQUEST>
+<ADDITIONAL_METADATA>
+The current local time is: 2026-10-09T01:44:08+05:30.
+
+The user's current state is as follows:
+Active Document: c:\Users\codes\Desktop\BRSR-project\backend\app\db\seed_demo_data.py (LANGUAGE_PYTHON)
+Cursor is on line: 212
+Other open documents:
+- c:\Users\codes\Desktop\BRSR-project\backend\app\modules\auth\models.py (LANGUAGE_PYTHON)
+- c:\Users\codes\Desktop\BRSR-project\frontend\src\api\client.js (LANGUAGE_JAVASCRIPT)
+- c:\Users\codes\Desktop\BRSR-project\backend\app\db\seed_demo_data.py (LANGUAGE_PYTHON)
+- c:\Users\codes\Desktop\BRSR-project\backend\app\ai\providers\openrouter.py (LANGUAGE_PYTHON)
+- c:\Users\codes\Desktop\BRSR-project\frontend\src\context\AuthContext.jsx (LANGUAGE_JAVASCRIPT)
+</ADDITIONAL_METADATA>
