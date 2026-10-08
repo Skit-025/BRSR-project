@@ -6,6 +6,7 @@ import {
   Sparkles, RefreshCw, FolderPlus, ChevronDown, CheckSquare, Square
 } from 'lucide-react';
 import { useOrgNodes, useOrgPeriods } from '../hooks/useApi';
+import { useAuth } from '../context/AuthContext';
 import { orgApi } from '../api/client';
 
 
@@ -104,6 +105,7 @@ function StepBar({ currentStep }) {
 
 export default function ProjectWizard() {
   const navigate = useNavigate();
+  const { canWriteOrg } = useAuth();
   const { data: nodes = [] } = useOrgNodes();
   const { data: periods = [] } = useOrgPeriods();
   const [step, setStep] = useState(1);
@@ -121,7 +123,23 @@ export default function ProjectWizard() {
     return list.length > 0 ? list : BUS;
   }, [nodes]);
 
+  if (!canWriteOrg) {
+    return (
+      <div className="page-content anim-fade-up" style={{ maxWidth: 560, margin: '80px auto', textAlign: 'center', background: '#fff', padding: '40px 32px', borderRadius: 12, border: '1px solid #e2e8f0' }}>
+        <div style={{ fontSize: 48, marginBottom: 16 }}>🔒</div>
+        <h2 style={{ fontSize: 20, fontWeight: 700, color: '#09090b', margin: '0 0 8px' }}>Access Restricted</h2>
+        <p style={{ color: '#64748b', fontSize: 13, margin: '0 0 24px', lineHeight: 1.5 }}>
+          You do not have permission to initialize or configure project entities. Project creation is restricted to Group Administrators and System Administrators.
+        </p>
+        <button className="btn btn-primary" onClick={() => navigate('/projects')}>
+          Return to Projects
+        </button>
+      </div>
+    );
+  }
+
   const handleCreateProject = async () => {
+    if (!canWriteOrg) return;
     setSubmitting(true);
     setCreateError(null);
     try {

@@ -9,6 +9,8 @@ from app.modules.consolidation.schemas import (
     ConsolidationRunResponse
 )
 from app.modules.consolidation.service import run_consolidation_engine
+from app.security.deps import require_permission, TokenData
+from app.security.rbac import Permission
 
 router = APIRouter(prefix="/consolidation", tags=["Boundary & Consolidation Engine"])
 
@@ -53,7 +55,8 @@ def get_consolidation_status(db: Session = Depends(get_db)):
 @router.post("/run", response_model=ConsolidationRunResponse, status_code=status.HTTP_200_OK)
 def trigger_consolidation(
     req: ConsolidationRunRequest,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _user: TokenData = Depends(require_permission(Permission.CONSOLIDATION_RUN))
 ):
     """
     F22-F23: Triggers deterministic post-order roll-up of approved site numbers

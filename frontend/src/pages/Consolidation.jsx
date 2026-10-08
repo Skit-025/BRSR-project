@@ -7,6 +7,7 @@ import {
 import { useConsolidationStatus, useConsolidationRun, useOrgNodes, useOrgPeriods } from '../hooks/useApi';
 import { consolidationApi } from '../api/client';
 import { useQueryClient, useQuery } from '@tanstack/react-query';
+import { useAuth } from '../context/AuthContext';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   ResponsiveContainer, Cell, AreaChart, Area
@@ -54,6 +55,7 @@ const ROLLUP_STAGES = [
 
 export default function Consolidation() {
   const qc = useQueryClient();
+  const { canConsolidate } = useAuth();
   const { data: consolidationStatus, isLoading, refetch, isRefetching } = useConsolidationStatus();
   const { data: nodes = [] }   = useOrgNodes();
   const { data: periods = [] } = useOrgPeriods();
@@ -168,6 +170,10 @@ export default function Consolidation() {
   const history    = consolidationStatus?.history || [];
 
   const handleRun = async () => {
+    if (!canConsolidate) {
+      setNotice({ type: 'error', text: 'You do not have permission to execute consolidation.' });
+      return;
+    }
     if (!runParams.period_id) {
       setNotice({ type: 'error', text: 'Period ID is required to run consolidation.' });
       return;
@@ -189,8 +195,9 @@ export default function Consolidation() {
     { key: 'bu_drilldown',           label: 'BU Drill-Down View (§18-§20)', icon: <Building2 size={13} /> },
     { key: 'subsidiary_comparison',  label: 'Cross-Subsidiary View (§31)',  icon: <BarChart2 size={13} /> },
     { key: 'ratio_integrity',        label: 'Ratio & Intensity Rule (§17)', icon: <Calculator size={13} /> },
+    canConsolidate && { key: 'run',  label: 'Trigger Roll-Up (§22)',       icon: <Layers size={13} /> },
     { key: 'history',                label: `Run History (${history.length})`, icon: <GitMerge size={13} /> },
-  ];
+  ].filter(Boolean);
 
   return (
     <div className="page-content anim-fade-up" style={{ background: '#f8fafc' }}>
@@ -599,7 +606,7 @@ export default function Consolidation() {
       )}
 
       {/* ── TAB 4: TRIGGER RUN ───────────────────────────────────────── */}
-      {activeTab === 'run' && (
+      {activeTab === 'run' && canConsolidate && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           <div style={{ padding: '24px', background: 'var(--bg-card)', borderRadius: '12px', border: '1px solid var(--border-default)' }}>
             <h2 style={{ fontSize: '15px', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '6px' }}>

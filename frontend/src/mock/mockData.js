@@ -716,36 +716,51 @@ export const MOCK_DASHBOARD_SUMMARY = {
   ],
 };
 
-// ── Metric Catalogue ──────────────────────────────────────────────────────────
+// ── Metric Catalogue — 38 Canonical SEBI BRSR Indicators ─────────────────────
 export const MOCK_METRICS = [
-  // ── Environment (Principle 6) ──
-  { id: 'm-env-001', code: 'ENV-ENERGY-001', name: 'Total electricity consumption', principle: 6, category: 'Essential', section: 'C', unit: 'MWh', description: 'Total electricity consumed in MWh/GJ, including purchased and self-generated renewable and non-renewable electricity.' },
-  { id: 'm-env-002', code: 'ENV-ENERGY-002', name: 'Fuel consumption (diesel, petrol, coal)', principle: 6, category: 'Essential', section: 'C', unit: 'GJ', description: 'Capture fuel consumption in physical units converted to Gigajoules (GJ) using calorific factors.' },
-  { id: 'm-env-003', code: 'ENV-GHG-001', name: 'Scope 1 direct emissions', principle: 6, category: 'Essential', section: 'C', unit: 'tCO2e', description: 'Gross direct GHG emissions resulting from fuel combustion in stationary and mobile sources owned or controlled by MEIL.' },
-  { id: 'm-env-004', code: 'ENV-GHG-002', name: 'Scope 2 indirect emissions (location-based)', principle: 6, category: 'Essential', section: 'C', unit: 'tCO2e', description: 'Gross indirect GHG emissions from generation of purchased or acquired electricity, heating, or cooling.' },
-  { id: 'm-env-005', code: 'ENV-WATER-001', name: 'Water withdrawal and consumption', principle: 6, category: 'Essential', section: 'C', unit: 'KL', description: 'Total volume of water withdrawn and consumed across surface water, groundwater, and municipal suppliers.' },
-  { id: 'm-env-006', code: 'ENV-WASTE-001', name: 'Waste generated and disposed', principle: 6, category: 'Essential', section: 'C', unit: 'MT', description: 'Total solid and construction waste generated across project sites and yards.' },
-  { id: 'm-020', code: 'P6-E-01', name: 'Total Energy Consumed (Gross)', principle: 6, category: 'Essential', section: 'C', unit: 'GJ', description: 'Total combined gross energy from all sources (electricity + fuel) in Gigajoules.' },
-  { id: 'm-021', code: 'P6-E-02', name: 'Energy Intensity (GJ/Revenue Cr)', principle: 6, category: 'Essential', section: 'C', unit: 'GJ/Cr', description: 'Energy intensity relative to revenue turnover in Crore Rupees.' },
-  { id: 'm-024', code: 'P6-E-05', name: 'Total GHG Emissions (tCO₂e)', principle: 6, category: 'Essential', section: 'C', unit: 'tCO₂e', description: 'Total Scope 1 + Scope 2 carbon footprint combined.' },
-  { id: 'm-028', code: 'P6-L-01', name: 'Renewable Energy Share (%)', principle: 6, category: 'Leadership', section: 'C', unit: '%', description: 'Percentage of total energy from zero-emission renewable sources.' },
-  { id: 'm-029', code: 'P6-L-02', name: 'Net Zero Target Year', principle: 6, category: 'Leadership', section: 'C', unit: 'year', description: 'Target calendar year for net-zero carbon neutrality.' },
+  // ── Governance (Principle 1) — 2 indicators ──
+  { id: 'm-gov-001', code: 'GOV-COMP-001', name: 'Stakeholder complaints received and resolved', principle: 1, category: 'Essential', section: 'A', brsr_core: false, unit: 'count', description: 'Formal vigilance and stakeholder complaints resolved.' },
+  { id: 'm-gov-002', code: 'GOV-ETH-001', name: 'Anti-corruption & ethics training coverage', principle: 1, category: 'Essential', section: 'A', brsr_core: false, unit: '%', description: 'Percentage of workforce certified on anti-bribery and business ethics.' },
 
-  // ── Social (Principle 3) ──
-  { id: 'm-soc-001', code: 'SOC-SAFE-001', name: 'Lost Time Injury Frequency Rate (LTIFR)', principle: 3, category: 'Essential', section: 'B', unit: 'per million manhours', description: 'Lost time injury frequency rate per million hours worked.' },
-  { id: 'm-soc-002', code: 'SOC-SAFE-002', name: 'Workplace Fatalities (direct + contract)', principle: 3, category: 'Essential', section: 'B', unit: 'count', description: 'Work-related employee and contractor fatalities.' },
-  { id: 'm-soc-003', code: 'SOC-EMP-001', name: 'Workforce breakdown by gender and category', principle: 3, category: 'Essential', section: 'B', unit: 'count', description: 'Total permanent and contract workforce headcount.' },
-  { id: 'm-soc-004', code: 'SOC-WELF-001', name: 'Training hours per employee', principle: 3, category: 'Essential', section: 'B', unit: 'hours', description: 'Average health, safety, and skills training hours completed per employee.' },
-  { id: 'm-010', code: 'P3-E-01', name: 'Permanent Employees (Male)', principle: 3, category: 'Essential', section: 'B', unit: 'count', description: 'Total male permanent employees on company payroll.' },
-  { id: 'm-011', code: 'P3-E-02', name: 'Permanent Employees (Female)', principle: 3, category: 'Essential', section: 'B', unit: 'count', description: 'Total female permanent employees on company payroll.' },
-  { id: 'm-014', code: 'P3-L-01', name: 'Health Insurance Coverage (%)', principle: 3, category: 'Leadership', section: 'B', unit: '%', description: 'Employees covered under comprehensive group health insurance.' },
+  // ── Social (Principle 3) — 4 indicators ──
+  { id: 'm-soc-003', code: 'SOC-EMP-001', name: 'Workforce breakdown by gender and category', principle: 3, category: 'Essential', section: 'B', brsr_core: true, unit: 'count', description: 'Total permanent and contract workforce headcount.' },
+  { id: 'm-soc-001', code: 'SOC-SAFE-001', name: 'Lost Time Injury Frequency Rate (LTIFR)', principle: 3, category: 'Essential', section: 'B', brsr_core: true, unit: 'per 1,000,000 h', description: 'Lost time injury frequency rate per million hours worked.' },
+  { id: 'm-soc-002', code: 'SOC-SAFE-002', name: 'Workplace Fatalities (direct + contract)', principle: 3, category: 'Essential', section: 'B', brsr_core: false, unit: 'count', description: 'Work-related employee and contractor fatalities.' },
+  { id: 'm-soc-004', code: 'SOC-WELF-001', name: 'Training hours per employee', principle: 3, category: 'Essential', section: 'B', brsr_core: false, unit: 'hours', description: 'Average health, safety, and skills training hours completed per employee.' },
 
-  // ── Governance (Principle 1) ──
-  { id: 'm-gov-001', code: 'GOV-ETH-001', name: 'Anti-corruption & ethics training coverage', principle: 1, category: 'Essential', section: 'A', unit: '%', description: 'Percentage of workforce certified on anti-bribery and business ethics.' },
-  { id: 'm-gov-002', code: 'GOV-COMP-001', name: 'Stakeholder complaints received and resolved', principle: 1, category: 'Essential', section: 'A', unit: 'count', description: 'Formal vigilance and stakeholder complaints resolved.' },
-  { id: 'm-001', code: 'P1-E-01', name: 'Code of Conduct Coverage (%)', principle: 1, category: 'Essential', section: 'A', unit: '%', description: 'Percentage of employees covered under corporate code of conduct.' },
-  { id: 'm-003', code: 'P1-E-02', name: 'Whistle-blower Policy Coverage (%)', principle: 1, category: 'Essential', section: 'A', unit: '%', description: 'Workforce covered under independent grievance and whistle-blower hotline.' },
-  { id: 'm-002', code: 'P1-L-01', name: 'Bribery & Corruption Complaints', principle: 1, category: 'Leadership', section: 'A', unit: 'count', description: 'Number of formal corruption or bribery complaints received.' },
+  // ── Environment (Principle 6) — 32 indicators ──
+  { id: 'm-env-001', code: 'ENV-ENERGY-001', name: 'Total electricity consumption', principle: 6, category: 'Essential', section: 'C', brsr_core: true, unit: 'MWh', description: 'Total electricity consumed in MWh/GJ, including purchased and self-generated renewable and non-renewable electricity.' },
+  { id: 'm-env-002', code: 'ENV-ENERGY-002', name: 'Fuel consumption (diesel, petrol, gas)', principle: 6, category: 'Essential', section: 'C', brsr_core: false, unit: 'GJ', description: 'Capture fuel consumption in physical units converted to Gigajoules (GJ) using calorific factors.' },
+  { id: 'm-env-009', code: 'ENV-ENERGY-003', name: 'Diesel Consumed – Mobile Machinery & Fleet', principle: 6, category: 'Essential', section: 'C', brsr_core: false, unit: 'litres', description: 'Diesel consumed by heavy excavation equipment and project maintenance transit fleet.' },
+  { id: 'm-env-010', code: 'ENV-FUEL-COAL-ANTHRACITE', name: 'Fuel Consumption – Anthracite Coal', principle: 6, category: 'Essential', section: 'C', brsr_core: false, unit: 'tonnes', description: 'Anthracite coal consumed in stationary boilers and industrial heating.' },
+  { id: 'm-env-011', code: 'ENV-FUEL-COAL-NONCOKING', name: 'Fuel Consumption – Non-Coking / Pit-Grade Coal', principle: 6, category: 'Essential', section: 'C', brsr_core: false, unit: 'tonnes', description: 'Non-coking coal consumed in power generation and industrial processes.' },
+  { id: 'm-env-012', code: 'ENV-FUEL-DIESEL-HSD', name: 'Fuel Consumption – High-Speed Diesel (HSD)', principle: 6, category: 'Essential', section: 'C', brsr_core: true, unit: 'Litres', description: 'High-Speed Diesel consumed in generators, plant machinery, and fleet.' },
+  { id: 'm-env-013', code: 'ENV-FUEL-DIESEL-LDO', name: 'Fuel Consumption – Light Diesel Oil (LDO)', principle: 6, category: 'Essential', section: 'C', brsr_core: false, unit: 'Litres', description: 'Light Diesel Oil consumed in industrial burners and pre-heating equipment.' },
+  { id: 'm-env-014', code: 'ENV-FUEL-GAS-CNG', name: 'Fuel Consumption – Compressed Natural Gas (CNG)', principle: 6, category: 'Essential', section: 'C', brsr_core: true, unit: 'kg', description: 'CNG consumed in fleet vehicles and mobile equipment.' },
+  { id: 'm-env-015', code: 'ENV-FUEL-GAS-PNG', name: 'Fuel Consumption – Piped Natural Gas (PNG)', principle: 6, category: 'Essential', section: 'C', brsr_core: true, unit: 'scm', description: 'Piped natural gas consumed in boilers, canteen, and industrial heating.' },
+  { id: 'm-env-003', code: 'ENV-GHG-001', name: 'Scope 1 emissions', principle: 6, category: 'Essential', section: 'C', brsr_core: true, unit: 'tCO2e', description: 'Gross direct GHG emissions resulting from fuel combustion in stationary and mobile sources.' },
+  { id: 'm-env-016', code: 'ENV-GHG-001A', name: 'Scope 1 – Stationary Combustion', principle: 6, category: 'Essential', section: 'C', brsr_core: true, unit: 'tCO2e', description: 'GHG emissions from stationary fuel combustion (boilers, furnaces, generators).' },
+  { id: 'm-env-017', code: 'ENV-GHG-001B', name: 'Scope 1 – Mobile Combustion', principle: 6, category: 'Essential', section: 'C', brsr_core: true, unit: 'tCO2e', description: 'GHG emissions from mobile equipment and fleet vehicles.' },
+  { id: 'm-env-018', code: 'ENV-GHG-001B-CNG', name: 'Scope 1 – Mobile Combustion (CNG)', principle: 6, category: 'Essential', section: 'C', brsr_core: true, unit: 'tCO2e', description: 'GHG from CNG-powered mobile equipment.' },
+  { id: 'm-env-019', code: 'ENV-GHG-001B-DSL', name: 'Scope 1 – Mobile Combustion (Diesel / HSD)', principle: 6, category: 'Essential', section: 'C', brsr_core: true, unit: 'tCO2e', description: 'GHG from diesel-powered construction equipment and fleet.' },
+  { id: 'm-env-020', code: 'ENV-GHG-001B-PET', name: 'Scope 1 – Mobile Combustion (Petrol / MS)', principle: 6, category: 'Essential', section: 'C', brsr_core: true, unit: 'tCO2e', description: 'GHG from petrol-powered inspection and supervisory vehicles.' },
+  { id: 'm-env-021', code: 'ENV-GHG-001C', name: 'Scope 1 – Process Emissions', principle: 6, category: 'Essential', section: 'C', brsr_core: false, unit: 'tCO2e', description: 'GHG from industrial process reactions (e.g., concrete carbonation, welding).' },
+  { id: 'm-env-022', code: 'ENV-GHG-001D', name: 'Scope 1 – Fugitive Emissions', principle: 6, category: 'Essential', section: 'C', brsr_core: false, unit: 'tCO2e', description: 'Unintentional GHG releases from equipment leaks and refrigerant losses.' },
+  { id: 'm-env-023', code: 'ENV-GHG-001D-REF', name: 'Scope 1 – Fugitive Emissions (Refrigerant Leaks)', principle: 6, category: 'Essential', section: 'C', brsr_core: false, unit: 'tCO2e', description: 'HFC emissions from refrigerant leaks in HVAC systems.' },
+  { id: 'm-env-024', code: 'ENV-GHG-001D-SF6', name: 'Scope 1 – Fugitive Emissions (SF6 Switchgear)', principle: 6, category: 'Essential', section: 'C', brsr_core: false, unit: 'tCO2e', description: 'SF6 leaks from high-voltage switchgear and electrical equipment.' },
+  { id: 'm-env-004', code: 'ENV-GHG-002', name: 'Scope 2 emissions (location-based)', principle: 6, category: 'Essential', section: 'C', brsr_core: true, unit: 'tCO2e', description: 'Gross location-based indirect GHG from purchased grid electricity.' },
+  { id: 'm-env-025', code: 'ENV-GHG-002A', name: 'Scope 2 – Grid Electricity (Non-Renewable)', principle: 6, category: 'Essential', section: 'C', brsr_core: true, unit: 'tCO2e', description: 'Scope 2 emissions from non-renewable grid electricity purchases.' },
+  { id: 'm-env-026', code: 'ENV-GHG-002B', name: 'Scope 2 – Renewable / Green Electricity', principle: 6, category: 'Essential', section: 'C', brsr_core: true, unit: 'MWh', description: 'Zero-emission renewable electricity sourced from captive solar / RECs.' },
+  { id: 'm-env-027', code: 'ENV-GHG-003A', name: 'Scope 3 – Business Travel', principle: 6, category: 'Essential', section: 'C', brsr_core: true, unit: 'tCO2e', description: 'GHG from corporate business travel (air, rail, road).' },
+  { id: 'm-env-028', code: 'ENV-GHG-003B', name: 'Scope 3 – Employee Commuting', principle: 6, category: 'Essential', section: 'C', brsr_core: false, unit: 'tCO2e', description: 'GHG from employee commuting between home and work sites.' },
+  { id: 'm-env-029', code: 'ENV-GHG-003C', name: 'Scope 3 – Purchased Goods and Materials', principle: 6, category: 'Leadership', section: 'C', brsr_core: true, unit: 'tCO2e', description: 'Upstream emissions embedded in raw materials and purchased goods.' },
+  { id: 'm-env-030', code: 'ENV-GHG-003D', name: 'Scope 3 – Upstream Transportation and Logistics', principle: 6, category: 'Leadership', section: 'C', brsr_core: false, unit: 'tCO2e', description: 'Emissions from transporting purchased goods to MEIL facilities.' },
+  { id: 'm-env-031', code: 'ENV-GHG-003E', name: 'Scope 3 – Capital Goods', principle: 6, category: 'Leadership', section: 'C', brsr_core: true, unit: 'tCO2e', description: 'Embedded GHG in capital equipment purchased (excavators, cranes, DG sets).' },
+  { id: 'm-env-032', code: 'ENV-GHG-003F', name: 'Scope 3 – Waste Generated in Operations', principle: 6, category: 'Essential', section: 'C', brsr_core: true, unit: 'tCO2e', description: 'GHG from disposal of C&D debris, hazardous waste, MSW from sites.' },
+  { id: 'm-env-033', code: 'ENV-TRAV-001', name: 'Business Travel & Local Conveyance', principle: 6, category: 'Essential', section: 'C', brsr_core: false, unit: 'km', description: 'Corporate business travel mileage across all vehicles and modes.' },
+  { id: 'm-env-034', code: 'ENV-TRAV-002', name: 'Air Travel Commercial Passenger-km', principle: 6, category: 'Essential', section: 'C', brsr_core: false, unit: 'passenger_km', description: 'Commercial airline domestic passenger travel in passenger-kilometres.' },
+  { id: 'm-env-006', code: 'ENV-WASTE-001', name: 'Waste generated and disposed', principle: 6, category: 'Essential', section: 'C', brsr_core: true, unit: 'tonnes', description: 'Total solid and construction waste generated across project sites and yards.' },
+  { id: 'm-env-005', code: 'ENV-WATER-001', name: 'Water withdrawal and consumption', principle: 6, category: 'Essential', section: 'C', brsr_core: true, unit: 'm3', description: 'Total volume of water withdrawn and consumed across all sources.' },
 ];
 
 // ── Scoped Form / Data Entry (pre-filled MEIL infrastructure metrics) ─────────
@@ -754,7 +769,7 @@ export const MOCK_SCOPED_FORM = {
   period_id: 'mock-period-2025-m04',
   submission_id: 'mock-submission-001',
   status: 'DRAFT',
-  total_metrics: 22,
+  total_metrics: 38,
   submission_status: 'DRAFT',
   sections: [
     {
@@ -1275,7 +1290,7 @@ export const MOCK_CONSOLIDATION_STATUS = {
     completed_at: '2024-09-10T06:03:42Z',
     triggered_by: 'Dr. Radhika Sen',
     entities_processed: 20,
-    metrics_consolidated: 39,
+    metrics_consolidated: 38,
   },
 };
 

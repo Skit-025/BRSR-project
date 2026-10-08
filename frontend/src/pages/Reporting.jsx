@@ -20,7 +20,7 @@ import { useAuth } from '../context/AuthContext';
 import ProjectSummary from './ProjectSummary';
 import DataLineageDrawer from '../components/DataLineageDrawer';
 
-// ── 9 BRSR Principles with full 39 sub-indicators ───────────────────────────
+// ── 9 BRSR Principles with full 38 statutory SEBI indicators ────────────────
 const BRSR_FRAMEWORK = [
   {
     principle: 'P1', icon: <Shield size={14} />, color: '#6366f1',

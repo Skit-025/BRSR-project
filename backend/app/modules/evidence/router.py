@@ -54,35 +54,49 @@ async def upload_evidence_file(
         if payload:
             uploader_id = payload.get("sub")
 
-    evidence, suggestions, is_relevant, rejection_reason = process_and_store_evidence(
-        db=db,
-        filename=file.filename or "uploaded_evidence",
-        file_bytes=file_bytes,
-        mime_type=mime_type,
-        client_sha256=sha256,
-        uploader_id=uploader_id,
-        doc_type_hint=doc_type_hint,
-        run_ocr=run_ocr
-    )
+    try:
+        evidence, suggestions, is_relevant, rejection_reason = process_and_store_evidence(
+            db=db,
+            filename=file.filename or "uploaded_evidence",
+            file_bytes=file_bytes,
+            mime_type=mime_type,
+            client_sha256=sha256,
+            uploader_id=uploader_id,
+            doc_type_hint=doc_type_hint,
+            run_ocr=run_ocr
+        )
 
-    message = (
-        "Evidence verified and stored in immutable vault."
-        if is_relevant else
-        f"File stored but rejected by AI engine: {rejection_reason or 'Unrelated document.'}"
-    )
+        message = (
+            "Evidence verified and stored in immutable vault."
+            if is_relevant else
+            f"File stored but rejected by AI engine: {rejection_reason or 'Unrelated document.'}"
+        )
 
-    return EvidenceUploadResponse(
-        evidence=EvidenceFileRead.model_validate(evidence),
-        extracted_fields=suggestions,
-        is_relevant=is_relevant,
-        rejection_reason=rejection_reason,
-        message=message
-    )
+        return EvidenceUploadResponse(
+            evidence=EvidenceFileRead.model_validate(evidence),
+            extracted_fields=suggestions,
+            is_relevant=is_relevant,
+            rejection_reason=rejection_reason,
+            message=message
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Evidence processing failed: {exc}"
+        ) from exc
 
 @router.get("", response_model=List[EvidenceFileRead])
 def list_evidence_files(db: Session = Depends(get_db)):
     """Lists all stored evidence files in the vault."""
     return db.query(EvidenceFile).order_by(EvidenceFile.created_at.desc()).all()
+
+@router.get("/by-sha/{sha256_hex}", response_model=EvidenceFileRead)
+def get_evidence_by_sha256(sha256_hex: str, db: Session = Depends(get_db)):
+    """Resolves a full SHA-256 hex string to an evidence record. Used by Ask AAROHAN AI to load a document directly by its cryptographic ID."""
+    evidence = db.query(EvidenceFile).filter(EvidenceFile.sha256 == sha256_hex).first()
+    if not evidence:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No evidence document with that SHA-256 hash found in the vault.")
+    return evidence
 
 @router.get("/{evidence_id}", response_model=EvidenceFileRead)
 def get_evidence_metadata(evidence_id: str, db: Session = Depends(get_db)):
@@ -104,8 +118,14 @@ def extract_from_existing_evidence(
     evidence = db.query(EvidenceFile).filter(EvidenceFile.id == evidence_id).first()
     if not evidence:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Evidence file not found.")
+    file_bytes = storage_service.get_file_bytes(evidence.storage_key)
+    if not file_bytes:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File content not found in storage vault.")
     req = E1ExtractRequest(
         evidence_id=evidence.id,
+        file_bytes=file_bytes,
+        filename=evidence.original_name,
+        mime_type=evidence.mime_type,
         doc_type_hint=doc_type_hint
     )
     e1_res = e1_engine.extract_from_file(req)

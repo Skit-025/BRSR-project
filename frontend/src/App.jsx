@@ -76,6 +76,7 @@ import AuditLog       from './pages/AuditLog';
 import ValueChain     from './pages/ValueChain';
 import Assurance      from './pages/Assurance';
 import BackgroundJobs from './pages/BackgroundJobs';
+import AarohanAI      from './pages/AarohanAI';
 
 // ── Disclosure pages (Type 3 forms — spec §46) ────────────────────────────────
 // BU Disclosures: targets, initiatives, BU-specific data (spec §23)
@@ -235,9 +236,9 @@ export default function App() {
                 {/* Dashboard — all authenticated users */}
                 <Route path="/dashboard" element={<Dashboard />} />
 
-                {/* Administration — system_admin only */}
+                {/* Administration — system_admin & scoped admins */}
                 <Route path="/admin/users" element={
-                  <PermissionGuard perms={['user:manage']}>
+                  <PermissionGuard perms={['user:manage', 'users:manage_scoped']}>
                     <UserManagement />
                   </PermissionGuard>
                 } />
@@ -322,7 +323,7 @@ export default function App() {
                   </PermissionGuard>
                 } />
                 <Route path="/projects/new" element={
-                  <PermissionGuard perms={['org:read']}>
+                  <PermissionGuard perms={['org:write']}>
                     <ProjectWizard />
                   </PermissionGuard>
                 } />
@@ -341,7 +342,7 @@ export default function App() {
 
                 {/* Audit Log */}
                 <Route path="/audit" element={
-                  <PermissionGuard perms={['user:manage', 'org:read']}>
+                  <PermissionGuard perms={['audit:read']}>
                     <AuditLog />
                   </PermissionGuard>
                 } />
@@ -355,7 +356,7 @@ export default function App() {
 
                 {/* Independent Reasonable Assurance & Audit */}
                 <Route path="/assurance" element={
-                  <PermissionGuard perms={['report:read', 'audit:read', 'assurance:write', 'user:manage']}>
+                  <PermissionGuard perms={['assurance:write', 'audit:read']}>
                     <Assurance />
                   </PermissionGuard>
                 } />
@@ -364,6 +365,13 @@ export default function App() {
                 <Route path="/admin/jobs" element={
                   <PermissionGuard perms={['user:manage', 'consolidation:read']}>
                     <BackgroundJobs />
+                  </PermissionGuard>
+                } />
+
+                {/* Ask AAROHAN AI — visible when any AI permission exists */}
+                <Route path="/aarohan" element={
+                  <PermissionGuard perms={['ai:e1:use', 'ai:e2:use', 'ai:e3:use', 'ai:e4:use', 'ai:e5:use', 'ai:e6:use', 'ai:e7:use']}>
+                    <AarohanAI />
                   </PermissionGuard>
                 } />
 

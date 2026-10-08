@@ -100,8 +100,8 @@ class E3ExplainFieldRequest(BaseModel):
     question: str = Field(..., description="User question or query about reporting rules/units")
 
 class E3ExplainFieldResponse(BaseModel):
-    run_id: str
-    indicator_code: str
+    run_id: str = ""
+    indicator_code: str = ""
     answer: str
     citations: List[Citation] = Field(default_factory=list)
     grounded: bool = True
@@ -162,6 +162,14 @@ class E6ValueChainResponse(BaseModel):
     estimated_emissions_tco2e: float
     confidence: float
     is_fallback: bool = False
+    # ── LLM validation layer ──────────────────────────────────────────────────
+    llm_validated: bool = False
+    llm_adjusted_tco2e: Optional[float] = None          # LLM override if formula seems off
+    llm_reasoning: Optional[str] = None                 # Structured LLM explanation
+    llm_confidence_note: Optional[str] = None           # LLM assessment of reliability
+    llm_suggested_method: Optional[str] = None          # spend-based / activity-based / hybrid
+    llm_brsr_reference: Optional[str] = None            # BRSR/GHG Protocol section cited
+    llm_data_gaps: Optional[List[str]] = None           # Gaps LLM flags for improvement
 
 
 # --- E7: Number Explainer Schemas ---

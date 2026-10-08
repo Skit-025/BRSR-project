@@ -4,6 +4,7 @@ Central FastAPI APIRouter aggregating all domain modules, AI engines, and pipeli
 """
 from fastapi import APIRouter
 from app.ai.router import router as ai_router
+from app.ai.aarohan_router import router as aarohan_router
 from app.modules.auth.router import router as auth_router
 from app.modules.org.router import router as org_router
 from app.modules.metrics.router import router as metrics_router
@@ -92,3 +93,6 @@ api_router.include_router(notifications_router)
 
 # 7 AI Engines (OCR, Anomaly, RAG, Policy, Narrative, ValueChain, Explainer)
 api_router.include_router(ai_router)
+
+# Ask AAROHAN AI: role-gated engine access for human-triggered AI proposals
+api_router.include_router(aarohan_router)

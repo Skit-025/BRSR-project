@@ -54,7 +54,7 @@ const FILTER_STATUSES = ['All', 'Ready', 'In Review', 'Submitted', 'Changes Requ
 
 export default function Projects() {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, canWriteOrg } = useAuth();
   const { data: nodes = [], isLoading } = useOrgNodes();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
@@ -178,9 +178,11 @@ export default function Projects() {
           <button className="btn btn-secondary" style={{ borderRadius: 6, border: '1px solid #e2e8f0', background: '#fff', color: '#09090b', fontWeight: 600 }}>
             <Download size={14} /> Export CSV
           </button>
-          <button className="btn btn-primary" style={{ borderRadius: 6, background: '#0070F3', color: '#fff', border: 'none', fontWeight: 600 }} onClick={() => navigate('/projects/new')}>
-            <Plus size={14} /> Add Project
-          </button>
+          {canWriteOrg && (
+            <button className="btn btn-primary" style={{ borderRadius: 6, background: '#0070F3', color: '#fff', border: 'none', fontWeight: 600 }} onClick={() => navigate('/projects/new')}>
+              <Plus size={14} /> Add Project
+            </button>
+          )}
         </div>
       </div>
 
