@@ -201,10 +201,10 @@ def seed_demo_data():
                 db.add(m)
                 db.flush()
         
-        # Also seed the full 35-metric SEBI BRSR catalogue with Scope 1/2/3 granularity
+        # Also seed the full 38-metric SEBI BRSR catalogue with Scope 1/2/3 granularity
         from app.modules.metrics.seed_data import seed_metrics
         seed_metrics(db)
-        print("[OK] Full 35-Metric Granular Catalogue Seeded")
+        print("[OK] Full 38-Metric Granular SEBI BRSR Catalogue Seeded")
 
 
         # 5. Submission Pack for Tunnel Project P7 (Matching the user screenshot!)

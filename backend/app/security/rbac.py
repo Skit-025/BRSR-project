@@ -52,6 +52,16 @@ class Permission(str, Enum):
     ORG_READ    = "org:read"
     ORG_WRITE   = "org:write"
 
+    # ── AI / Ask AAROHAN ───────────────────────────────────────────────────────
+    AI_E1_USE = "ai:e1:use"
+    AI_E2_USE = "ai:e2:use"
+    AI_E3_USE = "ai:e3:use"
+    AI_E4_USE = "ai:e4:use"
+    AI_E5_USE = "ai:e5:use"
+    AI_E6_USE = "ai:e6:use"
+    AI_E7_USE = "ai:e7:use"
+    AI_APPROVE = "ai:approve"
+
     # ── Metrics & Forms ───────────────────────────────────────────────────────
     METRIC_READ  = "metric:read"
     METRIC_WRITE = "metric:write"
@@ -114,6 +124,8 @@ ROLE_PERMISSIONS: dict[Role, Set[Permission]] = {
 
     # ── Group Admin (spec §4): broadest org visibility, technical config ──────
     Role.GROUP_ADMIN: {
+        Permission.AI_E1_USE, Permission.AI_E2_USE, Permission.AI_E3_USE, Permission.AI_E4_USE,
+        Permission.AI_E5_USE, Permission.AI_E6_USE, Permission.AI_E7_USE, Permission.AI_APPROVE,
         Permission.ORG_READ, Permission.ORG_WRITE,
         Permission.METRIC_READ, Permission.FORM_MASTER,
         Permission.SUBMISSION_READ,
@@ -131,6 +143,7 @@ ROLE_PERMISSIONS: dict[Role, Set[Permission]] = {
 
     # ── Group ESG Manager (spec §5): enterprise ESG, NO technical config ──────
     Role.GROUP_ESG_MANAGER: {
+        Permission.AI_E3_USE, Permission.AI_E4_USE, Permission.AI_E5_USE, Permission.AI_E6_USE,
         Permission.ORG_READ,
         Permission.METRIC_READ,
         Permission.SUBMISSION_READ, Permission.SUBMISSION_REVIEW,
@@ -164,6 +177,8 @@ ROLE_PERMISSIONS: dict[Role, Set[Permission]] = {
 
     # ── Subsidiary Admin (spec §6): scoped to ONE subsidiary ─────────────────
     Role.SUBSIDIARY_ADMIN: {
+        Permission.AI_E1_USE, Permission.AI_E2_USE, Permission.AI_E3_USE, Permission.AI_E4_USE,
+        Permission.AI_E5_USE, Permission.AI_E6_USE, Permission.AI_E7_USE, Permission.AI_APPROVE,
         Permission.ORG_READ,
         Permission.METRIC_READ,
         Permission.SUBMISSION_READ, Permission.SUBMISSION_REVIEW,
@@ -178,6 +193,7 @@ ROLE_PERMISSIONS: dict[Role, Set[Permission]] = {
 
     # ── Subsidiary ESG Manager (spec §7): BU review + subsidiary disclosures ──
     Role.SUBSIDIARY_ESG_MANAGER: {
+        Permission.AI_E3_USE, Permission.AI_E4_USE, Permission.AI_E5_USE, Permission.AI_E6_USE,
         Permission.ORG_READ,
         Permission.METRIC_READ,
         Permission.SUBMISSION_READ, Permission.SUBMISSION_REVIEW, Permission.SUBMISSION_APPROVE,
@@ -191,6 +207,8 @@ ROLE_PERMISSIONS: dict[Role, Set[Permission]] = {
 
     # ── BU Admin (spec §8): scoped to ONE BU ─────────────────────────────────
     Role.BU_ADMIN: {
+        Permission.AI_E1_USE, Permission.AI_E2_USE, Permission.AI_E3_USE,
+        Permission.AI_E6_USE, Permission.AI_E7_USE, Permission.AI_APPROVE,
         Permission.ORG_READ,
         Permission.METRIC_READ,
         Permission.SUBMISSION_READ, Permission.SUBMISSION_REVIEW,
@@ -205,6 +223,7 @@ ROLE_PERMISSIONS: dict[Role, Set[Permission]] = {
 
     # ── BU ESG Manager: BU disclosures + applicability ────────────────────────
     Role.BU_ESG_MANAGER: {
+        Permission.AI_E2_USE, Permission.AI_E7_USE, Permission.AI_APPROVE,
         Permission.ORG_READ,
         Permission.METRIC_READ,
         Permission.SUBMISSION_READ, Permission.SUBMISSION_REVIEW, Permission.SUBMISSION_APPROVE,
@@ -220,6 +239,7 @@ ROLE_PERMISSIONS: dict[Role, Set[Permission]] = {
     # ── BU Reviewer (spec §9): receive submissions, check evidence, approve/return ──
     # Must NOT re-enter project data. PRIMARY operational review role.
     Role.BU_REVIEWER: {
+        Permission.AI_E2_USE, Permission.AI_E7_USE, Permission.AI_APPROVE,
         Permission.ORG_READ,
         Permission.METRIC_READ,
         Permission.FORM_REVIEW,
@@ -259,6 +279,7 @@ ROLE_PERMISSIONS: dict[Role, Set[Permission]] = {
     # ── Project Data Entry User (spec §11): raw facts + evidence + submit ─────
     # Interface MUST be extremely simple. Must NOT see group/BU/subsidiary data.
     Role.PROJECT_DATA_ENTRY_USER: {
+        Permission.AI_E1_USE, Permission.AI_E2_USE, Permission.AI_E6_USE,
         Permission.ORG_READ,
         Permission.METRIC_READ,
         Permission.FORM_SUBMIT,

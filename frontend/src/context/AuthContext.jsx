@@ -41,6 +41,7 @@ const ROLE_PERMISSIONS = {
     'group_disclosure:write', 'group_disclosure:read',
     'period:lock', 'audit:read', 'assurance:write',
     'users:manage_scoped',
+    'ai:e1:use', 'ai:e2:use', 'ai:e3:use', 'ai:e4:use', 'ai:e5:use', 'ai:e6:use', 'ai:e7:use', 'ai:approve',
   ]),
 
   super_admin: new Set([
@@ -55,6 +56,7 @@ const ROLE_PERMISSIONS = {
     'subsidiary_disclosure:write', 'subsidiary_disclosure:read',
     'group_disclosure:write', 'group_disclosure:read',
     'period:lock', 'audit:read', 'assurance:write', 'users:manage_scoped',
+    'ai:e1:use', 'ai:e2:use', 'ai:e3:use', 'ai:e4:use', 'ai:e5:use', 'ai:e6:use', 'ai:e7:use', 'ai:approve',
   ]),
 
   // ── Group level ─────────────────────────────────────────────────────────────
@@ -66,6 +68,7 @@ const ROLE_PERMISSIONS = {
     'report:read', 'report:lineage', 'report:compile',
     'period:lock', 'audit:read',
     'user:manage', 'user:create', 'user:delete', 'users:manage_scoped',
+    'ai:e1:use', 'ai:e2:use', 'ai:e3:use', 'ai:e4:use', 'ai:e5:use', 'ai:e6:use', 'ai:e7:use', 'ai:approve',
   ]),
 
   group_esg_manager: new Set([
@@ -76,6 +79,7 @@ const ROLE_PERMISSIONS = {
     'group_disclosure:write', 'group_disclosure:read',
     'report:compile', 'report:read', 'report:lineage',
     'audit:read',
+    'ai:e3:use', 'ai:e4:use', 'ai:e5:use', 'ai:e6:use',
   ]),
 
   // ── Subsidiary level ─────────────────────────────────────────────────────────
@@ -87,6 +91,7 @@ const ROLE_PERMISSIONS = {
     'subsidiary_disclosure:write', 'subsidiary_disclosure:read',
     'report:read', 'report:lineage',
     'audit:read', 'users:manage_scoped',
+    'ai:e1:use', 'ai:e2:use', 'ai:e3:use', 'ai:e4:use', 'ai:e5:use', 'ai:e6:use', 'ai:e7:use', 'ai:approve',
   ]),
 
   subsidiary_esg_manager: new Set([
@@ -97,6 +102,7 @@ const ROLE_PERMISSIONS = {
     'subsidiary_disclosure:write', 'subsidiary_disclosure:read',
     'report:read', 'report:lineage',
     'audit:read',
+    'ai:e3:use', 'ai:e4:use', 'ai:e5:use', 'ai:e6:use',
   ]),
 
   // ── BU level ──────────────────────────────────────────────────────────────────
@@ -106,6 +112,7 @@ const ROLE_PERMISSIONS = {
     'consolidation:read',
     'bu_disclosure:write', 'bu_disclosure:read',
     'report:read', 'audit:read', 'users:manage_scoped',
+    'ai:e1:use', 'ai:e2:use', 'ai:e3:use', 'ai:e6:use', 'ai:e7:use', 'ai:approve',
   ]),
 
   bu_esg_manager: new Set([
@@ -114,6 +121,7 @@ const ROLE_PERMISSIONS = {
     'consolidation:read', 'calc:run',
     'bu_disclosure:write', 'bu_disclosure:read',
     'report:read', 'report:lineage', 'audit:read',
+    'ai:e2:use', 'ai:e7:use', 'ai:approve',
   ]),
 
   bu_reviewer: new Set([
@@ -123,6 +131,7 @@ const ROLE_PERMISSIONS = {
     'consolidation:read',
     'bu_disclosure:read',
     'report:read', 'audit:read',
+    'ai:e2:use', 'ai:e7:use', 'ai:approve',
   ]),
 
   // ── Project level ──────────────────────────────────────────────────────────────
@@ -139,7 +148,8 @@ const ROLE_PERMISSIONS = {
     'form:submit',
     'submission:create', 'submission:read', 'submission:submit',
     'evidence:upload', 'evidence:read', 'spreadsheet:upload',
-    'report:read',  // Project ESG summary only — scope-enforced server-side
+    'report:read',
+    'ai:e1:use', 'ai:e2:use', 'ai:e6:use',
   ]),
 
   // ── Legacy roles (backwards compatibility) ─────────────────────────────────
@@ -225,7 +235,11 @@ export function AuthProvider({ children }) {
     }
   });
   const [token, setToken] = useState(() => localStorage.getItem('brsr_token') || '');
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => {
+    const saved = localStorage.getItem('brsr_user');
+    // If cached session exists, render immediately; only block if token exists with NO cached profile
+    return !saved && !!localStorage.getItem('brsr_token');
+  });
 
   useEffect(() => {
     if (token) {

@@ -38,7 +38,8 @@ class Settings(BaseSettings):
     OPENROUTER_API_KEY: Optional[str] = None
     OPENROUTER_MODEL_TEXT: str = "meta-llama/llama-3.3-70b-instruct"
     OPENROUTER_MODEL_VISION: str = "dots-studio/dots-3-note-preview:free"
-    AI_AUTO_FALLBACK_ON_ERROR: bool = True
+    AI_FALLBACK_TO_MOCK: bool = False
+    AI_AUTO_FALLBACK_ON_ERROR: bool = False
     AI_MODEL_VISION: str = "models/gemini-3.8-flash"
     AI_MODEL_TEXT: str = "models/gemini-3.8-flash"
     AI_EMBEDDING_MODEL: str = "models/text-embedding-004"
