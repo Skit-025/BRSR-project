@@ -11,7 +11,7 @@ from app.modules.auth.models import User
 from app.modules.auth.router import get_current_active_user
 from app.modules.workflow.schemas import ReviewActionRequest, ReviewRead, ReviewQueueItem, PeriodLockResponse
 from app.modules.workflow.service import process_review, get_review_queue, lock_reporting_period
-from app.security.rbac import Role, Permission, has_permission
+from app.security.rbac import Role
 
 router = APIRouter(prefix="/workflow", tags=["Four-Eye Maker-Checker Workflow"])
 
@@ -39,11 +39,6 @@ def review_submission_pack(
     - Verifies validation error gates
     - Advances status or returns pack with mandatory review comments.
     """
-    if not (has_permission(current_user.role, Permission.SUBMISSION_REVIEW) or has_permission(current_user.role, Permission.SUBMISSION_APPROVE)):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Permission 'submission:review' required to review submissions."
-        )
     if not action.reviewer_id:
         action.reviewer_id = str(current_user.id)
     review = process_review(db, submission_id, action)

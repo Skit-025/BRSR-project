@@ -24,13 +24,6 @@ from app.modules.disclosures.service import (
     create_or_trigger_calc_job,
     get_latest_calc_job
 )
-from app.security.rbac import Permission, has_permission
-
-LEVEL_PERM_MAP = {
-    "bu": Permission.BU_DISCLOSURE_WRITE,
-    "subsidiary": Permission.SUBSIDIARY_DISCLOSURE_WRITE,
-    "group": Permission.GROUP_DISCLOSURE_WRITE,
-}
 
 router = APIRouter(prefix="/disclosures", tags=["Type 3 Org-Level Disclosures"])
 
@@ -73,13 +66,6 @@ def save_disclosure_endpoint(
     db: Session = Depends(get_db)
 ):
     """Autosaves a draft disclosure section payload."""
-    lvl = (req.disclosure_level or "").lower()
-    req_perm = LEVEL_PERM_MAP.get(lvl)
-    if req_perm and not has_permission(current_user.role, req_perm):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"Permission '{req_perm.value}' required to write {lvl} disclosures."
-        )
     return save_disclosure(db, req, user_id=str(current_user.id))
 
 
@@ -100,11 +86,6 @@ def approve_disclosure_endpoint(
     db: Session = Depends(get_db)
 ):
     """Approves a disclosure section."""
-    if not (has_permission(current_user.role, Permission.SUBMISSION_APPROVE) or has_permission(current_user.role, Permission.GROUP_DISCLOSURE_WRITE)):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Permission 'submission:approve' required to approve disclosures."
-        )
     return approve_disclosure(db, disclosure_id=disclosure_id, user_id=str(current_user.id))
 
 

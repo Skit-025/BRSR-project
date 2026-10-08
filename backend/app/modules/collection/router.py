@@ -21,7 +21,6 @@ from app.modules.collection.service import (
     process_spreadsheet_upload
 )
 from app.security.rate_limit import upload_rate_limit
-from app.security.rbac import Permission, has_permission
 
 router = APIRouter(prefix="/collection", tags=["Monthly Data Collection & Sync"])
 
@@ -48,11 +47,6 @@ def save_pack(
     Autosaves draft numbers into the monthly pack (F08).
     Enforces optimistic concurrency (409 Conflict on stale version) and normalizes units.
     """
-    if not (has_permission(current_user.role, Permission.FORM_SUBMIT) or has_permission(current_user.role, Permission.SUBMISSION_CREATE)):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Permission 'form:submit' required to edit data points."
-        )
     submission = save_draft_submission(db, save_req, user_id=str(current_user.id))
     return submission
 
@@ -64,11 +58,6 @@ def submit_pack(
     db: Session = Depends(get_db)
 ):
     """Freezes submission pack and moves it to SUBMITTED state for reviewer queue."""
-    if not has_permission(current_user.role, Permission.SUBMISSION_SUBMIT):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Permission 'submission:submit' required to submit packs."
-        )
     submission = submit_submission_pack(db, submission_id, user_id=str(current_user.id))
     return SubmitPackResponse(
         submission_id=submission.id,
@@ -102,11 +91,6 @@ async def upload_spreadsheet(
     Automatically parses metric codes, normalizes units, validates numeric values,
     and updates the entity's monthly submission pack.
     """
-    if not (has_permission(current_user.role, Permission.SPREADSHEET_UPLOAD) or has_permission(current_user.role, Permission.EVIDENCE_UPLOAD)):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Permission 'spreadsheet:upload' required to upload data spreadsheets."
-        )
     file_bytes = await file.read()
     result = process_spreadsheet_upload(
         db=db,

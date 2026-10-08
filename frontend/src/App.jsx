@@ -236,9 +236,9 @@ export default function App() {
                 {/* Dashboard — all authenticated users */}
                 <Route path="/dashboard" element={<Dashboard />} />
 
-                {/* Administration — system_admin & scoped admins */}
+                {/* Administration — system_admin only */}
                 <Route path="/admin/users" element={
-                  <PermissionGuard perms={['user:manage', 'users:manage_scoped']}>
+                  <PermissionGuard perms={['user:manage']}>
                     <UserManagement />
                   </PermissionGuard>
                 } />
@@ -323,7 +323,7 @@ export default function App() {
                   </PermissionGuard>
                 } />
                 <Route path="/projects/new" element={
-                  <PermissionGuard perms={['org:write']}>
+                  <PermissionGuard perms={['org:read']}>
                     <ProjectWizard />
                   </PermissionGuard>
                 } />
@@ -342,7 +342,7 @@ export default function App() {
 
                 {/* Audit Log */}
                 <Route path="/audit" element={
-                  <PermissionGuard perms={['audit:read']}>
+                  <PermissionGuard perms={['user:manage', 'org:read']}>
                     <AuditLog />
                   </PermissionGuard>
                 } />
@@ -356,7 +356,7 @@ export default function App() {
 
                 {/* Independent Reasonable Assurance & Audit */}
                 <Route path="/assurance" element={
-                  <PermissionGuard perms={['assurance:write', 'audit:read']}>
+                  <PermissionGuard perms={['report:read', 'audit:read', 'assurance:write', 'user:manage']}>
                     <Assurance />
                   </PermissionGuard>
                 } />

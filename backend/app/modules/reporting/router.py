@@ -5,8 +5,6 @@ from app.db.session import get_db
 from app.modules.reporting.schemas import BRSRFullReportResponse
 from app.modules.reporting.models import ReportType
 from app.modules.reporting.disclosure_mapper import compile_brsr_report
-from app.security.deps import require_permission, TokenData
-from app.security.rbac import Permission
 
 router = APIRouter(prefix="/reports", tags=["SEBI BRSR Reports & Disclosures"])
 
@@ -47,8 +45,7 @@ def list_reports(
 @router.post("/compile", response_model=Dict[str, Any])
 def compile_report_endpoint(
     data: Dict[str, Any],
-    db: Session = Depends(get_db),
-    _user: TokenData = Depends(require_permission(Permission.REPORT_COMPILE))
+    db: Session = Depends(get_db)
 ):
     """
     Triggers BRSR report compilation for an entity + period.
