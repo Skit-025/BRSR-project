@@ -16,8 +16,6 @@ from app.modules.org.schemas import (
 )
 from app.modules.org.tree import build_materialized_path, build_tree_hierarchy
 from app.modules.org.applicability.engine import evaluate_applicability_for_node
-from app.security.deps import require_permission, TokenData
-from app.security.rbac import Permission
 
 router = APIRouter(prefix="/org", tags=["Organization Hierarchy & Applicability"])
 
@@ -47,11 +45,7 @@ def list_nodes(
     return query.all()
 
 @router.post("/nodes", response_model=OrgNodeRead, status_code=status.HTTP_201_CREATED)
-def create_node(
-    node_in: OrgNodeCreate,
-    db: Session = Depends(get_db),
-    _user: TokenData = Depends(require_permission(Permission.ORG_WRITE))
-):
+def create_node(node_in: OrgNodeCreate, db: Session = Depends(get_db)):
     """Creates a new node in the hierarchy, validates 4-level parent-child rules, computes path, and triggers applicability evaluation."""
     from app.modules.org.service import OrgService
     service = OrgService(db)
@@ -72,12 +66,7 @@ def get_node(node_id: str, db: Session = Depends(get_db)):
 
 
 @router.put("/nodes/{node_id}", response_model=OrgNodeRead)
-def update_node(
-    node_id: str,
-    node_in: OrgNodeUpdate,
-    db: Session = Depends(get_db),
-    _user: TokenData = Depends(require_permission(Permission.ORG_WRITE))
-):
+def update_node(node_id: str, node_in: OrgNodeUpdate, db: Session = Depends(get_db)):
     """Updates an organization unit's metadata, boundary status, or ownership."""
     node = db.query(OrgNode).filter(OrgNode.id == node_id, OrgNode.is_deleted == False).first()
     if not node:
@@ -123,11 +112,7 @@ def list_periods(financial_year: Optional[str] = None, db: Session = Depends(get
 
 
 @router.post("/periods", response_model=ReportingPeriodRead, status_code=status.HTTP_201_CREATED)
-def create_period(
-    period_in: ReportingPeriodCreate,
-    db: Session = Depends(get_db),
-    _user: TokenData = Depends(require_permission(Permission.PERIOD_LOCK))
-):
+def create_period(period_in: ReportingPeriodCreate, db: Session = Depends(get_db)):
     existing = db.query(ReportingPeriod).filter(ReportingPeriod.code == period_in.code).first()
     if existing:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Period '{period_in.code}' already exists.")
@@ -149,12 +134,7 @@ def create_period(
 
 
 @router.put("/periods/{period_id}", response_model=ReportingPeriodRead)
-def update_period(
-    period_id: str,
-    period_in: ReportingPeriodUpdate,
-    db: Session = Depends(get_db),
-    _user: TokenData = Depends(require_permission(Permission.PERIOD_LOCK))
-):
+def update_period(period_id: str, period_in: ReportingPeriodUpdate, db: Session = Depends(get_db)):
     """Updates a reporting period's lifecycle state (OPEN / LOCKED) or calendar dates."""
     period = db.query(ReportingPeriod).filter(ReportingPeriod.id == period_id, ReportingPeriod.is_deleted == False).first()
     if not period:
@@ -184,12 +164,7 @@ def get_node_applicability(node_id: str, period_id: Optional[str] = None, db: Se
     return records
 
 @router.post("/applicability/{node_id}/override", response_model=MetricApplicabilityRead)
-def override_applicability(
-    node_id: str,
-    override_req: ApplicabilityOverrideRequest,
-    db: Session = Depends(get_db),
-    _user: TokenData = Depends(require_permission(Permission.ORG_WRITE))
-):
+def override_applicability(node_id: str, override_req: ApplicabilityOverrideRequest, db: Session = Depends(get_db)):
     node = db.query(OrgNode).filter(OrgNode.id == node_id).first()
     if not node:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Node not found.")

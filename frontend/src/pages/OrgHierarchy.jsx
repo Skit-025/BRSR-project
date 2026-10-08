@@ -31,7 +31,7 @@ const PROJECT_TYPES = [
 export default function OrgHierarchy() {
   const { data: nodes = [], isLoading: loadN, refetch: refetchNodes } = useOrgNodes();
   const { data: periods = [], isLoading: loadP, refetch: refetchPeriods } = useOrgPeriods();
-  const { user, isAdmin, canWriteOrg } = useAuth();
+  const { user, isAdmin } = useAuth();
   const createNode = useCreateNode();
   const updateNode = useUpdateNode();
   const createPeriod = useCreatePeriod();
@@ -144,10 +144,6 @@ export default function OrgHierarchy() {
   const handleCreateNode = async (e) => {
     e.preventDefault();
     setErrorMsg('');
-    if (!canWriteOrg) {
-      setErrorMsg('Access denied: You do not have permission to add organization units.');
-      return;
-    }
     if (!nodeForm.code.trim() || !nodeForm.name.trim()) {
       setErrorMsg('Entity Code and Name are required.');
       return;
@@ -190,10 +186,6 @@ export default function OrgHierarchy() {
   const handleCreatePeriod = async (e) => {
     e.preventDefault();
     setErrorMsg('');
-    if (!canWriteOrg && !isAdmin) {
-      setErrorMsg('Access denied: You do not have permission to create reporting periods.');
-      return;
-    }
     if (!periodForm.code.trim() || !periodForm.financial_year.trim()) {
       setErrorMsg('Period Code and Financial Year are required.');
       return;
@@ -231,10 +223,6 @@ export default function OrgHierarchy() {
 
   // ── Admin Edit Functions ──
   const handleOpenEditNode = (node) => {
-    if (!canWriteOrg && !isAdmin) {
-      setErrorMsg('Access denied: You do not have permission to edit organization units.');
-      return;
-    }
     setEditingNode(node);
     setEditNodeForm({
       name: node.name || '',
@@ -251,10 +239,6 @@ export default function OrgHierarchy() {
   const handleSaveEditNode = async (e) => {
     e.preventDefault();
     setNodeUpdateError('');
-    if (!canWriteOrg && !isAdmin) {
-      setNodeUpdateError('Access denied: You do not have permission to update organization units.');
-      return;
-    }
     setUpdatingNodePending(true);
     try {
       if (isAdmin) {
@@ -281,10 +265,6 @@ export default function OrgHierarchy() {
   };
 
   const handleTogglePeriodStatus = async (period) => {
-    if (!canWriteOrg && !isAdmin) {
-      setErrorMsg('Access denied: You do not have permission to modify period status.');
-      return;
-    }
     const newStatus = period.status === 'LOCKED' ? 'OPEN' : 'LOCKED';
     try {
       await updatePeriod.mutateAsync({
@@ -346,18 +326,14 @@ export default function OrgHierarchy() {
             <RefreshCw size={14} className={isRefreshing || loadN || loadP ? 'spin' : ''} />
             <span>Refresh</span>
           </button>
-          {canWriteOrg && (
-            <button className="btn btn-secondary" onClick={() => { setShowPeriodModal(true); setErrorMsg(''); }}>
-              <Calendar size={14} />
-              <span>+ New Period</span>
-            </button>
-          )}
-          {canWriteOrg && (
-            <button className="btn btn-primary" onClick={() => { setShowNodeModal(true); setErrorMsg(''); }}>
-              <Plus size={15} />
-              <span>+ Add Entity Unit</span>
-            </button>
-          )}
+          <button className="btn btn-secondary" onClick={() => { setShowPeriodModal(true); setErrorMsg(''); }}>
+            <Calendar size={14} />
+            <span>+ New Period</span>
+          </button>
+          <button className="btn btn-primary" onClick={() => { setShowNodeModal(true); setErrorMsg(''); }}>
+            <Plus size={15} />
+            <span>+ Add Entity Unit</span>
+          </button>
         </div>
       </div>
 
@@ -403,16 +379,14 @@ export default function OrgHierarchy() {
               <Eye size={13} color="var(--brand-400)" />
               <span>Dedicated Periods Console</span>
             </button>
-            {canWriteOrg && (
-              <button 
-                className="btn btn-primary btn-sm"
-                onClick={() => { setShowPeriodModal(true); setErrorMsg(''); }}
-                style={{ display: 'flex', alignItems: 'center', gap: 6 }}
-              >
-                <Plus size={13} />
-                <span>+ Add Period</span>
-              </button>
-            )}
+            <button 
+              className="btn btn-primary btn-sm"
+              onClick={() => { setShowPeriodModal(true); setErrorMsg(''); }}
+              style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+            >
+              <Plus size={13} />
+              <span>+ Add Period</span>
+            </button>
           </div>
         </div>
 
@@ -438,17 +412,15 @@ export default function OrgHierarchy() {
               <p style={{ fontSize: '12px', color: 'var(--text-secondary)', maxWidth: 420, margin: '0 auto 12px' }}>
                 Create a reporting period (e.g. FY 2025-26) to establish statutory collection cycles and enable ESG data submissions.
               </p>
-              {canWriteOrg && (
-                <button 
-                  type="button" 
-                  className="btn btn-primary btn-sm"
-                  onClick={() => { setShowPeriodModal(true); setErrorMsg(''); }}
-                  style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
-                >
-                  <Plus size={14} />
-                  <span>+ Create First Period</span>
-                </button>
-              )}
+              <button 
+                type="button" 
+                className="btn btn-primary btn-sm"
+                onClick={() => { setShowPeriodModal(true); setErrorMsg(''); }}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+              >
+                <Plus size={14} />
+                <span>+ Create First Period</span>
+              </button>
             </div>
           ) : (
             periodList.map((p) => {
@@ -567,14 +539,12 @@ export default function OrgHierarchy() {
               ))}
             </select>
 
-            {canWriteOrg && (
-              <button 
-                className="btn btn-primary btn-sm"
-                onClick={() => { setShowNodeModal(true); setErrorMsg(''); }}
-              >
-                <Plus size={13} /> Add Unit
-              </button>
-            )}
+            <button 
+              className="btn btn-primary btn-sm"
+              onClick={() => { setShowNodeModal(true); setErrorMsg(''); }}
+            >
+              <Plus size={13} /> Add Unit
+            </button>
           </div>
         </div>
 
@@ -610,10 +580,10 @@ export default function OrgHierarchy() {
                       </div>
                       <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: 16, lineHeight: 1.5 }}>
                         {nodeList.length === 0 
-                           ? 'Start by creating your Root Group Entity (e.g. AAROHAN-GROUP) or subsidiary units to establish statutory audit boundaries.'
+                          ? 'Start by creating your Root Group Entity (e.g. AAROHAN-GROUP) or subsidiary units to establish statutory audit boundaries.'
                           : 'Try changing your search term or filtering options.'}
                       </p>
-                      {canWriteOrg && nodeList.length === 0 && (
+                      {nodeList.length === 0 && (
                         <button 
                           type="button" 
                           className="btn btn-primary btn-sm"
@@ -1122,7 +1092,7 @@ export default function OrgHierarchy() {
 
           <div className="modal-footer" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
-              {(canWriteOrg || isAdmin) && (
+              {isAdmin && (
                 <button 
                   type="button"
                   className={`btn btn-sm ${selectedPeriodDetail?.status === 'LOCKED' ? 'btn-success' : 'btn-danger'}`}
@@ -1326,7 +1296,7 @@ export default function OrgHierarchy() {
 
           <div className="modal-footer" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
-              {(canWriteOrg || isAdmin) && (
+              {isAdmin && (
                 <button 
                   type="button" 
                   className="btn btn-primary"
