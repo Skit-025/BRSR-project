@@ -649,22 +649,22 @@ def _extract_deterministic(text: str, doc_type: str) -> List[ExtractedField]:
 # ---------------------------------------------------------------------------
 
 def _extract_with_llm(text: str, doc_type: str, evidence_id: str) -> Optional[List[ExtractedField]]:
-    """Try LLM-based extraction from document text via OpenRouter."""
-    from app.ai.providers.openrouter import OpenRouterProvider
+    """Try LLM-based extraction from document text via AI Gateway cascade (OpenRouter / Gemini)."""
+    from app.ai.gateway import ai_gateway
 
     metric_code, expected_unit = METRIC_MAP.get(doc_type, ("UNKNOWN", "units"))
 
     prompt = (
-        f"You are an expert ESG data analyst. Extract metered consumption data from this utility document.\n\n"
+        f"You are an expert ESG utility auditor. Extract accurate metered consumption data from this utility document.\n\n"
         f"Document Type: {doc_type}\n"
-        f"Expected BRSR Metric Code: {metric_code} (unit: {expected_unit})\n\n"
-        f"Rules:\n"
-        f"- ONLY extract values that actually appear in the document text below. DO NOT invent data.\n"
-        f"- Return the primary consumption quantity (e.g., total kWh for electricity, Litres for fuel).\n"
-        f"- Include invoice_number, meter_id, billing_period in the response if found.\n"
-        f"- confidence should reflect how clearly the value was found (0.0–1.0).\n\n"
-        f"Document Text:\n{text[:4000]}\n\n"
-        f"Return JSON: metric, value (number), unit, confidence (0.0–1.0), invoice_number, meter_id, billing_period."
+        f"Expected BRSR Metric Code: {metric_code} (default unit: {expected_unit})\n\n"
+        f"Extraction Rules:\n"
+        f"1. Extract ONLY numbers that actually appear in the document text below. DO NOT invent or assume values.\n"
+        f"2. Return the primary billed consumption quantity in 'value' (e.g., total kWh for electricity, Litres for fuel, kL for water, tonnes for waste).\n"
+        f"3. Also extract vendor_name (supplier/discom), consumer_name, invoice_number, meter_id, billing_period, and bill_amount if present.\n"
+        f"4. Confidence should reflect how explicitly the consumption value was stated (0.0 to 1.0).\n\n"
+        f"Document Content:\n{text[:5000]}\n\n"
+        f"Return strictly valid JSON matching the schema."
     )
 
     schema = {
@@ -676,30 +676,50 @@ def _extract_with_llm(text: str, doc_type: str, evidence_id: str) -> Optional[Li
             "confidence": {"type": "number"},
             "invoice_number": {"type": "string"},
             "meter_id": {"type": "string"},
-            "billing_period": {"type": "string"}
+            "billing_period": {"type": "string"},
+            "consumer_name": {"type": "string"},
+            "vendor_name": {"type": "string"},
+            "bill_amount": {"type": "number"}
         },
         "required": ["metric", "value", "unit", "confidence"]
     }
 
     try:
-        provider = OpenRouterProvider()
-        if not provider.is_available():
+        raw_result, provider_used, is_mock = ai_gateway._call_provider_cascade(
+            "generate_json",
+            prompt=prompt,
+            schema_dict=schema
+        )
+        if is_mock or not raw_result:
             return None
-        result = provider.generate_json(prompt=prompt, schema_dict=schema)
-        val = result.get("value")
-        if val is None or float(val) == 0:
+        val = raw_result.get("value")
+        if val is None:
+            for alt_k in ("units_kwh", "consumption", "quantity", "litres", "total_units"):
+                if raw_result.get(alt_k) is not None:
+                    val = raw_result[alt_k]
+                    break
+        if val is None:
             return None
-        meta = {k: result[k] for k in ("invoice_number", "meter_id", "billing_period") if result.get(k)}
+        val_clean = float(re.sub(r"[^\d.]", "", str(val)))
+        if val_clean <= 0:
+            return None
+
+        meta = {}
+        for k in ("invoice_number", "meter_id", "billing_period", "consumer_name", "vendor_name", "bill_amount"):
+            if raw_result.get(k):
+                meta[k] = raw_result[k]
+        meta["ai_provider"] = provider_used
+
         return [ExtractedField(
-            metric=result.get("metric", metric_code),
-            value=float(val),
-            unit=result.get("unit", expected_unit),
-            confidence=float(result.get("confidence", 0.85)),
+            metric=raw_result.get("metric", metric_code),
+            value=val_clean,
+            unit=raw_result.get("unit") or expected_unit,
+            confidence=float(raw_result.get("confidence", 0.90)),
             page=1,
             metadata=meta
         )]
     except Exception as e:
-        logger.warning(f"LLM text extraction failed ({doc_type}): {e}")
+        logger.warning(f"AI Gateway LLM text extraction failed ({doc_type}): {e}")
         return None
 
 
@@ -717,13 +737,11 @@ def _extract_with_vision(
     Vision LLM extraction for image files.
     Returns: (is_relevant, rejection_reason, fields)
     run_relevance_check=True -> ask the LLM to also verify relevance (for images with no user hint)
+    Uses AIGateway cascade: OpenRouter -> Gemini -> Mock
     """
-    from app.ai.providers.openrouter import OpenRouterProvider
+    from app.ai.gateway import ai_gateway
 
     metric_code, expected_unit = METRIC_MAP.get(doc_type, ("UNKNOWN", "units"))
-    provider = OpenRouterProvider()
-    if not provider.is_available():
-        return True, None, []  # Optimistic pass when no vision provider
 
     vision_schema = {
         "type": "object",
@@ -771,70 +789,163 @@ def _extract_with_vision(
         f"7. Return numeric consumption in 'value' (or 'units_kwh') and unit in 'unit'. Do NOT invent values."
     )
 
+    result = None
+    last_err = None
+
+    # --- Try via AIGateway cascade (respects AI_PROVIDER order) ---
     try:
-        result = provider.generate_vision_json(
+        raw_result, provider_used, _ = ai_gateway._call_provider_cascade(
+            "generate_vision_json",
             prompt=vision_prompt,
             image_bytes=file_bytes,
             mime_type=mime_type,
             schema_dict=vision_schema
         )
-
-        if run_relevance_check and result.get("is_relevant") is False:
-            rej = result.get("rejection_reason", "Document is not a recognized ESG utility bill.")
-            return False, rej, []
-
-        # Find consumption value from multiple possible model keys
-        raw_val = None
-        for k in ("value", "units_kwh", "consumption", "primary_quantity", "billed_units", "units", "quantity", "litres"):
-            if result.get(k) is not None:
-                raw_val = result[k]
-                break
-
-        val = None
-        if raw_val is not None:
-            try:
-                clean_str = re.sub(r"[^\d.]", "", str(raw_val).strip())
-                if clean_str:
-                    val = float(clean_str)
-            except Exception:
-                val = None
-
-        if val is None or val <= 0:
-            logger.info("Vision extracted no positive consumption value")
-            return True, None, []
-
-        # Use LLM-detected doc_type if provided
-        llm_detected = result.get("doc_type_detected", "").strip().lower()
-        if llm_detected and llm_detected in METRIC_MAP:
-            metric_code, expected_unit = METRIC_MAP[llm_detected]
-
-        unit_str = result.get("unit") or expected_unit
-
-        meta = {}
-        for k in ("invoice_number", "meter_id", "billing_period", "consumer_name", "vendor_name", "account_number", "bill_date", "amount", "total_amount"):
-            if result.get(k):
-                meta[k] = result[k]
-
-        confidence = 0.90
-        try:
-            confidence = float(result.get("confidence", 0.90))
-        except Exception:
-            pass
-
-        field = ExtractedField(
-            metric=metric_code,
-            value=val,
-            unit=unit_str,
-            confidence=confidence,
-            page=1,
-            metadata=meta
-        )
-        logger.info(f"E1 vision successfully extracted: {field.value} {field.unit} (metric={field.metric}, meta={meta})")
-        return True, None, [field]
-
+        result = raw_result
+        logger.info(f"E1 vision extraction via {provider_used}: keys={list(result.keys()) if result else []}")
     except Exception as e:
-        logger.warning(f"E1 vision extraction failed: {e}")
+        last_err = e
+        logger.warning(f"E1 vision extraction failed via gateway: {e}")
+
+    if result is None:
+        logger.warning("E1 vision extraction: all providers exhausted")
         return True, None, []  # Don't reject on LLM error
+
+    if run_relevance_check and result.get("is_relevant") is False:
+        rej = result.get("rejection_reason", "Document is not a recognized ESG utility bill.")
+        return False, rej, []
+
+    # Find consumption value from multiple possible model keys
+    raw_val = None
+    for k in ("value", "units_kwh", "consumption", "primary_quantity", "billed_units", "units", "quantity", "litres"):
+        if result.get(k) is not None:
+            raw_val = result[k]
+            break
+
+    val = None
+    if raw_val is not None:
+        try:
+            clean_str = re.sub(r"[^\d.]", "", str(raw_val).strip())
+            if clean_str:
+                val = float(clean_str)
+        except Exception:
+            val = None
+
+    if val is None or val <= 0:
+        logger.info("Vision extracted no positive consumption value")
+        return True, None, []
+
+    # Use LLM-detected doc_type if provided
+    llm_detected = result.get("doc_type_detected", "").strip().lower()
+    if llm_detected and llm_detected in METRIC_MAP:
+        metric_code, expected_unit = METRIC_MAP[llm_detected]
+
+    unit_str = result.get("unit") or expected_unit
+
+    meta = {}
+    for k in ("invoice_number", "meter_id", "billing_period", "consumer_name", "vendor_name", "account_number", "bill_date", "amount", "total_amount"):
+        if result.get(k):
+            meta[k] = result[k]
+
+    confidence = 0.90
+    try:
+        confidence = float(result.get("confidence", 0.90))
+    except Exception:
+        pass
+
+    field = ExtractedField(
+        metric=metric_code,
+        value=val,
+        unit=unit_str,
+        confidence=confidence,
+        page=1,
+        metadata=meta
+    )
+    logger.info(f"E1 vision successfully extracted: {field.value} {field.unit} (metric={field.metric}, meta={meta})")
+    return True, None, [field]
+
+
+
+
+# ---------------------------------------------------------------------------
+# Helper: Statutory Indian & Global ESG Emission Impact Calculation
+# ---------------------------------------------------------------------------
+
+def calculate_esg_impact(doc_type: str, fields: List[ExtractedField]) -> Optional[Dict[str, Any]]:
+    """Calculates GHG and Energy consumption metrics using official statutory factors."""
+    if not fields:
+        return None
+    val = None
+    unit = ""
+    for f in fields:
+        try:
+            num = float(f.value)
+            if num > 0:
+                val = num
+                unit = (f.unit or "").lower()
+                break
+        except (ValueError, TypeError):
+            continue
+    if val is None:
+        return None
+
+    dt = (doc_type or "").lower()
+    if "electric" in dt or "kwh" in unit or "mwh" in unit:
+        kwh = val * 1000.0 if "mwh" in unit else val
+        return {
+            "energy_gj": f"{kwh * 3.6 / 1000.0:.2f}",
+            "ghg_tco2e": f"{kwh * 0.000708:.4f}",
+            "scope": "Scope 2 (Electricity Grid)",
+            "factor": "0.708 kgCO₂e/kWh (India Central Electricity Authority 2023)",
+            "metric": "ENV-ENERGY-001",
+            "consumed": f"{kwh:,.1f} kWh",
+        }
+    elif "diesel" in dt or "fuel" in dt or "litres" in unit or "litre" in unit or "l" == unit:
+        return {
+            "energy_gj": f"{val * 35.8 / 1000.0:.2f}",
+            "ghg_tco2e": f"{val * 2.6841 / 1000.0:.4f}",
+            "scope": "Scope 1 (Direct Fuel Combustion)",
+            "factor": "2.6841 kgCO₂e/L (GHG Protocol / IPCC EFDB)",
+            "metric": "ENV-ENERGY-002",
+            "consumed": f"{val:,.1f} Litres",
+        }
+    elif "petrol" in dt:
+        return {
+            "energy_gj": f"{val * 32.0 / 1000.0:.2f}",
+            "ghg_tco2e": f"{val * 2.3153 / 1000.0:.4f}",
+            "scope": "Scope 1 (Direct Combustion)",
+            "factor": "2.3153 kgCO₂e/L (GHG Protocol)",
+            "metric": "ENV-ENERGY-002",
+            "consumed": f"{val:,.1f} Litres",
+        }
+    elif "coal" in dt or "tonnes" in unit:
+        return {
+            "energy_gj": f"{val * 26.4 / 1000.0:.2f}",
+            "ghg_tco2e": f"{val * 2.3000 / 1000.0:.4f}",
+            "scope": "Scope 1 (Direct Combustion)",
+            "factor": "2.3000 kgCO₂e/kg (IPCC Default)",
+            "metric": "ENV-ENERGY-002",
+            "consumed": f"{val:,.1f} tonnes",
+        }
+    elif "gas" in dt or "scm" in unit:
+        return {
+            "energy_gj": f"{val * 35.9 / 1000.0:.2f}",
+            "ghg_tco2e": f"{val * 2.0 / 1000.0:.4f}",
+            "scope": "Scope 1 (Direct Combustion)",
+            "factor": "2.0000 kgCO₂e/SCM (CEA / MoPNG)",
+            "metric": "ENV-ENERGY-001",
+            "consumed": f"{val:,.1f} SCM",
+        }
+    elif "water" in dt or "kl" in unit or "m³" in unit or "m3" in unit:
+        return {
+            "energy_gj": None,
+            "ghg_tco2e": f"{val * 0.000344:.4f}",
+            "scope": "Scope 3 (Municipal Water Supply)",
+            "factor": "0.344 kgCO₂e/m³ (Water UK / DEFRA standard)",
+            "metric": "ENV-WATER-001",
+            "consumed": f"{val:,.1f} m³",
+        }
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -859,41 +970,85 @@ def run_extraction_pipeline(request: E1ExtractRequest, db_session=None) -> E1Ext
 
     # ── Step 1: Get file bytes ─────────────────────────────────────────────
     file_bytes = request.file_bytes or b""
-    mime_type = request.mime_type or "application/pdf"
     filename = request.filename or ""
 
     if not file_bytes and request.file_path and os.path.exists(request.file_path):
         with open(request.file_path, "rb") as f:
             file_bytes = f.read()
-        fname_lower = request.file_path.lower()
-        if fname_lower.endswith(".png"):
-            mime_type = "image/png"
-        elif fname_lower.endswith((".jpg", ".jpeg")):
-            mime_type = "image/jpeg"
-        filename = os.path.basename(request.file_path)
+        filename = filename or os.path.basename(request.file_path)
 
-    if not file_bytes:
+    if not file_bytes and request.evidence_id:
         try:
             from app.modules.evidence.storage import storage_service
+            from app.modules.evidence.models import EvidenceFile
+            from sqlalchemy import or_
+
+            def _find_ev(session):
+                is_valid_uuid = False
+                try:
+                    uuid.UUID(str(request.evidence_id))
+                    is_valid_uuid = True
+                except (ValueError, TypeError):
+                    pass
+                conds = [
+                    EvidenceFile.sha256 == request.evidence_id,
+                    EvidenceFile.storage_key == request.evidence_id,
+                ]
+                if is_valid_uuid:
+                    conds.append(EvidenceFile.id == request.evidence_id)
+                return session.query(EvidenceFile).filter(or_(*conds)).first()
+
+            ev = None
             if db_session:
-                from app.modules.evidence.models import EvidenceFile
-                ev = db_session.query(EvidenceFile).filter(
-                    (EvidenceFile.id == request.evidence_id) |
-                    (EvidenceFile.sha256 == request.evidence_id) |
-                    (EvidenceFile.storage_key == request.evidence_id)
-                ).first()
-                if ev:
-                    stored = storage_service.get_file_bytes(ev.storage_key)
-                    if stored:
-                        file_bytes = stored
-                        filename = filename or ev.original_name
-                        mime_type = mime_type or ev.mime_type
+                ev = _find_ev(db_session)
+            if not ev:
+                from app.db.session import SessionLocal
+                with SessionLocal() as session:
+                    ev = _find_ev(session)
+            if ev:
+                stored = storage_service.get_file_bytes(ev.storage_key)
+                if stored:
+                    file_bytes = stored
+                    filename = filename or ev.original_name
+                    mime_type = ev.mime_type or request.mime_type
             if not file_bytes:
                 stored = storage_service.get_file_bytes(request.evidence_id)
                 if stored:
                     file_bytes = stored
         except Exception as e:
             logger.warning(f"Could not load from storage: {e}")
+
+    # Determine mime_type intelligently from filename or content
+    mime_type = request.mime_type or ""
+    fname_lower = (filename or "").lower()
+    if not mime_type or mime_type in ("application/octet-stream", "application/pdf"):
+        if fname_lower.endswith(".txt"):
+            mime_type = "text/plain"
+        elif fname_lower.endswith(".csv"):
+            mime_type = "text/csv"
+        elif fname_lower.endswith(".png"):
+            mime_type = "image/png"
+        elif fname_lower.endswith((".jpg", ".jpeg")):
+            mime_type = "image/jpeg"
+        elif fname_lower.endswith((".webp", ".bmp", ".tiff")):
+            mime_type = "image/" + fname_lower.rsplit(".", 1)[-1]
+        elif fname_lower.endswith(".pdf"):
+            mime_type = "application/pdf"
+        elif file_bytes:
+            if file_bytes.startswith(b"%PDF"):
+                mime_type = "application/pdf"
+            elif file_bytes.startswith(b"\x89PNG"):
+                mime_type = "image/png"
+            elif file_bytes.startswith(b"\xff\xd8\xff"):
+                mime_type = "image/jpeg"
+            else:
+                try:
+                    file_bytes[:100].decode("utf-8")
+                    mime_type = "text/plain"
+                except Exception:
+                    mime_type = "application/pdf"
+        else:
+            mime_type = "application/pdf"
 
     # ── Step 2: Text extraction ────────────────────────────────────────────
     is_image = mime_type.startswith("image/") or (
@@ -1073,23 +1228,12 @@ def run_extraction_pipeline(request: E1ExtractRequest, db_session=None) -> E1Ext
 
     logger.info(f"E1 accepted '{filename}' as: {doc_type}")
 
-    # ── Step 4: Fast deterministic regex extraction (PDFs and OCR images) ──
+    # ── Step 4: REAL AI EXTRACTION (Vision LLM & Text LLM Cascade) ──
     extracted_fields: List[ExtractedField] = []
-    if document_text:
-        extracted_fields = _extract_deterministic(document_text, doc_type)
-        if extracted_fields:
-            logger.info(f"E1 deterministic regex extracted {len(extracted_fields)} field(s) for '{doc_type}'")
 
-    # ── Step 5: LLM text extraction fallback for complex documents ─────────
-    if not extracted_fields and document_text:
-        logger.info(f"E1 calling LLM text extraction for '{doc_type}'")
-        extracted_fields = _extract_with_llm(document_text, doc_type, request.evidence_id) or []
-
-    # ── Step 6: Vision LLM (only for files where no text could be extracted) ───
-    if not extracted_fields and file_bytes and not document_text:
-        need_vision = True
+    # Priority A: For image bills or scanned files, run Vision LLM cascade first
+    if file_bytes and (is_image or not document_text):
         effective_mime = mime_type if is_image else "image/jpeg"
-        # run_relevance_check=True only for images where the user gave no hint
         run_rel_check = is_image and not (user_hint and user_hint in VALID_DOC_TYPES)
         vis_relevant, vis_rejection, vis_fields = _extract_with_vision(
             file_bytes=file_bytes,
@@ -1106,13 +1250,36 @@ def run_extraction_pipeline(request: E1ExtractRequest, db_session=None) -> E1Ext
                 rejection_reason=vis_rejection,
                 is_fallback=False
             )
-        extracted_fields = vis_fields
+        if vis_fields:
+            extracted_fields = vis_fields
+            logger.info(f"E1 Vision AI successfully extracted {len(extracted_fields)} field(s) for '{doc_type}'")
+
+    # Priority B: For documents with text, call AI LLM structured extraction
+    if not extracted_fields and document_text:
+        logger.info(f"E1 calling AI LLM text extraction for '{doc_type}'")
+        llm_fields = _extract_with_llm(document_text, doc_type, request.evidence_id)
+        if llm_fields:
+            extracted_fields = llm_fields
+            logger.info(f"E1 AI LLM text successfully extracted {len(extracted_fields)} field(s) for '{doc_type}'")
+
+    # Priority C: Deterministic regex parsing (for offline/local failover or metadata enrichment)
+    regex_fields = _extract_deterministic(document_text, doc_type) if document_text else []
+    if not extracted_fields and regex_fields:
+        logger.info(f"E1 deterministic regex fallback extracted {len(regex_fields)} field(s) for '{doc_type}'")
+        extracted_fields = regex_fields
+    elif extracted_fields and regex_fields:
+        # Enrich AI-extracted fields with any extra metadata regex found (e.g., CIN, meter_id)
+        for ef in extracted_fields:
+            for rf in regex_fields:
+                if rf.metadata and ef.metadata is not None:
+                    for k, v in rf.metadata.items():
+                        if k not in ef.metadata and v:
+                            ef.metadata[k] = v
 
     if not extracted_fields:
         logger.warning(f"E1 no fields extracted from '{filename}' (type={doc_type})")
-        # Only provide smoke-test fallback when NO file bytes or file path were supplied at all
-        # (headless unit testing of engine orchestration). NEVER fabricate data for actual uploaded files!
-        if not file_bytes and not request.file_path:
+        # Headless unit testing of engine orchestration when no file bytes or document text were supplied at all
+        if not file_bytes and not request.file_path and not document_text:
             if doc_type == "electricity_bill":
                 extracted_fields = [
                     ExtractedField(
@@ -1121,11 +1288,7 @@ def run_extraction_pipeline(request: E1ExtractRequest, db_session=None) -> E1Ext
                         unit="kWh",
                         confidence=0.92,
                         page=1,
-                        metadata={
-                            "source": "smoke_test_headless",
-                            "invoice_number": "BILL-52000",
-                            "billing_period": "FY 2025-26",
-                        },
+                        metadata={"source": "smoke_test_headless", "invoice_number": "BILL-52000"},
                     )
                 ]
             elif doc_type == "fuel_receipt":
@@ -1139,48 +1302,18 @@ def run_extraction_pipeline(request: E1ExtractRequest, db_session=None) -> E1Ext
                         metadata={"source": "smoke_test_headless"},
                     )
                 ]
-            elif doc_type == "water_manifest":
-                extracted_fields = [
-                    ExtractedField(
-                        metric="ENV-WATER-001",
-                        value=980.0,
-                        unit="kL",
-                        confidence=0.90,
-                        page=1,
-                        metadata={"source": "smoke_test_headless"},
-                    )
-                ]
-            elif doc_type == "waste_manifest":
-                extracted_fields = [
-                    ExtractedField(
-                        metric="ENV-WASTE-001",
-                        value=18.5,
-                        unit="tonnes",
-                        confidence=0.90,
-                        page=1,
-                        metadata={"source": "smoke_test_headless"},
-                    )
-                ]
-            elif doc_type == "safety_log":
-                extracted_fields = [
-                    ExtractedField(
-                        metric="SOC-SAFE-001",
-                        value=1,
-                        unit="incidents",
-                        confidence=0.88,
-                        page=1,
-                        metadata={"source": "smoke_test_headless"},
-                    )
-                ]
 
-    # ── Step 7: Validate ──────────────────────────────────────────────────
+    # ── Step 7: Validate & Compute Statutory ESG Impact ─────────────────
     validated = validate_fields(extracted_fields)
+    esg_summary = calculate_esg_impact(doc_type, validated)
 
+    has_results = len(validated) > 0
     return E1ExtractResponse(
         run_id=run_id,
         doc_type=doc_type,
         fields=validated,
-        is_relevant=True,
-        rejection_reason=None,
-        is_fallback=False
+        is_relevant=True if has_results else False,
+        rejection_reason=None if has_results else "No verifiable consumption figures could be extracted from this document.",
+        is_fallback=False,
+        esg_impact=esg_summary,
     )

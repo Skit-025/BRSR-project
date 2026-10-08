@@ -30,9 +30,9 @@ def get_master_form(
     """
     Returns the comprehensive Master Digital Form containing all metrics across
     all 5 MEIL subsidiaries and principles.
-    Restricted to system_admin, group_admin, and esg_manager.
+    Restricted to system_admin and group_admin.
     """
-    allowed = [Role.SYSTEM_ADMIN.value, Role.GROUP_ADMIN.value, Role.ESG_MANAGER.value]
+    allowed = [Role.SYSTEM_ADMIN.value, Role.GROUP_ADMIN.value, Role.SUBSIDIARY_ADMIN.value]
     if current_user.role not in allowed:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

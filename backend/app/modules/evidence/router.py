@@ -55,7 +55,7 @@ async def upload_evidence_file(
             uploader_id = payload.get("sub")
 
     try:
-        evidence, suggestions, is_relevant, rejection_reason = process_and_store_evidence(
+        evidence, suggestions, is_relevant, rejection_reason, esg_impact = process_and_store_evidence(
             db=db,
             filename=file.filename or "uploaded_evidence",
             file_bytes=file_bytes,
@@ -77,8 +77,11 @@ async def upload_evidence_file(
             extracted_fields=suggestions,
             is_relevant=is_relevant,
             rejection_reason=rejection_reason,
-            message=message
+            message=message,
+            esg_impact=esg_impact
         )
+    except HTTPException:
+        raise
     except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -128,7 +131,7 @@ def extract_from_existing_evidence(
         mime_type=evidence.mime_type,
         doc_type_hint=doc_type_hint
     )
-    e1_res = e1_engine.extract_from_file(req)
+    e1_res = e1_engine.extract_from_file(req, db_session=db)
     suggestions = []
     for f in e1_res.fields:
         val = float(f.value) if isinstance(f.value, (int, float)) else 0.0
@@ -200,10 +203,10 @@ def delete_evidence_file(
 ):
     """
     Deletes an evidence file and its cryptographic hash record.
-    Restricted to system_admin and his 1 level down roles (group_admin, esg_manager).
+    Restricted to system_admin and group_admin.
     Enforces re-entering admin password for audit authorization.
     """
-    allowed_roles = [Role.SYSTEM_ADMIN.value, Role.GROUP_ADMIN.value, Role.ESG_MANAGER.value]
+    allowed_roles = [Role.SYSTEM_ADMIN.value, Role.GROUP_ADMIN.value]
     if current_user.role not in allowed_roles:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

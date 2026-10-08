@@ -270,7 +270,7 @@ export default function EvidenceVault() {
   const qc = useQueryClient();
   const { user } = useAuth();
   const userRole = user?.role || '';
-  const canDelete = ['system_admin', 'group_admin', 'esg_manager'].includes(userRole);
+  const canDelete = ['system_admin', 'group_admin'].includes(userRole);
 
   const { data: evidenceList = [], isLoading, refetch, isRefetching } = useQuery({
     queryKey: ['evidence-list'],

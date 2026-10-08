@@ -140,10 +140,17 @@ def provision_user_by_admin(
     return user, password_to_use
 
 
-def delete_user_by_admin(db: Session, admin_user: User, user_id: str, admin_password: Optional[str] = None) -> None:
+def delete_user_by_admin(
+    db: Session,
+    admin_user: User,
+    user_id: str,
+    admin_password: Optional[str] = None,
+    reason: Optional[str] = None
+) -> None:
     """
     Sole method to delete a user. System Admin soft-deletes and revokes all active role assignments.
-    Requires administrator password re-verification for high-privilege account revocation.
+    Requires administrator password re-verification for account deletion.
+    Special protection: Deleting a Group Admin requires a mandatory reason.
     """
     if admin_user.role != Role.SYSTEM_ADMIN.value:
         raise PermissionError("Only System Admin is authorized to delete users.")
@@ -152,17 +159,7 @@ def delete_user_by_admin(db: Session, admin_user: User, user_id: str, admin_pass
         raise ValueError("Administrator password is required to confirm user deletion.")
 
     # Re-verify the administrator's password
-    pwd_valid = False
-    cleaned_pwd = admin_password.strip()
-    if verify_password(cleaned_pwd, admin_user.hashed_password):
-        pwd_valid = True
-    else:
-        for v in [cleaned_pwd.replace(" ", ""), cleaned_pwd]:
-            if verify_password(v, admin_user.hashed_password):
-                pwd_valid = True
-                break
-
-    if not pwd_valid:
+    if not verify_admin_password_check(admin_user, admin_password):
         raise ValueError("Incorrect administrator password. Deletion unauthorized.")
 
     if str(admin_user.id) == str(user_id):
@@ -171,6 +168,11 @@ def delete_user_by_admin(db: Session, admin_user: User, user_id: str, admin_pass
     user = db.query(User).filter(User.id == user_id, User.is_deleted == False).first()
     if not user:
         raise ValueError("User not found or already deleted.")
+
+    if user.role == Role.GROUP_ADMIN.value:
+        clean_reason = (reason or "").strip()
+        if not clean_reason:
+            raise ValueError("A mandatory removal reason must be provided to delete a Group Admin account.")
 
     user.is_deleted = True
     user.is_active = False
@@ -181,6 +183,14 @@ def delete_user_by_admin(db: Session, admin_user: User, user_id: str, admin_pass
         a.is_active = False
 
     db.commit()
+
+    action_label = "GROUP_ADMIN_DELETED" if user.role == Role.GROUP_ADMIN.value else "USER_DELETED"
+    log_admin_audit(
+        db, actor=admin_user, action=action_label,
+        target_user_id=str(user.id), target_name=user.full_name,
+        target_role=user.role, target_scope_id=str(user.org_node_id) if user.org_node_id else None,
+        details={"reason": reason or "Account deleted by System Admin", "status": "DELETED", "result": "SUCCESS"}
+    )
 
 
 def verify_admin_password_check(admin_user: User, admin_password: Optional[str]) -> bool:
@@ -323,43 +333,30 @@ def bootstrap_system_admin(db: Session, req: BootstrapAdminRequest) -> User:
 # ─── Hierarchical Admin Delegation (Spec §1-§3, §16-§18, §26) ────────────────
 
 HIERARCHICAL_DELEGATION_RULES = {
-    # System / Super Admin: unrestricted
+    # System Admin: unrestricted
     "system_admin": None,
-    "super_admin": None,
 
     # Group Admin: can create own level + exactly 1 level below (Subsidiary Admin)
     "group_admin": {
-        "allowed_roles": ["group_admin", "group_esg_manager", "subsidiary_admin", "subsidiary_esg_manager"],
-        "allowed_levels": ["group", "company", "subsidiary"],
-    },
-    "group_esg_manager": {
-        "allowed_roles": ["group_esg_manager", "subsidiary_esg_manager"],
+        "allowed_roles": ["group_admin", "subsidiary_admin"],
         "allowed_levels": ["group", "company", "subsidiary"],
     },
 
     # Subsidiary Admin: can create own level + exactly 1 level below (BU Admin)
     "subsidiary_admin": {
-        "allowed_roles": ["subsidiary_admin", "subsidiary_esg_manager", "bu_admin", "bu_esg_manager", "bu_reviewer"],
-        "allowed_levels": ["company", "subsidiary", "business_unit", "bu"],
-    },
-    "subsidiary_esg_manager": {
-        "allowed_roles": ["subsidiary_esg_manager", "bu_esg_manager", "bu_reviewer"],
+        "allowed_roles": ["subsidiary_admin", "bu_admin"],
         "allowed_levels": ["company", "subsidiary", "business_unit", "bu"],
     },
 
     # BU Admin: can create own level + exactly 1 level below (Project Admin)
     "bu_admin": {
-        "allowed_roles": ["bu_admin", "bu_esg_manager", "bu_reviewer", "project_admin", "project_data_entry_user", "maker"],
-        "allowed_levels": ["business_unit", "bu", "project", "site"],
-    },
-    "bu_esg_manager": {
-        "allowed_roles": ["bu_esg_manager", "bu_reviewer", "project_admin", "project_data_entry_user", "maker"],
+        "allowed_roles": ["bu_admin", "project_admin"],
         "allowed_levels": ["business_unit", "bu", "project", "site"],
     },
 
     # Project Admin: can create project-level operational users
     "project_admin": {
-        "allowed_roles": ["project_admin", "project_data_entry_user", "maker", "checker"],
+        "allowed_roles": ["project_admin"],
         "allowed_levels": ["project", "site"],
     },
 }
@@ -385,7 +382,7 @@ def validate_admin_delegation(db: Session, creator_user: User, requested_role: s
     2. Requested role must be for creator's level OR exactly one level below
     3. Target org_node must be within creator's subtree
     """
-    if creator_user.role in ("system_admin", "super_admin"):
+    if creator_user.role == Role.SYSTEM_ADMIN.value:
         return True
 
     delegation_rule = HIERARCHICAL_DELEGATION_RULES.get(creator_user.role)
@@ -479,7 +476,7 @@ def create_invitation_by_admin(db: Session, admin_user: User, req) -> "UserInvit
 
 def list_invitations_for_admin(db: Session, admin_user: User) -> List["UserInvitation"]:
     from app.modules.auth.models import UserInvitation
-    if admin_user.role in ("system_admin", "super_admin"):
+    if admin_user.role == Role.SYSTEM_ADMIN.value:
         return db.query(UserInvitation).filter(UserInvitation.is_deleted == False).order_by(UserInvitation.created_at.desc()).all()
 
     q = db.query(UserInvitation).filter(UserInvitation.is_deleted == False)
@@ -528,7 +525,13 @@ def revoke_invitation(db: Session, admin_user: User, invitation_id: str) -> "Use
     return inv
 
 
-def deactivate_user_scoped(db: Session, admin_user: User, target_user_id: str, reason: str = "Deactivated by Administrator") -> User:
+def deactivate_user_scoped(
+    db: Session,
+    admin_user: User,
+    target_user_id: str,
+    reason: str = "Deactivated by Administrator",
+    admin_password: Optional[str] = None
+) -> User:
     target_user = db.query(User).filter(User.id == target_user_id, User.is_deleted == False).first()
     if not target_user:
         raise ValueError("User not found.")
@@ -536,8 +539,33 @@ def deactivate_user_scoped(db: Session, admin_user: User, target_user_id: str, r
     if str(target_user.id) == str(admin_user.id):
         raise ValueError("You cannot deactivate your own account.")
 
-    # Scope check
-    if admin_user.role not in ("system_admin", "super_admin"):
+    # ── Special Group Admin Removal Protection ────────────────────────────────
+    # System Admin can remove/deactivate a Group Admin, but this must be a protected operation:
+    # 1. Current authenticated user is verified as system_admin.
+    # 2. Target user is actually group_admin.
+    # 3. Mandatory removal reason/cause.
+    # 4. System Admin re-enters their own password.
+    # 5. Backend verifies that password against the stored password hash.
+    # 6. Operation is performed only after successful verification.
+    # 7. An audit event is recorded.
+    if target_user.role == Role.GROUP_ADMIN.value:
+        if admin_user.role != Role.SYSTEM_ADMIN.value:
+            raise PermissionError("Only System Admin is authorized to deactivate or remove a Group Admin.")
+        
+        clean_reason = (reason or "").strip()
+        if not clean_reason or clean_reason == "Deactivated by Administrator":
+            raise ValueError("A mandatory removal reason must be provided to deactivate a Group Admin.")
+
+        if not admin_password or not admin_password.strip():
+            raise ValueError("System Administrator password confirmation is required to deactivate a Group Admin.")
+
+        if not verify_admin_password_check(admin_user, admin_password):
+            raise ValueError("Incorrect administrator password. Group Admin deactivation unauthorized.")
+
+    # Scope check for other tiers
+    if admin_user.role != Role.SYSTEM_ADMIN.value:
+        if target_user.role == Role.SYSTEM_ADMIN.value:
+            raise PermissionError("Cannot deactivate a System Administrator.")
         if admin_user.org_node_id and target_user.org_node_id:
             if not is_node_descendant(db, str(admin_user.org_node_id), str(target_user.org_node_id)):
                 raise PermissionError("You cannot deactivate a user outside your organizational scope.")
@@ -546,18 +574,19 @@ def deactivate_user_scoped(db: Session, admin_user: User, target_user_id: str, r
     db.commit()
     db.refresh(target_user)
 
+    action_label = "GROUP_ADMIN_DEACTIVATED" if target_user.role == Role.GROUP_ADMIN.value else "USER_DEACTIVATED"
     log_admin_audit(
-        db, actor=admin_user, action="USER_DEACTIVATED",
+        db, actor=admin_user, action=action_label,
         target_user_id=str(target_user.id), target_name=target_user.full_name,
         target_role=target_user.role, target_scope_id=str(target_user.org_node_id) if target_user.org_node_id else None,
-        details={"reason": reason, "preserves_records": True}
+        details={"reason": reason, "preserves_records": True, "status": "DEACTIVATED", "result": "SUCCESS"}
     )
     return target_user
 
 
 def list_users_for_admin_scoped(db: Session, admin_user: User) -> List[User]:
     """Lists users visible within the calling admin's authorized hierarchy branch."""
-    if admin_user.role in ("system_admin", "super_admin"):
+    if admin_user.role == Role.SYSTEM_ADMIN.value:
         return db.query(User).filter(User.is_deleted == False).order_by(User.created_at.desc()).all()
 
     if not admin_user.org_node_id:
@@ -567,8 +596,8 @@ def list_users_for_admin_scoped(db: Session, admin_user: User) -> List[User]:
     scoped_users = []
     for u in all_users:
         if not u.org_node_id:
-            # Group or system level
-            if admin_user.role in ("group_admin", "group_esg_manager"):
+            # Group level
+            if admin_user.role == Role.GROUP_ADMIN.value:
                 scoped_users.append(u)
         elif is_node_descendant(db, str(admin_user.org_node_id), str(u.org_node_id)):
             scoped_users.append(u)
@@ -578,7 +607,7 @@ def list_users_for_admin_scoped(db: Session, admin_user: User) -> List[User]:
 def get_admin_audit_log(db: Session, admin_user: User, limit: int = 50):
     from app.modules.auth.models import AdminAuditEntry
     q = db.query(AdminAuditEntry)
-    if admin_user.role not in ("system_admin", "super_admin"):
+    if admin_user.role != Role.SYSTEM_ADMIN.value:
         q = q.filter(AdminAuditEntry.actor_id == admin_user.id)
     return q.order_by(AdminAuditEntry.created_at.desc()).limit(limit).all()
 

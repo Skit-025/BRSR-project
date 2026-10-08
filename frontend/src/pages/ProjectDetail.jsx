@@ -197,7 +197,13 @@ export default function ProjectDetail() {
       {/* ── Breadcrumb + Header ── */}
       <div>
         <button
-          onClick={() => navigate('/projects')}
+          onClick={() => {
+            if (user?.role === 'project_admin' || user?.role === 'project_data_entry_user') {
+              navigate(`/projects/${project.code || project.id || 'PRJ-ODISHA-SOLAR'}`);
+            } else {
+              navigate('/projects');
+            }
+          }}
           style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 13, marginBottom: 16, padding: 0 }}
         >
           <ArrowLeft size={14} /> Projects

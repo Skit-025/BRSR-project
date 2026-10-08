@@ -1,11 +1,11 @@
 """
 app/security/sod.py
-Segregation of Duties (SoD) enforcement utilities.
+Segregation of Duties (SoD) enforcement utilities for 5-Role architecture.
 
-BRSR audit rules:
-  - The Maker who submitted data CANNOT review/approve that same submission.
-  - Checker cannot create submissions they are expected to review.
-  - Period locks require ESG Manager role (not Maker or Checker).
+Core SoD audit rules:
+  - The Maker/creator who submitted data CANNOT review/approve that same submission.
+  - Creator and Reviewer identities must be distinct (enforce_maker_checker).
+  - Period locks require Group Admin or System Admin.
 """
 from fastapi import HTTPException, status
 from app.security.rbac import Role
@@ -34,28 +34,38 @@ def enforce_maker_checker(maker_id: str, checker_id: str, context: str = "") -> 
 
 # ── Role-based SoD checks ────────────────────────────────────────
 def assert_can_submit(role: str) -> None:
-    """Only MAKER and ESG_MANAGER roles may submit data entries."""
-    allowed = {Role.MAKER.value, Role.ESG_MANAGER.value, Role.SYSTEM_ADMIN.value}
+    """PROJECT_ADMIN, BU_ADMIN, GROUP_ADMIN, and SYSTEM_ADMIN roles may submit data entries."""
+    allowed = {
+        Role.PROJECT_ADMIN.value,
+        Role.BU_ADMIN.value,
+        Role.GROUP_ADMIN.value,
+        Role.SYSTEM_ADMIN.value,
+    }
     if role not in allowed:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"Role '{role}' is not permitted to submit data. Must be 'maker' or 'esg_manager'.",
+            detail=f"Role '{role}' is not permitted to submit data.",
         )
 
 
 def assert_can_review(role: str) -> None:
-    """Only CHECKER, ESG_MANAGER, and SYSTEM_ADMIN may approve/reject submissions."""
-    allowed = {Role.CHECKER.value, Role.ESG_MANAGER.value, Role.SYSTEM_ADMIN.value}
+    """BU_ADMIN, SUBSIDIARY_ADMIN, GROUP_ADMIN, and SYSTEM_ADMIN may approve/reject submissions."""
+    allowed = {
+        Role.BU_ADMIN.value,
+        Role.SUBSIDIARY_ADMIN.value,
+        Role.GROUP_ADMIN.value,
+        Role.SYSTEM_ADMIN.value,
+    }
     if role not in allowed:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"Role '{role}' is not permitted to review submissions. Must be 'checker' or 'esg_manager'.",
+            detail=f"Role '{role}' is not permitted to review submissions.",
         )
 
 
 def assert_can_lock_period(role: str) -> None:
-    """Only ESG_MANAGER and SYSTEM_ADMIN may lock reporting periods."""
-    allowed = {Role.ESG_MANAGER.value, Role.SYSTEM_ADMIN.value}
+    """Only GROUP_ADMIN and SYSTEM_ADMIN may lock reporting periods."""
+    allowed = {Role.GROUP_ADMIN.value, Role.SYSTEM_ADMIN.value}
     if role not in allowed:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -64,8 +74,8 @@ def assert_can_lock_period(role: str) -> None:
 
 
 def assert_can_run_consolidation(role: str) -> None:
-    """Only ESG_MANAGER and SYSTEM_ADMIN may trigger consolidation runs."""
-    allowed = {Role.ESG_MANAGER.value, Role.SYSTEM_ADMIN.value}
+    """Only GROUP_ADMIN and SYSTEM_ADMIN may trigger consolidation runs."""
+    allowed = {Role.GROUP_ADMIN.value, Role.SYSTEM_ADMIN.value}
     if role not in allowed:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -74,8 +84,8 @@ def assert_can_run_consolidation(role: str) -> None:
 
 
 def assert_can_compile_report(role: str) -> None:
-    """Only ESG_MANAGER and SYSTEM_ADMIN may compile BRSR reports."""
-    allowed = {Role.ESG_MANAGER.value, Role.SYSTEM_ADMIN.value}
+    """Only GROUP_ADMIN and SYSTEM_ADMIN may compile BRSR reports."""
+    allowed = {Role.GROUP_ADMIN.value, Role.SYSTEM_ADMIN.value}
     if role not in allowed:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

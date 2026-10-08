@@ -58,6 +58,7 @@ class E1ExtractResponse(BaseModel):
     is_relevant: bool = True
     rejection_reason: Optional[str] = None
     is_fallback: bool = False
+    esg_impact: Optional[Dict[str, Any]] = None
 
 
 # --- E2: Anomaly Engine Schemas ---

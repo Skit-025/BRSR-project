@@ -323,7 +323,7 @@ export default function App() {
                   </PermissionGuard>
                 } />
                 <Route path="/projects/new" element={
-                  <PermissionGuard perms={['org:read']}>
+                  <PermissionGuard perms={['org:write']}>
                     <ProjectWizard />
                   </PermissionGuard>
                 } />

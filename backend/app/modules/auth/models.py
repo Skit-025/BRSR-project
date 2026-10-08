@@ -1,7 +1,7 @@
 """
 app/modules/auth/models.py
 Authentication models: User, UserRoleAssignment, and IdempotencyKey.
-Enforces the 8-role security hierarchy with System Admin sole user provisioning.
+Enforces the 5-role security hierarchy with System Admin sole user provisioning.
 """
 import enum
 from datetime import datetime, timezone
@@ -12,36 +12,11 @@ from app.db.base import Base, UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMix
 
 
 class UserRole(str, enum.Enum):
-    # ── System level ─────────────────────────────────────────────────────────
-    SYSTEM_ADMIN     = "system_admin"          # Sole authority: create/delete users, credentials, master form
-    SUPER_ADMIN      = "super_admin"           # Alias/synonym for system_admin in multi-instance deployments
-
-    # ── Group level ──────────────────────────────────────────────────────────
-    GROUP_ADMIN      = "group_admin"           # Group executive oversight, hierarchy mgmt, user provisioning
-    GROUP_ESG_MANAGER = "group_esg_manager"    # Enterprise ESG: review subsidiaries, approve consolidated data, generate group reports
-
-    # ── Subsidiary level ─────────────────────────────────────────────────────
-    SUBSIDIARY_ADMIN    = "subsidiary_admin"       # Subsidiary org management, user management within subsidiary
-    SUBSIDIARY_ESG_MANAGER = "subsidiary_esg_manager"  # Review BU submissions, approve BU data, subsidiary disclosures, generate subsidiary report
-
-    # ── BU level ─────────────────────────────────────────────────────────────
-    BU_ADMIN     = "bu_admin"            # BU org management, assign reviewers, manage project users
-    BU_ESG_MANAGER = "bu_esg_manager"   # BU ESG oversight: manage applicability, BU-level disclosures, BU report
-    BU_REVIEWER  = "bu_reviewer"        # Primary operational role: receive project submissions, evidence review, approve/return
-
-    # ── Project level ────────────────────────────────────────────────────────
-    PROJECT_ADMIN      = "project_admin"           # Project mgmt: manage project users, view submission status
-    PROJECT_DATA_ENTRY_USER = "project_data_entry_user"  # Operational data collection: enter raw facts, upload evidence, submit
-
-    # ── Legacy aliases (kept for backwards compatibility with existing records) ──
-    ESG_MANAGER      = "esg_manager"           # Legacy: maps to group_esg_manager capabilities
-    MAKER            = "maker"                 # Legacy: maps to project_data_entry_user capabilities
-    CHECKER          = "checker"               # Legacy: maps to bu_reviewer capabilities
-
-    # ── Cross-cutting ─────────────────────────────────────────────────────────
-    AUDITOR = "auditor"     # Independent assurance, read-only data, audit trails & findings
-    READ_ONLY_VIEWER = "read_only_viewer"  # Read-only dashboards and analytics
-    VIEWER  = "viewer"      # Legacy alias for read_only_viewer
+    SYSTEM_ADMIN     = "system_admin"
+    GROUP_ADMIN      = "group_admin"
+    SUBSIDIARY_ADMIN = "subsidiary_admin"
+    BU_ADMIN         = "bu_admin"
+    PROJECT_ADMIN    = "project_admin"
 
 
 class User(Base, UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin):
@@ -55,8 +30,8 @@ class User(Base, UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin):
     hashed_password = Column(String(255), nullable=False)
     full_name = Column(String(255), nullable=False)
     
-    # Permanent Role (One of the 8 authoritative roles)
-    role = Column(String(50), default=UserRole.MAKER.value, nullable=False, index=True)
+    # Permanent Role (One of the 5 authoritative runtime roles)
+    role = Column(String(50), default=UserRole.PROJECT_ADMIN.value, nullable=False, index=True)
     
     # Scoped Org Node (Subsidiary, BU, or Project). System Admin and Group Admin have group-wide access (None)
     org_node_id = Column(PG_UUID(as_uuid=False), ForeignKey("org_nodes.id", ondelete="SET NULL"), nullable=True, index=True)

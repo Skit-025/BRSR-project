@@ -84,7 +84,7 @@ const ROLE_PERMISSIONS = {
 
   // ── Subsidiary level ─────────────────────────────────────────────────────────
   subsidiary_admin: new Set([
-    'org:read', 'metric:read',
+    'org:read', 'org:write', 'metric:read',
     'submission:read', 'submission:review', 'evidence:read',
     'consolidation:read',
     'bu_disclosure:read',
@@ -107,7 +107,7 @@ const ROLE_PERMISSIONS = {
 
   // ── BU level ──────────────────────────────────────────────────────────────────
   bu_admin: new Set([
-    'org:read', 'metric:read',
+    'org:read', 'org:write', 'metric:read',
     'submission:read', 'submission:review', 'form:review', 'evidence:read',
     'consolidation:read',
     'bu_disclosure:write', 'bu_disclosure:read',
@@ -141,6 +141,8 @@ const ROLE_PERMISSIONS = {
     'submission:create', 'submission:read', 'submission:submit',
     'evidence:upload', 'evidence:read', 'spreadsheet:upload',
     'report:read', 'users:manage_scoped',
+    // ── AI Engines (synced with backend rbac.py PROJECT_ADMIN) ──────────────
+    'ai:e1:use', 'ai:e2:use', 'ai:e3:use', 'ai:e6:use',
   ]),
 
   project_data_entry_user: new Set([
@@ -149,7 +151,8 @@ const ROLE_PERMISSIONS = {
     'submission:create', 'submission:read', 'submission:submit',
     'evidence:upload', 'evidence:read', 'spreadsheet:upload',
     'report:read',
-    'ai:e1:use', 'ai:e2:use', 'ai:e6:use',
+    // ── AI Engines (synced with backend rbac.py PROJECT_DATA_ENTRY_USER) ──────
+    'ai:e1:use', 'ai:e3:use', 'ai:e6:use',
   ]),
 
   // ── Legacy roles (backwards compatibility) ─────────────────────────────────

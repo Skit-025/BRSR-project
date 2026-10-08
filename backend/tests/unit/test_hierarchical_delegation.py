@@ -24,8 +24,8 @@ def test_hierarchical_delegation_rules_structure():
     assert "subsidiary_admin" not in bu_rules["allowed_roles"]
     assert "group_admin" not in bu_rules["allowed_roles"]
 
-    # Project Admin: can create project-level users
+    # Project Admin: can create other project-level admins (same level only)
     proj_rules = HIERARCHICAL_DELEGATION_RULES["project_admin"]
-    assert "project_data_entry_user" in proj_rules["allowed_roles"]
+    assert "project_admin" in proj_rules["allowed_roles"]
     assert "bu_admin" not in proj_rules["allowed_roles"]
     assert "subsidiary_admin" not in proj_rules["allowed_roles"]

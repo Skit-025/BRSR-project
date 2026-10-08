@@ -32,30 +32,39 @@ class AIGateway:
 
     def _call_provider_cascade(self, method_name: str, **kwargs) -> tuple[Dict[str, Any], str, bool]:
         """
-        Executes cascade:
-        1. Gemini (if available)
-        2. OpenRouter (if Gemini fails or unavailable)
-        3. Mock Fallback (if both fail or unavailable)
+        Executes cascade respecting settings.AI_PROVIDER:
+        - AI_PROVIDER="openrouter"  -> OpenRouter first, then Gemini, then Mock
+        - AI_PROVIDER="gemini"      -> Gemini first, then OpenRouter, then Mock
+        - AI_PROVIDER="mock"        -> Mock directly
         """
-        # Step 1: Gemini
-        if self.gemini_provider.is_available():
-            try:
-                method = getattr(self.gemini_provider, method_name)
-                result = method(**kwargs)
-                return result, "gemini", False
-            except Exception as e:
-                logger.warning(f"AI Gateway: Gemini provider failed: {e}. Falling back to OpenRouter.")
+        # Build ordered provider list based on configured primary
+        primary = (settings.AI_PROVIDER or "openrouter").lower()
 
-        # Step 2: OpenRouter
-        if self.openrouter_provider.is_available():
-            try:
-                method = getattr(self.openrouter_provider, method_name)
-                result = method(**kwargs)
-                return result, "openrouter", False
-            except Exception as e:
-                logger.warning(f"AI Gateway: OpenRouter provider failed: {e}. Falling back to Mock.")
+        if primary == "openrouter":
+            ordered = [
+                ("openrouter", self.openrouter_provider),
+                ("gemini", self.gemini_provider),
+            ]
+        elif primary == "gemini":
+            ordered = [
+                ("gemini", self.gemini_provider),
+                ("openrouter", self.openrouter_provider),
+            ]
+        else:
+            # mock or unknown -> skip real providers
+            ordered = []
 
-        # Step 3: Mock Fallback
+        for provider_name, provider in ordered:
+            if not provider.is_available():
+                continue
+            try:
+                method = getattr(provider, method_name)
+                result = method(**kwargs)
+                return result, provider_name, False
+            except Exception as e:
+                logger.warning(f"AI Gateway: {provider_name} provider failed: {e}. Trying next provider.")
+
+        # Final: Mock Fallback
         if settings.AI_AUTO_FALLBACK_ON_ERROR:
             logger.info("AI Gateway: Activating deterministic Mock Fallback.")
             method = getattr(self.mock_provider, method_name)

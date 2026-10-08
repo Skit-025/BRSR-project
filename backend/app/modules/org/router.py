@@ -16,6 +16,9 @@ from app.modules.org.schemas import (
 )
 from app.modules.org.tree import build_materialized_path, build_tree_hierarchy
 from app.modules.org.applicability.engine import evaluate_applicability_for_node
+from app.modules.auth.models import User
+from app.modules.auth.router import get_current_active_user
+from app.security.rbac import Role, Permission, assert_permission
 
 router = APIRouter(prefix="/org", tags=["Organization Hierarchy & Applicability"])
 
@@ -45,8 +48,32 @@ def list_nodes(
     return query.all()
 
 @router.post("/nodes", response_model=OrgNodeRead, status_code=status.HTTP_201_CREATED)
-def create_node(node_in: OrgNodeCreate, db: Session = Depends(get_db)):
+def create_node(
+    node_in: OrgNodeCreate, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
     """Creates a new node in the hierarchy, validates 4-level parent-child rules, computes path, and triggers applicability evaluation."""
+    assert_permission(current_user.role, Permission.ORG_WRITE)
+    
+    # Enforce strict hierarchical creation architecture
+    node_type = node_in.type.value if hasattr(node_in.type, "value") else str(node_in.type)
+    
+    allowed_creations = {
+        Role.SYSTEM_ADMIN.value: ["group", "subsidiary", "company", "business_unit", "project", "site"],
+        Role.GROUP_ADMIN.value: ["subsidiary", "company", "business_unit", "project", "site"],
+        Role.SUBSIDIARY_ADMIN.value: ["business_unit", "project", "site"],
+        Role.BU_ADMIN.value: ["project", "site"],
+        Role.PROJECT_ADMIN.value: []
+    }
+    
+    allowed = allowed_creations.get(current_user.role, [])
+    if node_type not in allowed:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Role '{current_user.role}' is not permitted to create organizational nodes of type '{node_type}'."
+        )
+
     from app.modules.org.service import OrgService
     service = OrgService(db)
     try:

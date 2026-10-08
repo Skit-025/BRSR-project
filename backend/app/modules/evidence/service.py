@@ -63,6 +63,7 @@ def process_and_store_evidence(
     suggestions: List[ExtractedFieldSuggestion] = []
     is_relevant: bool = True
     rejection_reason: Optional[str] = None
+    esg_impact: Optional[dict] = None
 
     if run_ocr:
         try:
@@ -73,9 +74,10 @@ def process_and_store_evidence(
                 mime_type=mime_type,
                 doc_type_hint=doc_type_hint  # Pass as-is, None means auto-classify
             )
-            e1_res = e1_engine.extract_from_file(req)
+            e1_res = e1_engine.extract_from_file(req, db_session=db)
             is_relevant = e1_res.is_relevant
             rejection_reason = e1_res.rejection_reason
+            esg_impact = getattr(e1_res, "esg_impact", None)
 
             if is_relevant:
                 for f in e1_res.fields:
@@ -96,7 +98,7 @@ def process_and_store_evidence(
         except Exception as e:
             logger.warning(f"AI E1 extraction notice: {e}. Entry can still proceed manually.")
 
-    return evidence, suggestions, is_relevant, rejection_reason
+    return evidence, suggestions, is_relevant, rejection_reason, esg_impact
 
 
 def link_evidence_to_datapoint(

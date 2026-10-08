@@ -10,39 +10,21 @@ import { authApi, orgApi } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import Modal from '../components/Modal';
 
-// All standard roles with display metadata
+// ── 5 canonical runtime roles ──────────────────────────────────────────────
 export const ROLE_DEFINITIONS = {
-  system_admin: { label: 'System Admin', tier: 'System', level: 0, badge: 'badge-purple', desc: 'Central infrastructure & platform root authority' },
-  super_admin: { label: 'Super Admin', tier: 'System', level: 0, badge: 'badge-purple', desc: 'Enterprise super administrator' },
-  group_admin: { label: 'Group Admin', tier: 'Group', level: 1, badge: 'badge-purple', desc: 'Enterprise group ESG governance & consolidation' },
-  group_esg_manager: { label: 'Group ESG Manager', tier: 'Group', level: 1, badge: 'badge-purple', desc: 'Group methodology & disclosure compilation' },
-  subsidiary_admin: { label: 'Subsidiary Admin', tier: 'Subsidiary', level: 2, badge: 'badge-indigo', desc: 'Subsidiary administrator (BRSR sections A, B, C)' },
-  subsidiary_esg_manager: { label: 'Subsidiary ESG Manager', tier: 'Subsidiary', level: 2, badge: 'badge-indigo', desc: 'Subsidiary review & aggregation lead' },
-  bu_admin: { label: 'BU Admin', tier: 'BU', level: 3, badge: 'badge-sky', desc: 'Business Unit Admin (reviews project data)' },
-  bu_esg_manager: { label: 'BU ESG Manager', tier: 'BU', level: 3, badge: 'badge-sky', desc: 'BU multi-year targets & target tracking' },
-  bu_reviewer: { label: 'BU Reviewer', tier: 'BU', level: 3, badge: 'badge-sky', desc: 'Four-Eyes BU data reviewer' },
-  project_admin: { label: 'Project Admin', tier: 'Project', level: 4, badge: 'badge-amber', desc: 'Project site administrator' },
-  project_data_entry_user: { label: 'Project Data Entry', tier: 'Project', level: 4, badge: 'badge-amber', desc: 'Operational raw fact entry & evidence upload' },
-  maker: { label: 'Maker (Data Entry)', tier: 'Project', level: 4, badge: 'badge-amber', desc: 'Operational ESG data entry' },
-  checker: { label: 'Checker (Reviewer)', tier: 'Project', level: 4, badge: 'badge-sky', desc: 'Operational data reviewer' },
-  auditor: { label: 'Independent Auditor', tier: 'External', level: 5, badge: 'badge-teal', desc: 'Third-party assurance & verification' },
-  read_only_viewer: { label: 'Read-Only Viewer', tier: 'All', level: 5, badge: 'badge-gray', desc: 'Read-only analytics and reports' },
-  viewer: { label: 'Viewer', tier: 'All', level: 5, badge: 'badge-gray', desc: 'General read-only viewer' },
+  system_admin:     { label: 'System Admin',      tier: 'System',     level: 0, badge: 'badge-purple', desc: 'Central infrastructure & platform root authority' },
+  group_admin:      { label: 'Group Admin',        tier: 'Group',      level: 1, badge: 'badge-purple', desc: 'Enterprise group ESG governance, consolidation & BRSR approval' },
+  subsidiary_admin: { label: 'Subsidiary Admin',   tier: 'Subsidiary', level: 2, badge: 'badge-indigo', desc: 'Subsidiary administrator — BRSR sections A, B & C' },
+  bu_admin:         { label: 'BU Admin',           tier: 'BU',         level: 3, badge: 'badge-sky',    desc: 'Business Unit Admin — reviews project data & manages BU targets' },
+  project_admin:    { label: 'Project Admin',      tier: 'Project',    level: 4, badge: 'badge-amber',  desc: 'Project site admin — data entry, evidence upload & draft submission' },
 };
 
-// Default delegable permissions per role
+// Default delegable permissions preview per role
 const ROLE_PERMISSIONS_PREVIEW = {
-  group_admin: ['Group ESG Consolidation', 'Subsidiary Admin Delegation', 'BRSR Report Approval', 'Audit Trail Oversight'],
-  group_esg_manager: ['Group Net-Zero Targets', 'Consolidation Pipeline', 'Report Compilation'],
-  subsidiary_admin: ['Subsidiary ESG Governance', 'BU Admin Delegation', 'BRSR Sections A & B', 'Consolidated Review'],
-  subsidiary_esg_manager: ['Subsidiary Metrics Aggregation', 'BU Review Oversight', 'Evidence Validation'],
-  bu_admin: ['BU Data Review', 'Project Admin Delegation', 'Variance Analysis', 'BU Target Management'],
-  bu_esg_manager: ['BU Target Entry', 'Initiatives Tracking', 'Monthly Pack Review'],
-  bu_reviewer: ['BU Reviewer 4-Eyes Check', 'Sign-Off / Return with Comments'],
-  project_admin: ['Project Site Governance', 'Data Entry User Delegation', 'Readiness Checklist Sign-Off'],
-  project_data_entry_user: ['Monthly Operational Data Entry', 'Evidence Document Upload', 'Pre-Submission Checklist'],
-  maker: ['Operational Metric Entry', 'Evidence File Upload', 'Pre-Submission Checklist'],
-  checker: ['Project Verification', 'Approve / Reject Data Rows'],
+  group_admin:      ['Group ESG Consolidation', 'Subsidiary Admin Delegation', 'BRSR Report Approval', 'Audit Trail Oversight', 'Period Lock', 'Consolidation Run'],
+  subsidiary_admin: ['Subsidiary ESG Governance', 'BU Admin Delegation', 'BRSR Sections A & B', 'Consolidated Review', 'Subsidiary Disclosure Forms'],
+  bu_admin:         ['BU Data Review & Approval', 'Project Admin Delegation', 'Variance Analysis', 'BU Target Management', 'BU Disclosure Forms', '4-Eyes Maker-Checker Sign-Off'],
+  project_admin:    ['Project Site Governance', 'Monthly Operational Data Entry', 'Evidence Document Upload', 'Spreadsheet Upload', 'Pre-Submission Checklist'],
 };
 
 export default function UserManagement() {
@@ -90,7 +72,7 @@ export default function UserManagement() {
 
   // Calculate descendant node IDs for the current user to enforce scope isolation
   const authorizedNodeIds = useMemo(() => {
-    if (!currentUser?.org_node_id || ['system_admin', 'super_admin'].includes(currentUser.role)) {
+    if (!currentUser?.org_node_id || currentUser.role === 'system_admin') {
       return null; // All nodes authorized
     }
 

@@ -75,9 +75,10 @@ export default function Login() {
       const loggedUser = await login(identifier, password);
       if (loggedUser.role === 'system_admin') {
         navigate('/admin/users');
-      } else if (loggedUser.role === 'project_data_entry_user' || loggedUser.role === 'maker') {
-        navigate('/projects');
-      } else if (loggedUser.role === 'bu_admin' || loggedUser.role === 'bu_reviewer' || loggedUser.role === 'checker') {
+      } else if (loggedUser.role === 'project_admin' || loggedUser.role === 'project_data_entry_user') {
+        const dest = loggedUser.org_node_id ? `/projects/${loggedUser.org_node_id}` : '/projects/PRJ-ODISHA-SOLAR';
+        navigate(dest);
+      } else if (loggedUser.role === 'bu_admin') {
         navigate('/workflow');
       } else {
         navigate('/dashboard');

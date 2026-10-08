@@ -893,18 +893,17 @@ function E2Form({ onRun, loading }) {
 }
 
 function E3Form({ onRun, loading }) {
-  const [topic, setTopic] = usePersistentInput('e3_topic', '');
   const [question, setQuestion] = usePersistentInput('e3_question', '');
   const [indicatorCode, setIndicatorCode] = usePersistentInput('e3_indicatorCode', '');
 
-  const handleQuick = (q) => { setQuestion(q); setTopic(''); };
+  const handleQuick = (q) => { setQuestion(q); };
 
+  // Only send fields that E3ExplainFieldRequest expects: indicator_code + question
   const handleRun = () => {
     if (!question.trim()) return;
     onRun({
       indicator_code: indicatorCode || 'GENERAL',
-      question: question,
-      topic: topic || undefined,
+      question: question.trim(),
     });
   };
 
@@ -1283,7 +1282,7 @@ function E1Result({ result }) {
     ? confidenceValues.reduce((total, value) => total + value, 0) / confidenceValues.length
     : null;
   const notes = result.notes || result.extraction_notes;
-  const esg = calcEsgImpact(result.doc_type, fields);
+  const esg = result.esg_impact || calcEsgImpact(result.doc_type, fields);
   const evidenceId = result.evidence_id || result.evidence?.id;
 
   return (
@@ -1914,7 +1913,56 @@ const OUTPUT_PANELS = { E1: E1Result, E2: E2Result, E3: E3Result, E4: E4Result, 
 // ─── MAIN PAGE ────────────────────────────────────────────────────────────────
 
 export default function AarohanAI() {
-  const { roleMeta, role } = useAuth();
+  const { roleMeta, role, user } = useAuth();
+
+  // Clear state on user change or 5 mins inactivity
+  useEffect(() => {
+    let timeout;
+    const clearAarohanState = () => {
+      try {
+        const keysToRemove = [];
+        for (let i = 0; i < localStorage.length; i++) {
+          const k = localStorage.key(i);
+          if (k && k.startsWith('aarohan_')) {
+            keysToRemove.push(k);
+          }
+        }
+        keysToRemove.forEach(k => localStorage.removeItem(k));
+        window.location.reload();
+      } catch (err) {
+        console.error("Error clearing state", err);
+      }
+    };
+
+    const resetTimer = () => {
+      clearTimeout(timeout);
+      timeout = setTimeout(clearAarohanState, 5 * 60 * 1000); // 5 mins
+    };
+
+    window.addEventListener('mousemove', resetTimer);
+    window.addEventListener('keydown', resetTimer);
+    window.addEventListener('scroll', resetTimer);
+    window.addEventListener('click', resetTimer);
+    
+    const savedUser = localStorage.getItem('aarohan_currentUser');
+    const currentUserSig = user?.id + '_' + role;
+    if (savedUser && savedUser !== currentUserSig) {
+      clearAarohanState();
+    } else {
+      localStorage.setItem('aarohan_currentUser', currentUserSig);
+    }
+    
+    resetTimer();
+    
+    return () => {
+      clearTimeout(timeout);
+      window.removeEventListener('mousemove', resetTimer);
+      window.removeEventListener('keydown', resetTimer);
+      window.removeEventListener('scroll', resetTimer);
+      window.removeEventListener('click', resetTimer);
+    };
+  }, [user, role]);
+
   const [engines, setEngines] = useState([]);
   const [selectedEngine, setSelectedEngineState] = useState(() => {
     try {
@@ -1951,26 +1999,44 @@ export default function AarohanAI() {
 
   useEffect(() => {
     let mounted = true;
+    setLoading(true);
     aarohanApi.listEngines()
       .then((res) => {
         const available = Array.isArray(res.data) ? res.data : [];
         if (!mounted) return;
         setEngines(available);
-        if (available.length > 0 && !selectedEngine) {
-          const defaultEng = available[0].engine;
-          setSelectedEngine(defaultEng);
+        const allowedEngineIds = new Set(available.map(e => e.engine));
+        if (available.length > 0) {
+          // If current selectedEngine isn't in the allowed list (stale from another role/user), reset it
+          if (!selectedEngine || !allowedEngineIds.has(selectedEngine)) {
+            const defaultEng = available[0].engine;
+            setSelectedEngine(defaultEng);
+            setResult(null);
+            setError('');
+            backgroundJobs.clear(selectedEngine);
+          }
+        } else {
+          // No engines for this role - clear any stale engine
+          setSelectedEngineState(null);
+          try { localStorage.removeItem('aarohan_selected_engine'); } catch {}
+          setResult(null);
+          setError('');
         }
       })
       .catch((err) => {
-        setError(getFriendlyErrorMessage(err, 'Could not load engine catalog from server.'));
+        if (mounted) setError(getFriendlyErrorMessage(err, 'Could not load engine catalog from server.'));
       })
       .finally(() => mounted && setLoading(false));
     return () => { mounted = false; };
-  }, [selectedEngine, setSelectedEngine]);
+  // Re-fetch when the user's role changes (role is in the JWT which changes on login/role-switch)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [role]);
 
   const handleRun = useCallback((payload) => {
     if (!selectedEngine) return;
     setError('');
+    setResult(null);
+    backgroundJobs.clear(selectedEngine);
 
     const runnerPromise = (async () => {
       if (selectedEngine === 'E1') {
@@ -1986,12 +2052,14 @@ export default function AarohanAI() {
             doc_type: response.data.evidence?.doc_type || payload.doc_type_hint,
             run_id: response.data.extracted_fields?.[0]?.run_id,
             evidence_id: response.data.evidence?.id,
+            esg_impact: response.data.esg_impact,
           };
         } else if (payload.evidence_id) {
           const response = await aarohanApi.runEngine('E1', payload);
           return {
             ...response.data,
             evidence_id: payload.evidence_id,
+            esg_impact: response.data.esg_impact,
           };
         }
       } else {
