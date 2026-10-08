@@ -35,6 +35,10 @@ async def upload_evidence_file(
     sha256: Optional[str] = Form(None),
     doc_type_hint: Optional[str] = Form(None),
     run_ocr: bool = Form(True),
+    doc_category: Optional[str] = Form(None),
+    bill_type: Optional[str] = Form(None),
+    project_id: Optional[str] = Form(None),
+    esg_indicator: Optional[str] = Form(None),
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
     db: Session = Depends(get_db)
 ):
@@ -42,17 +46,29 @@ async def upload_evidence_file(
     F09-F12 Evidence Vault Ingestion:
     - Verifies client SHA-256 hash
     - Stores file in immutable storage
-    - Runs AI Engine E1 to extract numbers for instant form pre-fill.
+    - Assigns unique server-generated Evidence ID (EVD-XXXXXXXX)
+    - Records metadata: doc_category (Bill/Report), bill_type, attached_by_role, project_id, esg_indicator
+    - Runs AI Engine E1 to extract numbers for instant form pre-fill (when run_ocr=True).
     """
     file_bytes = await file.read()
     mime_type = file.content_type or "application/octet-stream"
 
     uploader_id = None
+    attached_by_role = "project_admin"
     if credentials and credentials.credentials:
         from app.security.jwt import decode_access_token
         payload = decode_access_token(credentials.credentials)
         if payload:
             uploader_id = payload.get("sub")
+            token_role = payload.get("role")
+            if uploader_id:
+                user = db.query(User).filter(User.id == uploader_id).first()
+                if user and user.role:
+                    attached_by_role = user.role.value if hasattr(user.role, "value") else str(user.role)
+                elif token_role:
+                    attached_by_role = token_role
+            elif token_role:
+                attached_by_role = token_role
 
     try:
         evidence, suggestions, is_relevant, rejection_reason, esg_impact = process_and_store_evidence(
@@ -63,13 +79,18 @@ async def upload_evidence_file(
             client_sha256=sha256,
             uploader_id=uploader_id,
             doc_type_hint=doc_type_hint,
-            run_ocr=run_ocr
+            run_ocr=run_ocr,
+            doc_category=doc_category,
+            bill_type=bill_type,
+            attached_by_role=attached_by_role,
+            project_id=project_id,
+            esg_indicator=esg_indicator,
         )
 
         message = (
             "Evidence verified and stored in immutable vault."
             if is_relevant else
-            f"File stored but rejected by AI engine: {rejection_reason or 'Unrelated document.'}"
+            f"File stored but rejected by AI engine: {rejection_reason or 'This document does not appear to be relevant to this ESG field.'}"
         )
 
         return EvidenceUploadResponse(
@@ -124,14 +145,20 @@ def extract_from_existing_evidence(
     file_bytes = storage_service.get_file_bytes(evidence.storage_key)
     if not file_bytes:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File content not found in storage vault.")
+    effective_hint = doc_type_hint or (evidence.bill_type if evidence.doc_category == "Bill" else evidence.doc_type)
     req = E1ExtractRequest(
         evidence_id=evidence.id,
         file_bytes=file_bytes,
         filename=evidence.original_name,
         mime_type=evidence.mime_type,
-        doc_type_hint=doc_type_hint
+        doc_type_hint=effective_hint
     )
     e1_res = e1_engine.extract_from_file(req, db_session=db)
+    if not e1_res.is_relevant:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=e1_res.rejection_reason or "Document is not relevant to this ESG field."
+        )
     suggestions = []
     for f in e1_res.fields:
         val = float(f.value) if isinstance(f.value, (int, float)) else 0.0
@@ -203,10 +230,10 @@ def delete_evidence_file(
 ):
     """
     Deletes an evidence file and its cryptographic hash record.
-    Restricted to system_admin and group_admin.
+    Restricted to system_admin and his 1 level down roles (group_admin, esg_manager).
     Enforces re-entering admin password for audit authorization.
     """
-    allowed_roles = [Role.SYSTEM_ADMIN.value, Role.GROUP_ADMIN.value]
+    allowed_roles = [Role.SYSTEM_ADMIN.value, Role.GROUP_ADMIN.value, Role.ESG_MANAGER.value]
     if current_user.role not in allowed_roles:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

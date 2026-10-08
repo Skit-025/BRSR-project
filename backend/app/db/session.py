@@ -81,11 +81,33 @@ def init_db() -> None:
 
     try:
         with engine.begin() as conn:
-            # Fast check: if users table already exists, skip expensive 16.5s reflection
+            # Fast check: if users table already exists, run lightweight column migrations
             table_check = conn.execute(
                 text("SELECT 1 FROM information_schema.tables WHERE table_name = 'users' LIMIT 1")
             ).fetchone()
             if table_check:
+                conn.execute(text("""
+                    ALTER TABLE evidence_files ADD COLUMN IF NOT EXISTS doc_type VARCHAR(50) DEFAULT 'OTHER';
+                    ALTER TABLE evidence_files ADD COLUMN IF NOT EXISTS evidence_display_id VARCHAR(20);
+                    ALTER TABLE evidence_files ADD COLUMN IF NOT EXISTS doc_category VARCHAR(20) DEFAULT 'Unknown';
+                    ALTER TABLE evidence_files ADD COLUMN IF NOT EXISTS bill_type VARCHAR(50) DEFAULT 'Unknown';
+                    ALTER TABLE evidence_files ADD COLUMN IF NOT EXISTS attached_by_role VARCHAR(50);
+                    ALTER TABLE evidence_files ADD COLUMN IF NOT EXISTS project_id VARCHAR(100);
+                    ALTER TABLE evidence_files ADD COLUMN IF NOT EXISTS esg_indicator VARCHAR(100);
+                    
+                    ALTER TABLE org_nodes ADD COLUMN IF NOT EXISTS project_description TEXT;
+                    ALTER TABLE org_nodes ADD COLUMN IF NOT EXISTS enabled_activity_categories JSONB DEFAULT '[]'::jsonb;
+                    ALTER TABLE metrics ADD COLUMN IF NOT EXISTS entry_level VARCHAR(50) DEFAULT 'project';
+                    ALTER TABLE metrics ADD COLUMN IF NOT EXISTS guidance_text TEXT;
+                    ALTER TABLE metrics ADD COLUMN IF NOT EXISTS why_needed TEXT;
+                    ALTER TABLE metrics ADD COLUMN IF NOT EXISTS document_hint TEXT;
+                    ALTER TABLE metrics ADD COLUMN IF NOT EXISTS calc_formula_code VARCHAR(100);
+                    ALTER TABLE reports ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'READY';
+
+                    UPDATE evidence_files
+                    SET evidence_display_id = 'EVD-' || UPPER(SUBSTRING(REPLACE(id::text, '-', ''), 1, 8))
+                    WHERE evidence_display_id IS NULL;
+                """))
                 logger.info("⚡ Database already initialized — startup accelerated.")
                 return
 
@@ -101,15 +123,26 @@ def init_db() -> None:
 
         with engine.begin() as conn:
             conn.execute(text("""
-                ALTER TABLE evidence_files ADD COLUMN IF NOT EXISTS doc_type VARCHAR(50) DEFAULT 'OTHER' NOT NULL;
+                ALTER TABLE evidence_files ADD COLUMN IF NOT EXISTS doc_type VARCHAR(50) DEFAULT 'OTHER';
+                ALTER TABLE evidence_files ADD COLUMN IF NOT EXISTS evidence_display_id VARCHAR(20);
+                ALTER TABLE evidence_files ADD COLUMN IF NOT EXISTS doc_category VARCHAR(20) DEFAULT 'Unknown';
+                ALTER TABLE evidence_files ADD COLUMN IF NOT EXISTS bill_type VARCHAR(50) DEFAULT 'Unknown';
+                ALTER TABLE evidence_files ADD COLUMN IF NOT EXISTS attached_by_role VARCHAR(50);
+                ALTER TABLE evidence_files ADD COLUMN IF NOT EXISTS project_id VARCHAR(100);
+                ALTER TABLE evidence_files ADD COLUMN IF NOT EXISTS esg_indicator VARCHAR(100);
+
                 ALTER TABLE org_nodes ADD COLUMN IF NOT EXISTS project_description TEXT;
-                ALTER TABLE org_nodes ADD COLUMN IF NOT EXISTS enabled_activity_categories JSONB DEFAULT '[]'::jsonb NOT NULL;
-                ALTER TABLE metrics ADD COLUMN IF NOT EXISTS entry_level VARCHAR(50) DEFAULT 'project' NOT NULL;
+                ALTER TABLE org_nodes ADD COLUMN IF NOT EXISTS enabled_activity_categories JSONB DEFAULT '[]'::jsonb;
+                ALTER TABLE metrics ADD COLUMN IF NOT EXISTS entry_level VARCHAR(50) DEFAULT 'project';
                 ALTER TABLE metrics ADD COLUMN IF NOT EXISTS guidance_text TEXT;
                 ALTER TABLE metrics ADD COLUMN IF NOT EXISTS why_needed TEXT;
                 ALTER TABLE metrics ADD COLUMN IF NOT EXISTS document_hint TEXT;
                 ALTER TABLE metrics ADD COLUMN IF NOT EXISTS calc_formula_code VARCHAR(100);
-                ALTER TABLE reports ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'READY' NOT NULL;
+                ALTER TABLE reports ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'READY';
+
+                UPDATE evidence_files
+                SET evidence_display_id = 'EVD-' || UPPER(SUBSTRING(REPLACE(id::text, '-', ''), 1, 8))
+                WHERE evidence_display_id IS NULL;
             """))
         logger.info("✅ All database tables initialised.")
     except Exception as e:

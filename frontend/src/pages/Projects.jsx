@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { useNavigate, Navigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import {
   Search, Filter, Plus, ChevronRight, ChevronDown,
   FolderKanban, Building2, CheckCircle2, Clock,
@@ -54,7 +54,7 @@ const FILTER_STATUSES = ['All', 'Ready', 'In Review', 'Submitted', 'Changes Requ
 
 export default function Projects() {
   const navigate = useNavigate();
-  const { user, hasPermission } = useAuth();
+  const { user } = useAuth();
   const { data: nodes = [], isLoading } = useOrgNodes();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
@@ -63,22 +63,6 @@ export default function Projects() {
   const [showFilters, setShowFilters] = useState(false);
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 8;
-
-  // Project Admin is strictly scoped to their single operational project.
-  // Never show the full portfolio directory (Image 2) — redirect immediately to their project detail view (Image 1).
-  const isProjectRole = user?.role === 'project_admin' || user?.role === 'project_data_entry_user';
-  const targetProjectCode = useMemo(() => {
-    if (!user) return 'PRJ-ODISHA-SOLAR';
-    if (user.org_node_id) {
-      const match = nodes.find(n => n.id === user.org_node_id || n.code === user.org_node_id);
-      return match?.code || user.org_node_id;
-    }
-    return 'PRJ-ODISHA-SOLAR';
-  }, [user, nodes]);
-
-  if (isProjectRole) {
-    return <Navigate to={`/projects/${targetProjectCode}`} replace />;
-  }
 
   // Known Aarohan demo project status from seed data
   const AAROHAN_STATUS_MAP = {
@@ -89,20 +73,7 @@ export default function Projects() {
   };
 
   const projectsList = useMemo(() => {
-    let projectNodes = nodes.filter(n => n.type === 'project' || n.type === 'site');
-
-    // Scope filtering for BU Admin and Subsidiary Admin
-    if (user?.org_node_id && ['bu_admin', 'subsidiary_admin'].includes(user?.role)) {
-      const userNode = nodes.find(n => n.id === user.org_node_id);
-      if (userNode) {
-        projectNodes = projectNodes.filter(n =>
-          n.id === userNode.id ||
-          n.parent_id === userNode.id ||
-          (userNode.path && n.path?.startsWith(userNode.path))
-        );
-      }
-    }
-
+    const projectNodes = nodes.filter(n => n.type === 'project' || n.type === 'site');
     if (!projectNodes || projectNodes.length === 0) {
       return MOCK_PROJECTS;
     }
@@ -124,7 +95,7 @@ export default function Projects() {
         lastActivity: knownStatus.lastActivity || 'Active',
       };
     });
-  }, [nodes, user]);
+  }, [nodes]);
 
   const filtered = useMemo(() => {
     let rows = [...projectsList];
@@ -207,11 +178,9 @@ export default function Projects() {
           <button className="btn btn-secondary" style={{ borderRadius: 6, border: '1px solid #e2e8f0', background: '#fff', color: '#09090b', fontWeight: 600 }}>
             <Download size={14} /> Export CSV
           </button>
-          {hasPermission('org:write') && (
-            <button className="btn btn-primary" style={{ borderRadius: 6, background: '#0070F3', color: '#fff', border: 'none', fontWeight: 600 }} onClick={() => navigate('/projects/new')}>
-              <Plus size={14} /> Add Project
-            </button>
-          )}
+          <button className="btn btn-primary" style={{ borderRadius: 6, background: '#0070F3', color: '#fff', border: 'none', fontWeight: 600 }} onClick={() => navigate('/projects/new')}>
+            <Plus size={14} /> Add Project
+          </button>
         </div>
       </div>
 

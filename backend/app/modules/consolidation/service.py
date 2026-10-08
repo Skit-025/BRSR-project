@@ -58,16 +58,14 @@ def run_consolidation_engine(
     consolidated_metrics_count = 0
 
     # 3. Bottom-up roll-up across parent nodes
-    # Group parent nodes by checking which nodes have children in all_nodes
-    children_by_parent: Dict[str, List[OrgNode]] = {}
-    for n in all_nodes:
-        if n.parent_id:
-            children_by_parent.setdefault(n.parent_id, []).append(n)
-
-    parent_nodes = [n for n in sorted_nodes if n.id in children_by_parent]
+    # Group parent nodes by checking which nodes have children
+    parent_nodes = [n for n in sorted_nodes if db.query(OrgNode).filter(OrgNode.parent_id == n.id).count() > 0]
 
     for parent in parent_nodes:
-        children = children_by_parent.get(parent.id, [])
+        children = db.query(OrgNode).filter(
+            OrgNode.parent_id == parent.id,
+            OrgNode.is_deleted == False
+        ).all()
         if not children:
             continue
 

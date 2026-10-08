@@ -41,7 +41,7 @@ def test_full_maker_checker_approval_and_sod_flow():
         "email": f"maker.{suffix}@meil.in",
         "password": "Password123!",
         "full_name": "Maker Engineer",
-        "role": "project_admin",
+        "role": "site_collector",
         "org_node_id": site["id"]
     })
     maker = maker_res.json()
@@ -49,8 +49,8 @@ def test_full_maker_checker_approval_and_sod_flow():
     reviewer_res = client.post("/api/v1/auth/register", json={
         "email": f"reviewer.{suffix}@meil.in",
         "password": "Password123!",
-        "full_name": "BU Review Lead",
-        "role": "bu_admin"
+        "full_name": "BU Reviewer Lead",
+        "role": "bu_reviewer"
     })
     reviewer = reviewer_res.json()
 

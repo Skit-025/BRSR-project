@@ -8,7 +8,7 @@ Usage:
         ...
 
     @router.post("/admin-only")
-    def admin_endpoint(user: CurrentUser = Depends(require_roles("system_admin", "group_admin"))):
+    def admin_endpoint(user: CurrentUser = Depends(require_roles("super_admin", "esg_manager"))):
         ...
 """
 from typing import Optional, Annotated
@@ -61,7 +61,7 @@ def get_current_user(
     # add db.query(User) here if revocation list is needed.
     return TokenData(
         user_id     = payload["sub"],
-        role        = payload.get("role", Role.PROJECT_ADMIN.value),
+        role        = payload.get("role", "viewer"),
         org_node_id = payload.get("org"),
     )
 
@@ -77,7 +77,7 @@ def get_optional_user(
         return None
     return TokenData(
         user_id     = payload["sub"],
-        role        = payload.get("role", Role.PROJECT_ADMIN.value),
+        role        = payload.get("role", "viewer"),
         org_node_id = payload.get("org"),
     )
 
@@ -89,7 +89,7 @@ def require_roles(*allowed_roles: str):
 
     Example:
         @router.post("/lock")
-        def lock(user = Depends(require_roles("system_admin", "group_admin"))):
+        def lock(user = Depends(require_roles("super_admin", "esg_manager"))):
             ...
     """
     def _check(user: TokenData = Depends(get_current_user)) -> TokenData:

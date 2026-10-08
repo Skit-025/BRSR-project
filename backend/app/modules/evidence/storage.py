@@ -6,9 +6,8 @@ from app.config.settings import settings
 
 logger = logging.getLogger(__name__)
 
-# Canonical local vault directory (relative to backend package root)
-_BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-LOCAL_VAULT_DIR = os.path.join(_BACKEND_DIR, "storage", "evidence_vault")
+# Fallback local vault directory
+LOCAL_VAULT_DIR = os.path.join(os.getcwd(), "storage", "evidence_vault")
 os.makedirs(LOCAL_VAULT_DIR, exist_ok=True)
 
 class StorageService:
@@ -82,38 +81,12 @@ class StorageService:
             except Exception as e:
                 logger.warning(f"MinIO get_object failed: {e}")
 
-        # Local vault check across candidate directories
+        # Local vault check
         basename = os.path.basename(storage_key)
-        candidate_dirs = [
-            LOCAL_VAULT_DIR,
-            os.path.join(os.getcwd(), "backend", "storage", "evidence_vault"),
-            os.path.join(os.getcwd(), "storage", "evidence_vault"),
-        ]
-        for v_dir in candidate_dirs:
-            if not os.path.exists(v_dir):
-                continue
-            # Direct match
-            local_path = os.path.join(v_dir, basename)
-            if os.path.isfile(local_path):
-                with open(local_path, "rb") as f:
-                    return f.read()
-            # If storage_key starts with "evidence/"
-            alt_path = os.path.join(v_dir, storage_key)
-            if os.path.isfile(alt_path):
-                with open(alt_path, "rb") as f:
-                    return f.read()
-            # Match by normalized stem (e.g. UUID with/without hyphens or without extension)
-            clean_stem = os.path.splitext(basename)[0].replace("-", "").lower()
-            if len(clean_stem) >= 8:
-                try:
-                    for fname in os.listdir(v_dir):
-                        if clean_stem in fname.replace("-", "").lower():
-                            fpath = os.path.join(v_dir, fname)
-                            if os.path.isfile(fpath):
-                                with open(fpath, "rb") as f:
-                                    return f.read()
-                except Exception:
-                    pass
+        local_path = os.path.join(LOCAL_VAULT_DIR, basename)
+        if os.path.exists(local_path):
+            with open(local_path, "rb") as f:
+                return f.read()
         return None
 
     def delete_file(self, storage_key: str) -> bool:

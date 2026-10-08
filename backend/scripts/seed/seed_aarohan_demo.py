@@ -277,7 +277,7 @@ def seed_aarohan_demo():
             ("group.admin@aarohan.in", "group_admin", "Aditya Sharma (Group ESG Director)", group.id),
             ("sub.admin@aarohan.in", "subsidiary_admin", "Meera Nair (Subsidiary ESG Admin)", sub1.id),
             ("bu.admin@aarohan.in", "bu_admin", "Rajesh V. (Solar EPC BU Reviewer)", bu1.id),
-            ("project.user@aarohan.in", "project_admin", "Ravi Kumar (Site Engineer - Odisha Solar)", proj1.id),
+            ("project.user@aarohan.in", "project_data_entry_user", "Ravi Kumar (Site Engineer - Odisha Solar)", proj1.id),
         ]
         user_records = {}
         for email, role, full_name, node_id in demo_users:

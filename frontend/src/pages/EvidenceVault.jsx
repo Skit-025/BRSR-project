@@ -270,7 +270,7 @@ export default function EvidenceVault() {
   const qc = useQueryClient();
   const { user } = useAuth();
   const userRole = user?.role || '';
-  const canDelete = ['system_admin', 'group_admin'].includes(userRole);
+  const canDelete = ['system_admin', 'group_admin', 'esg_manager'].includes(userRole);
 
   const { data: evidenceList = [], isLoading, refetch, isRefetching } = useQuery({
     queryKey: ['evidence-list'],
@@ -754,8 +754,10 @@ export default function EvidenceVault() {
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
           <thead>
             <tr style={{ borderBottom: '1px solid var(--border-default)', background: 'var(--bg-elevated)', color: 'var(--text-secondary)' }}>
+              <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11 }}>Evidence ID</th>
               <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11 }}>Document</th>
-              <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11 }}>Type</th>
+              <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11 }}>Doc Category &amp; Type</th>
+              <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11 }}>Project &amp; ESG Field</th>
               <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11 }}>Extraction Summary</th>
               <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11 }}>SHA-256 (click to copy)</th>
               <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11 }}>Size</th>
@@ -765,9 +767,9 @@ export default function EvidenceVault() {
           </thead>
           <tbody>
             {isLoading ? (
-              <tr><td colSpan={7} style={{ textAlign: 'center', padding: 40, color: 'var(--text-secondary)' }}>Loading vault documents…</td></tr>
+              <tr><td colSpan={9} style={{ textAlign: 'center', padding: 40, color: 'var(--text-secondary)' }}>Loading vault documents…</td></tr>
             ) : displayEvidenceList.length === 0 ? (
-              <tr><td colSpan={7} style={{ textAlign: 'center', padding: 40, color: 'var(--text-secondary)' }}>No documents uploaded yet. Select a bill type above to begin.</td></tr>
+              <tr><td colSpan={9} style={{ textAlign: 'center', padding: 40, color: 'var(--text-secondary)' }}>No documents uploaded yet. Select a bill type above to begin.</td></tr>
             ) : (
               displayEvidenceList.map((ev) => {
                 const isSelected = selected?.id === ev.id;
@@ -777,24 +779,67 @@ export default function EvidenceVault() {
                   ? evFields.slice(0, 3).map(f => `${f.metric || f.name}: ${f.value} ${f.unit || ''}`).join(' · ')
                   : (manualData[ev.id] ? `${manualData[ev.id].metric}: ${manualData[ev.id].value} ${manualData[ev.id].unit}` : null);
 
+                const evDisplayId = ev.evidence_display_id || ('EVD-' + (ev.id || '').replace(/-/g, '').slice(0, 8).toUpperCase());
+                const categoryLabel = ev.doc_category || (ev.doc_type?.includes('REPORT') ? 'Report' : 'Bill');
+                const billTypeLabel = categoryLabel === 'Report' ? '—' : (ev.bill_type || billSpec.label);
+
                 return (
                   <tr key={ev.id}
                     onClick={() => handleSelectFile(ev)}
                     style={{ borderBottom: '1px solid var(--border-default)', cursor: 'pointer', background: isSelected ? 'rgba(99,102,241,0.06)' : 'transparent', transition: 'background 0.12s' }}
                   >
                     <td style={{ padding: '10px 16px' }}>
+                      <span style={{
+                        fontFamily: 'monospace',
+                        fontWeight: 700,
+                        fontSize: 11,
+                        color: 'var(--brand-400, #38bdf8)',
+                        background: 'rgba(56,189,248,0.1)',
+                        padding: '3px 7px',
+                        borderRadius: 4,
+                        border: '1px solid rgba(56,189,248,0.25)',
+                        letterSpacing: '0.05em',
+                        whiteSpace: 'nowrap'
+                      }}>
+                        {evDisplayId}
+                      </span>
+                    </td>
+                    <td style={{ padding: '10px 16px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         <FileTypeIcon mime={ev.mime_type} />
                         <div>
-                          <div style={{ fontWeight: 600, color: 'var(--text-primary)', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ev.original_name || ev.filename}</div>
+                          <div style={{ fontWeight: 600, color: 'var(--text-primary)', maxWidth: 170, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ev.original_name || ev.filename}</div>
                           <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{ev.mime_type}</div>
                         </div>
                       </div>
                     </td>
                     <td style={{ padding: '10px 16px' }}>
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 8px', borderRadius: 4, fontSize: 11, fontWeight: 600, color: billSpec.color, background: `${billSpec.color}15`, border: `1px solid ${billSpec.color}30` }}>
-                        {billSpec.label}
-                      </span>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                        <span style={{
+                          display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 7px', borderRadius: 4,
+                          fontSize: 10.5, fontWeight: 700, width: 'fit-content',
+                          color: categoryLabel === 'Report' ? '#a855f7' : billSpec.color,
+                          background: categoryLabel === 'Report' ? 'rgba(168,85,247,0.12)' : `${billSpec.color}15`,
+                          border: `1px solid ${categoryLabel === 'Report' ? 'rgba(168,85,247,0.3)' : `${billSpec.color}30`}`
+                        }}>
+                          {categoryLabel}
+                        </span>
+                        {categoryLabel !== 'Report' && (
+                          <span style={{ fontSize: 11, color: 'var(--text-secondary)', fontWeight: 500 }}>
+                            {billTypeLabel}
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                    <td style={{ padding: '10px 16px' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 2, fontSize: 11 }}>
+                        <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
+                          {ev.project_id && ev.project_id !== '__' ? ev.project_id : 'Site'}
+                        </span>
+                        <span style={{ color: 'var(--text-muted)', fontSize: 10 }}>
+                          {ev.esg_indicator && ev.esg_indicator !== '__' ? ev.esg_indicator : 'General'} · {ev.attached_by_role || 'project_admin'}
+                        </span>
+                      </div>
                     </td>
                     <td style={{ padding: '10px 16px' }}>
                       {extractedSummary ? (
@@ -815,12 +860,12 @@ export default function EvidenceVault() {
                         <button onClick={() => handleViewDoc(ev)} className="btn btn-secondary btn-sm"
                           style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, padding: '4px 8px', color: 'var(--brand-400, #38bdf8)' }}
                           title="View original bill">
-                          <Eye size={11} /> View Bill
+                          <Eye size={11} /> View
                         </button>
                         <button onClick={() => handleSelectFile(ev)} className="btn btn-secondary btn-sm"
                           style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, padding: '4px 8px' }}
                           title="Inspect extracted data &amp; GHG calculations">
-                          <Edit3 size={11} /> Inspect Details
+                          <Edit3 size={11} /> Inspect
                         </button>
                         {canDelete && (
                           <button onClick={() => handleDeleteClick(ev)} className="btn btn-sm"
@@ -848,12 +893,12 @@ export default function EvidenceVault() {
                   <FileText size={18} color="var(--brand-400)" /> E1 Extraction — Scraped Fields &amp; GHG Calculations
                 </h3>
                 <p style={{ fontSize: 12, color: 'var(--text-secondary)', margin: '4px 0 0 0' }}>
-                  Document: <strong>{selected?.original_name || selected?.filename}</strong>
+                  Document: <strong>{selected?.original_name || selected?.filename}</strong> · <span style={{ fontFamily: 'monospace', color: 'var(--brand-400)' }}>{selected?.evidence_display_id || ('EVD-' + (selected?.id || '').slice(0, 8).toUpperCase())}</span>
                 </p>
               </div>
               <div style={{ display: 'flex', gap: 8 }}>
                 <button onClick={() => handleViewDoc(selected)} className="btn btn-secondary btn-sm" style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12 }}>
-                  <Eye size={13} /> View Bill
+                  <Eye size={13} /> View File
                 </button>
                 <button onClick={() => setReviewModalOpen(false)} className="btn btn-secondary btn-sm" style={{ padding: 6 }}><X size={16} /></button>
               </div>
@@ -862,8 +907,30 @@ export default function EvidenceVault() {
             {/* Metadata grid */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, background: 'var(--bg-elevated)', padding: '12px 16px', borderRadius: 8, border: '1px solid var(--border-default)', marginBottom: 20, fontSize: 12 }}>
               <div>
-                <div style={{ color: 'var(--text-secondary)', fontSize: 11 }}>Document Type</div>
-                <div style={{ fontWeight: 600 }}>{(selected?.doc_type || 'Unknown').replace(/_/g, ' ').toUpperCase()}</div>
+                <div style={{ color: 'var(--text-secondary)', fontSize: 11 }}>Evidence ID</div>
+                <div style={{ fontWeight: 700, fontFamily: 'monospace', color: 'var(--brand-400)' }}>
+                  {selected?.evidence_display_id || ('EVD-' + (selected?.id || '').replace(/-/g, '').slice(0, 8).toUpperCase())}
+                </div>
+              </div>
+              <div>
+                <div style={{ color: 'var(--text-secondary)', fontSize: 11 }}>Document Category</div>
+                <div style={{ fontWeight: 600 }}>{selected?.doc_category || (selected?.doc_type?.includes('REPORT') ? 'Report' : 'Bill')}</div>
+              </div>
+              <div>
+                <div style={{ color: 'var(--text-secondary)', fontSize: 11 }}>Bill Type</div>
+                <div style={{ fontWeight: 600 }}>{selected?.doc_category === 'Report' ? 'Unknown (Report)' : (selected?.bill_type || (selected?.doc_type || 'Unknown').replace(/_/g, ' '))}</div>
+              </div>
+              <div>
+                <div style={{ color: 'var(--text-secondary)', fontSize: 11 }}>Attached By Role</div>
+                <div style={{ fontWeight: 600 }}>{selected?.attached_by_role || 'project_admin'}</div>
+              </div>
+              <div>
+                <div style={{ color: 'var(--text-secondary)', fontSize: 11 }}>Project Scope</div>
+                <div style={{ fontWeight: 600 }}>{selected?.project_id && selected?.project_id !== '__' ? selected?.project_id : 'Site'}</div>
+              </div>
+              <div>
+                <div style={{ color: 'var(--text-secondary)', fontSize: 11 }}>ESG Indicator</div>
+                <div style={{ fontWeight: 600 }}>{selected?.esg_indicator && selected?.esg_indicator !== '__' ? selected?.esg_indicator : 'General'}</div>
               </div>
               <div>
                 <div style={{ color: 'var(--text-secondary)', fontSize: 11 }}>SHA-256 Hash</div>

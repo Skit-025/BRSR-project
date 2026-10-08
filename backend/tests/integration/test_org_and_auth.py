@@ -15,7 +15,7 @@ def test_auth_workflow():
         "email": "collector.site1@meil.in",
         "password": "SecurePassword123!",
         "full_name": "Ramesh Kumar",
-        "role": "project_admin"
+        "role": "site_collector"
     }
     res = client.post("/api/v1/auth/register", json=reg_payload)
     assert res.status_code in [201, 400]  # 400 if rerun with same email

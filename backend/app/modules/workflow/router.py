@@ -52,11 +52,11 @@ def lock_period(
     db: Session = Depends(get_db)
 ):
     """
-    Group sign-off and period lock.
-    Authorized for group_admin and system_admin.
+    Group ESG sign-off and period lock.
+    Authorized for group_admin, esg_manager, or system_admin.
     Generates immutable SHA-256 seal of reported numbers.
     """
-    allowed_roles = [Role.GROUP_ADMIN.value, Role.SYSTEM_ADMIN.value]
+    allowed_roles = [Role.GROUP_ADMIN.value, Role.ESG_MANAGER.value, Role.SYSTEM_ADMIN.value]
     if current_user.role not in allowed_roles:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

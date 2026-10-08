@@ -43,15 +43,6 @@ export default function Sidebar() {
     navigate('/landing');
   };
 
-  // Derive the target for the "Projects" nav item based on role & assigned project
-  const projectNavTarget = useMemo(() => {
-    if (user?.role === 'project_admin' || user?.role === 'project_data_entry_user') {
-      const match = nodes.find(n => n.id === user.org_node_id || n.code === user.org_node_id);
-      return `/projects/${match?.code || user.org_node_id || 'PRJ-ODISHA-SOLAR'}`;
-    }
-    return '/projects';
-  }, [user, nodes]);
-
   // Role-filtered navigation
   const navGroups = useMemo(() => {
     const groups = [
@@ -66,7 +57,7 @@ export default function Sidebar() {
         items: [
           hasPermission('subsidiary_disclosure:read') && { to: '/disclosure/subsidiary', label: 'Subsidiaries', icon: Building2 },
           hasPermission('bu_disclosure:read') && { to: '/disclosure/bu', label: 'Business Units', icon: Factory },
-          { to: projectNavTarget, label: 'Projects', icon: HardHat },
+          { to: '/projects', label: 'Projects', icon: HardHat },
         ].filter(Boolean)
       },
       {
@@ -110,7 +101,7 @@ export default function Sidebar() {
       },
     ].filter(Boolean);
     return groups.filter(g => g.items && g.items.length > 0);
-  }, [hasPermission, pendingReviewsCount, projectNavTarget]);
+  }, [hasPermission, pendingReviewsCount]);
 
   const initials = user?.full_name
     ? user.full_name.split(' ').slice(0, 2).map(w => w[0]).join('').toUpperCase()

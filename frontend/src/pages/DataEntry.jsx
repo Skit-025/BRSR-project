@@ -5,7 +5,7 @@ import {
   Send, Save, RefreshCw, Eye, MessageSquare, Lock,
   Leaf, Droplets, Trash2, Shield, Users, Flame, Zap, BarChart3,
   HelpCircle, FileText, Building2, ArrowRight, X, ChevronDown,
-  Upload, Paperclip, Sparkles
+  Upload, Paperclip, Sparkles, Check, Edit3, ExternalLink
 } from "lucide-react";
 import { useOrgNodes, useOrgPeriods, useScopedForm, useSavePack, useSubmitPack, useFuelCatalog } from "../hooks/useApi";
 import { useAuth } from "../context/AuthContext";
@@ -47,59 +47,527 @@ const STATUS_CONFIG = {
   CONSOLIDATED:        { label: "Consolidated",     color: "#4338ca", bg: "#e0e7ff",  icon: Lock },
 };
 
-// ─── Inline Evidence Upload per field ───────────────────────────────────────
-function EvidenceUploader({ metricCode, evidenceRule, onUploaded }) {
-  const [uploading, setUploading] = useState(false);
-  const [uploaded, setUploaded] = useState([]);
-  const [error, setError] = useState(null);
+// ─── Document Type & Bill Type Options ─────────────────────────────────────────
+const BILL_TYPE_OPTIONS = [
+  { id: "Electricity", label: "Electricity Bill" },
+  { id: "Fuel", label: "Fuel / Diesel Receipt" },
+  { id: "Gas", label: "Gas / PNG Bill" },
+  { id: "Water", label: "Water Supply Invoice" },
+  { id: "Waste", label: "Waste Disposal Manifest" },
+  { id: "Other", label: "Other Commercial Invoice" },
+];
 
-  const handleFile = async (e) => {
+function getDefaultBillType(metricCode) {
+  if (!metricCode) return "Electricity";
+  const m = metricCode.toUpperCase();
+  if (m.includes("ENERGY-001")) return "Electricity";
+  if (m.includes("ENERGY-002") || m.includes("ENERGY-003") || m.includes("FUEL")) return "Fuel";
+  if (m.includes("WATER")) return "Water";
+  if (m.includes("WASTE")) return "Waste";
+  if (m.includes("GAS")) return "Gas";
+  return "Electricity";
+}
+
+// ─── Generalized Document Evidence Attachment Panel ─────────────────────────
+function EvidenceAttachPanel({
+  metricCode,
+  metricName,
+  unit,
+  evidenceRule,
+  projectId,
+  onUploaded,
+  onValueConfirmed,
+  stickyDocType,
+  setStickyDocType,
+}) {
+  const [billType, setBillType] = useState(() => getDefaultBillType(metricCode));
+  const [uploading, setUploading] = useState(false);
+  const [processingAi, setProcessingAi] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const [error, setError] = useState(null);
+  const [aiRejection, setAiRejection] = useState(null);
+  const [attachedFiles, setAttachedFiles] = useState([]);
+  const [pendingEvidence, setPendingEvidence] = useState(null);
+
+  // AI review & confirmation state
+  const [extractedField, setExtractedField] = useState(null);
+  const [isEditingValue, setIsEditingValue] = useState(false);
+  const [editedValue, setEditedValue] = useState("");
+  const [confirmedSuccess, setConfirmedSuccess] = useState(null);
+
+  const fileInputRef = React.useRef(null);
+
+  const handleDragEnter = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  };
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  };
+  const handleDragLeave = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  };
+  const handleDrop = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    const files = e.dataTransfer?.files;
+    if (files && files.length > 0) {
+      handleFileSelected(files[0]);
+    }
+  };
+
+  const handleFileInputChange = (e) => {
     const file = e.target.files?.[0];
-    if (!file) return;
-    setUploading(true);
+    if (file) {
+      handleFileSelected(file);
+    }
+    if (e.target) e.target.value = "";
+  };
+
+  const handleFileSelected = async (file) => {
     setError(null);
+    setAiRejection(null);
+    setExtractedField(null);
+    setConfirmedSuccess(null);
+
+    // Frontend format & size validation
+    const validExts = [".pdf", ".jpg", ".jpeg", ".png", ".xlsx", ".xls", ".csv"];
+    const ext = "." + (file.name.split(".").pop() || "").toLowerCase();
+    if (!validExts.includes(ext)) {
+      setError(`Unsupported format (${ext}). Supported: PDF, JPG, PNG, XLSX, CSV.`);
+      return;
+    }
+    if (file.size > 25 * 1024 * 1024) {
+      setError("File exceeds maximum size limit (25 MB).");
+      return;
+    }
+
+    setUploading(true);
     try {
       const fd = new FormData();
       fd.append("file", file);
-      fd.append("doc_type_hint", metricCode);
+      fd.append("doc_category", stickyDocType || "Bill");
+      fd.append("bill_type", (stickyDocType || "Bill") === "Bill" ? billType : "Unknown");
+      fd.append("project_id", projectId || "__");
+      fd.append("esg_indicator", metricCode);
+      fd.append("doc_type_hint", (stickyDocType || "Bill") === "Bill" ? billType : "OTHER");
+      fd.append("run_ocr", "false"); // Immediate attachment without blocking
+
       const res = await evidenceApi.upload(fd);
       const ev = res.data?.evidence;
-      setUploaded(prev => [...prev, { name: file.name, id: ev?.id }]);
+      const displayId = ev?.evidence_display_id || ("EVD-" + (ev?.id || "").replace(/-/g, "").slice(0, 8).toUpperCase());
+
+      const item = {
+        id: ev?.id,
+        displayId: displayId,
+        name: file.name,
+        category: stickyDocType || "Bill",
+        billType: (stickyDocType || "Bill") === "Bill" ? billType : "Unknown",
+        uploadedAt: new Date().toLocaleTimeString(),
+      };
+
+      setAttachedFiles(prev => [...prev, item]);
+      setPendingEvidence(item);
       onUploaded?.(ev?.id);
     } catch (err) {
-      setError("Upload failed. Please try again.");
+      setError(err.response?.data?.detail || "Upload failed. Please try again.");
     } finally {
       setUploading(false);
     }
   };
 
+  const handleContinueWithAi = async () => {
+    if (!pendingEvidence) return;
+    setProcessingAi(true);
+    setError(null);
+    setAiRejection(null);
+
+    try {
+      const res = await evidenceApi.extract(
+        pendingEvidence.id,
+        (stickyDocType || "Bill") === "Bill" ? pendingEvidence.billType : "LAB_REPORT"
+      );
+
+      if ((stickyDocType || "Bill") === "Report") {
+        setConfirmedSuccess("✓ Report verified as relevant supporting document by AI. Please enter metric value manually.");
+        setPendingEvidence(null);
+      } else {
+        const fields = Array.isArray(res.data) ? res.data : [];
+        if (fields.length > 0) {
+          const matched = fields.find(f => f.metric === metricCode) || fields[0];
+          setExtractedField(matched);
+          setEditedValue(String(matched.value));
+        } else {
+          setConfirmedSuccess("✓ Document stored. No numeric values detected — please enter value manually.");
+          setPendingEvidence(null);
+        }
+      }
+    } catch (err) {
+      const detail = err.response?.data?.detail || "This document does not appear to be relevant to this ESG field. Please upload a relevant supporting document.";
+      setAiRejection(detail);
+    } finally {
+      setProcessingAi(false);
+    }
+  };
+
+  const handleContinueWithoutAi = () => {
+    setConfirmedSuccess(`✓ Document ${pendingEvidence?.displayId} attached without AI. Enter value manually above.`);
+    setPendingEvidence(null);
+    setExtractedField(null);
+  };
+
+  const handleConfirmValue = () => {
+    const finalVal = isEditingValue ? editedValue : extractedField?.value;
+    if (finalVal !== undefined && finalVal !== null && finalVal !== "") {
+      onValueConfirmed?.(finalVal);
+      setConfirmedSuccess(`✓ Inserted ${finalVal} ${extractedField?.unit || unit || ""} into ESG field from ${pendingEvidence?.displayId}`);
+    }
+    setPendingEvidence(null);
+    setExtractedField(null);
+    setIsEditingValue(false);
+  };
+
+  const handleRemovePending = () => {
+    if (pendingEvidence) {
+      setAttachedFiles(prev => prev.filter(f => f.id !== pendingEvidence.id));
+      setPendingEvidence(null);
+    }
+    setAiRejection(null);
+    setExtractedField(null);
+  };
+
+  const currentCategory = stickyDocType || "Bill";
+
   return (
-    <div style={{ marginTop: 8 }}>
-      {uploaded.map((f, i) => (
-        <div key={i} style={{
-          display: "flex", alignItems: "center", gap: 6, padding: "4px 10px",
-          background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 6,
-          marginBottom: 4, fontSize: 12, color: "#15803d", fontWeight: 500
-        }}>
-          <Paperclip size={12} />
-          <span>{f.name}</span>
-          <CheckCircle2 size={12} style={{ marginLeft: "auto" }} />
+    <div style={{ marginTop: 10, background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 10, padding: 12 }}>
+      {/* ── Document Type Selection (Sticky across all attachments) ── */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10, flexWrap: "wrap", gap: 8 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ fontSize: 11, fontWeight: 700, color: "#475569", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+            Document Type:
+          </span>
+          <div style={{ display: "inline-flex", background: "#e2e8f0", borderRadius: 6, padding: 2 }}>
+            <button
+              type="button"
+              onClick={() => setStickyDocType?.("Bill")}
+              style={{
+                padding: "3px 12px", fontSize: 11, fontWeight: 700, borderRadius: 5, border: "none", cursor: "pointer",
+                background: currentCategory === "Bill" ? "#2563eb" : "transparent",
+                color: currentCategory === "Bill" ? "#fff" : "#475569",
+                transition: "all 0.15s ease"
+              }}
+            >
+              Bill
+            </button>
+            <button
+              type="button"
+              onClick={() => setStickyDocType?.("Report")}
+              style={{
+                padding: "3px 12px", fontSize: 11, fontWeight: 700, borderRadius: 5, border: "none", cursor: "pointer",
+                background: currentCategory === "Report" ? "#7c3aed" : "transparent",
+                color: currentCategory === "Report" ? "#fff" : "#475569",
+                transition: "all 0.15s ease"
+              }}
+            >
+              Report
+            </button>
+          </div>
         </div>
-      ))}
-      <label style={{
-        display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 12px",
-        background: "#f8fafc", border: "1px dashed #cbd5e1", borderRadius: 6,
-        cursor: "pointer", fontSize: 12, color: "#475569", fontWeight: 500,
-        transition: "all 0.15s"
-      }}>
-        {uploading ? <RefreshCw size={12} className="spin" /> : <Upload size={12} />}
-        {uploading ? "Uploading…" : "Upload Evidence"}
-        <input type="file" accept=".pdf,.xlsx,.xls,.csv,.jpg,.png" style={{ display: "none" }} onChange={handleFile} disabled={uploading} />
-      </label>
-      {evidenceRule === "mandatory" && uploaded.length === 0 && (
-        <span style={{ fontSize: 11, color: "#f59e0b", marginLeft: 8 }}>* Evidence required</span>
+
+        {/* Bill Type Sub-selector (only active when category is Bill) */}
+        {currentCategory === "Bill" ? (
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <span style={{ fontSize: 11, color: "#64748b", fontWeight: 600 }}>Bill Category:</span>
+            <select
+              value={billType}
+              onChange={e => setBillType(e.target.value)}
+              style={{
+                fontSize: 11, fontWeight: 600, padding: "3px 8px", borderRadius: 6,
+                border: "1px solid #cbd5e1", background: "#fff", color: "#1e293b", outline: "none"
+              }}
+            >
+              {BILL_TYPE_OPTIONS.map(opt => (
+                <option key={opt.id} value={opt.id}>{opt.label}</option>
+              ))}
+            </select>
+          </div>
+        ) : (
+          <span style={{ fontSize: 10.5, color: "#7c3aed", fontWeight: 600, background: "#f5f3ff", padding: "2px 8px", borderRadius: 4, border: "1px solid #ddd6fe" }}>
+            Supporting Study / Environmental Audit / Manifest
+          </span>
+        )}
+      </div>
+
+      {/* ── Drag & Drop Upload Dropzone ── */}
+      {!pendingEvidence && !extractedField && (
+        <div
+          onDragEnter={handleDragEnter}
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+          onClick={() => fileInputRef.current?.click()}
+          style={{
+            border: isDragging ? "2px dashed #2563eb" : "1.5px dashed #cbd5e1",
+            background: isDragging ? "rgba(37, 99, 235, 0.05)" : "#fff",
+            borderRadius: 8, padding: "14px 16px", textAlign: "center", cursor: "pointer",
+            transition: "all 0.18s ease"
+          }}
+        >
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".pdf,.jpg,.jpeg,.png,.xlsx,.xls,.csv"
+            style={{ display: "none" }}
+            onChange={handleFileInputChange}
+            disabled={uploading}
+          />
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+            {uploading ? (
+              <RefreshCw size={20} className="spin" style={{ color: "#2563eb" }} />
+            ) : (
+              <Upload size={20} style={{ color: isDragging ? "#2563eb" : "#64748b" }} />
+            )}
+            <div style={{ fontSize: 12.5, fontWeight: 600, color: "#1e293b" }}>
+              {uploading ? "Registering document & generating Evidence ID…" : "Drag & drop document here, or click to upload"}
+            </div>
+            <div style={{ fontSize: 10.5, color: "#94a3b8" }}>
+              Supports PDF, JPG, PNG, XLSX, CSV (Max 25MB)
+            </div>
+          </div>
+        </div>
       )}
-      {error && <div style={{ fontSize: 11, color: "#ef4444", marginTop: 4 }}>{error}</div>}
+
+      {/* ── Immediate Attachment State & The Two Processing Paths ── */}
+      {pendingEvidence && !extractedField && (
+        <div style={{ background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: 8, padding: 12, marginTop: 6 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 700, color: "#1e40af" }}>
+              <CheckCircle2 size={15} color="#2563eb" />
+              <span>Document Attached:</span>
+              <span style={{ fontFamily: "monospace", background: "#dbeafe", padding: "1px 6px", borderRadius: 4 }}>
+                {pendingEvidence.displayId}
+              </span>
+            </div>
+            <span style={{ fontSize: 11, color: "#64748b" }}>{pendingEvidence.name}</span>
+          </div>
+
+          {processingAi ? (
+            <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", background: "#fff", borderRadius: 6, border: "1px solid #bfdbfe", fontSize: 12, color: "#2563eb", fontWeight: 600 }}>
+              <RefreshCw size={14} className="spin" />
+              Running E1 AI document relevance check &amp; extraction…
+            </div>
+          ) : aiRejection ? (
+            <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 6, padding: 10, marginTop: 6 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6, color: "#dc2626", fontWeight: 700, fontSize: 12, marginBottom: 4 }}>
+                <AlertTriangle size={14} />
+                <span>AI Relevance Rejection</span>
+              </div>
+              <p style={{ margin: "0 0 8px 0", fontSize: 11.5, color: "#b91c1c" }}>
+                {aiRejection}
+              </p>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button
+                  type="button"
+                  onClick={handleContinueWithoutAi}
+                  style={{ padding: "5px 10px", fontSize: 11, fontWeight: 600, background: "#fff", border: "1px solid #fca5a5", color: "#dc2626", borderRadius: 5, cursor: "pointer" }}
+                >
+                  Continue without AI (Enter Manually)
+                </button>
+                <button
+                  type="button"
+                  onClick={handleRemovePending}
+                  style={{ padding: "5px 10px", fontSize: 11, fontWeight: 600, background: "#fee2e2", border: "1px solid #f87171", color: "#991b1b", borderRadius: 5, cursor: "pointer" }}
+                >
+                  Remove Document
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+              <button
+                type="button"
+                onClick={handleContinueWithAi}
+                style={{
+                  flex: 1, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6,
+                  padding: "8px 14px", fontSize: 12, fontWeight: 700, background: "#2563eb", color: "#fff",
+                  border: "none", borderRadius: 6, cursor: "pointer", transition: "background 0.15s"
+                }}
+              >
+                <Sparkles size={13} />
+                Continue with AI
+              </button>
+              <button
+                type="button"
+                onClick={handleContinueWithoutAi}
+                style={{
+                  flex: 1, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6,
+                  padding: "8px 14px", fontSize: 12, fontWeight: 600, background: "#fff", color: "#334155",
+                  border: "1px solid #cbd5e1", borderRadius: 6, cursor: "pointer", transition: "background 0.15s"
+                }}
+              >
+                <Edit3 size={13} />
+                Continue without AI
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── AI Extracted Value Review & Confirmation ── */}
+      {extractedField && (
+        <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 8, padding: 12, marginTop: 6 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+            <span style={{ fontSize: 12, fontWeight: 800, color: "#166534", display: "inline-flex", alignItems: "center", gap: 5 }}>
+              <Sparkles size={14} color="#16a34a" /> AI Extracted Value
+            </span>
+            {extractedField.confidence && (
+              <span style={{ fontSize: 10.5, fontWeight: 700, background: "#dcfce7", color: "#15803d", padding: "2px 6px", borderRadius: 4 }}>
+                {Math.round(extractedField.confidence * 100)}% Confidence
+              </span>
+            )}
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+            {!isEditingValue ? (
+              <div style={{ fontSize: 17, fontWeight: 800, color: "#14532d" }}>
+                {extractedField.value} <span style={{ fontSize: 13, fontWeight: 600, color: "#475569" }}>{extractedField.unit || unit}</span>
+              </div>
+            ) : (
+              <div style={{ display: "flex", alignItems: "center", gap: 6, flex: 1 }}>
+                <input
+                  type="number"
+                  value={editedValue}
+                  onChange={e => setEditedValue(e.target.value)}
+                  style={{
+                    flex: 1, padding: "6px 10px", fontSize: 15, fontWeight: 700,
+                    borderRadius: 6, border: "1px solid #86efac", background: "#fff", color: "#14532d", outline: "none"
+                  }}
+                />
+                <span style={{ fontSize: 13, fontWeight: 600, color: "#475569" }}>{extractedField.unit || unit}</span>
+              </div>
+            )}
+          </div>
+
+          <div style={{ fontSize: 11, color: "#15803d", marginBottom: 10 }}>
+            Is this value correct?
+          </div>
+
+          <div style={{ display: "flex", gap: 8 }}>
+            <button
+              type="button"
+              onClick={handleConfirmValue}
+              style={{
+                display: "inline-flex", alignItems: "center", gap: 5, padding: "7px 14px",
+                fontSize: 12, fontWeight: 700, background: "#16a34a", color: "#fff",
+                border: "none", borderRadius: 6, cursor: "pointer"
+              }}
+            >
+              <Check size={13} />
+              Confirm &amp; Use Value
+            </button>
+            {!isEditingValue ? (
+              <button
+                type="button"
+                onClick={() => { setIsEditingValue(true); setEditedValue(String(extractedField.value)); }}
+                style={{
+                  display: "inline-flex", alignItems: "center", gap: 5, padding: "7px 14px",
+                  fontSize: 12, fontWeight: 600, background: "#fff", color: "#15803d",
+                  border: "1px solid #86efac", borderRadius: 6, cursor: "pointer"
+                }}
+              >
+                <Edit3 size={13} />
+                Edit Value
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setIsEditingValue(false)}
+                style={{
+                  padding: "7px 12px", fontSize: 12, fontWeight: 500, background: "transparent",
+                  color: "#64748b", border: "none", cursor: "pointer"
+                }}
+              >
+                Cancel
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Confirmation feedback */}
+      {confirmedSuccess && (
+        <div style={{ marginTop: 6, fontSize: 11.5, color: "#15803d", fontWeight: 600, display: "flex", alignItems: "center", gap: 5 }}>
+          <CheckCircle2 size={13} />
+          {confirmedSuccess}
+        </div>
+      )}
+
+      {/* Error display */}
+      {error && (
+        <div style={{ marginTop: 6, fontSize: 11.5, color: "#ef4444", fontWeight: 500, display: "flex", alignItems: "center", gap: 5 }}>
+          <AlertCircle size={13} />
+          {error}
+        </div>
+      )}
+
+      {/* ── Persistent Attached Documents List ── */}
+      {attachedFiles.length > 0 && (
+        <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 4 }}>
+          {attachedFiles.map((f, i) => (
+            <div
+              key={f.id || i}
+              style={{
+                display: "flex", alignItems: "center", justifyContent: "space-between",
+                padding: "5px 10px", background: "#fff", border: "1px solid #e2e8f0",
+                borderRadius: 6, fontSize: 11.5
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <span style={{
+                  fontFamily: "monospace", fontWeight: 700, fontSize: 10.5,
+                  background: "#e0f2fe", color: "#0369a1", padding: "1px 5px", borderRadius: 3
+                }}>
+                  {f.displayId}
+                </span>
+                <span style={{ fontWeight: 600, color: "#1e293b" }}>{f.name}</span>
+                <span style={{
+                  fontSize: 10, fontWeight: 700,
+                  color: f.category === "Report" ? "#7c3aed" : "#2563eb",
+                  background: f.category === "Report" ? "#f5f3ff" : "#eff6ff",
+                  padding: "1px 6px", borderRadius: 4
+                }}>
+                  {f.category}{f.category === "Bill" && f.billType && f.billType !== "Unknown" ? `: ${f.billType}` : ""}
+                </span>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                {f.id && (
+                  <a
+                    href={evidenceApi.getViewUrl(f.id)}
+                    target="_blank"
+                    rel="noreferrer"
+                    style={{ color: "#0284c7", display: "inline-flex", alignItems: "center", gap: 3, textDecoration: "none", fontSize: 11, fontWeight: 600 }}
+                  >
+                    <ExternalLink size={11} /> View
+                  </a>
+                )}
+                <CheckCircle2 size={12} color="#16a34a" />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {evidenceRule === "mandatory" && attachedFiles.length === 0 && (
+        <div style={{ marginTop: 6, fontSize: 11, color: "#f59e0b", fontWeight: 600 }}>
+          * Supporting evidence is mandatory for this disclosure parameter
+        </div>
+      )}
     </div>
   );
 }
@@ -384,7 +852,7 @@ function PreSubmissionModal({ open, onClose, onConfirm, submitting, stats, valid
 }
 
 // ─── Single Parameter Field ─────────────────────────────────────────────────
-function ParameterField({ field, value, onChange, readOnly, submissionStatus, onEvidenceUploaded }) {
+function ParameterField({ field, value, onChange, readOnly, submissionStatus, onEvidenceUploaded, projectId, stickyDocType, setStickyDocType }) {
   const [showGuidance, setShowGuidance] = useState(false);
   const [localError, setLocalError] = useState(null);
 
@@ -558,12 +1026,18 @@ function ParameterField({ field, value, onChange, readOnly, submissionStatus, on
       {/* Guidance card */}
       <GuidanceCard field={field} open={showGuidance} onToggle={() => setShowGuidance(p => !p)} />
 
-      {/* Evidence uploader */}
+      {/* Generalized Document Evidence Attachment Workflow */}
       {!isLocked && field.evidence_rule !== "none" && (
-        <EvidenceUploader
+        <EvidenceAttachPanel
           metricCode={field.metric_code}
+          metricName={field.metric_name || field.name}
+          unit={field.unit}
           evidenceRule={field.evidence_rule}
+          projectId={projectId}
           onUploaded={(evId) => onEvidenceUploaded?.(field.metric_code, evId)}
+          onValueConfirmed={(confirmedVal) => handleChange(confirmedVal)}
+          stickyDocType={stickyDocType}
+          setStickyDocType={setStickyDocType}
         />
       )}
     </div>
@@ -663,7 +1137,7 @@ function ProjectContextCard({ entity, form }) {
 }
 
 // ─── Domain Section ──────────────────────────────────────────────────────────
-function DomainSection({ domain, principle, fields, values, onChange, submissionStatus, onEvidenceUploaded }) {
+function DomainSection({ domain, principle, fields, values, onChange, submissionStatus, onEvidenceUploaded, projectId, stickyDocType, setStickyDocType }) {
   const [collapsed, setCollapsed] = useState(false);
   const meta = DOMAIN_META[domain] || DOMAIN_META["Environment"];
   const DomainIcon = meta.icon;
@@ -727,6 +1201,9 @@ function DomainSection({ domain, principle, fields, values, onChange, submission
               onChange={onChange}
               submissionStatus={submissionStatus}
               onEvidenceUploaded={onEvidenceUploaded}
+              projectId={projectId}
+              stickyDocType={stickyDocType}
+              setStickyDocType={setStickyDocType}
             />
           ))}
         </div>
@@ -829,6 +1306,22 @@ export default function DataEntry() {
   const [notice, setNotice] = useState(null);
   const [openGuidance, setOpenGuidance] = useState({});
   const [showPreSubmitModal, setShowPreSubmitModal] = useState(false);
+
+  // Sticky Document Type selection (Bill / Report) across all ESG field attachments
+  const [stickyDocType, setStickyDocType] = useState(() => {
+    try {
+      return localStorage.getItem("brsr_preferred_doc_type") || "Bill";
+    } catch {
+      return "Bill";
+    }
+  });
+
+  const handleDocTypeChange = useCallback((newType) => {
+    setStickyDocType(newType);
+    try {
+      localStorage.setItem("brsr_preferred_doc_type", newType);
+    } catch {}
+  }, []);
 
   // Populate values from API form data
   React.useEffect(() => {
@@ -1266,6 +1759,9 @@ export default function DataEntry() {
                 onChange={handleFieldChange}
                 submissionStatus={submissionStatus}
                 onEvidenceUploaded={handleEvidenceUploaded}
+                projectId={selectedEntity}
+                stickyDocType={stickyDocType}
+                setStickyDocType={handleDocTypeChange}
               />
             ))}
           </div>

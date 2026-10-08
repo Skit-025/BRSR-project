@@ -14,17 +14,16 @@ def _parse_json_robust(content: str) -> Dict[str, Any]:
     """
     Parses JSON from LLM responses even if wrapped in markdown blocks
     (```json ... ```) or preceded/followed by reasoning commentary.
-    Handles models that output lengthy chain-of-thought before the final JSON.
     """
     text = (content or "").strip()
     if not text:
         raise ValueError("Empty LLM response")
 
-    # 1. Strip markdown fences - handle ```json ... ``` blocks
+    # 1. Strip markdown fences
     if "```json" in text:
         parts = text.split("```json")
         if len(parts) > 1:
-            candidate = parts[-1].split("```")[0].strip()  # use LAST block
+            candidate = parts[1].split("```")[0].strip()
             try:
                 return json.loads(candidate)
             except Exception:
@@ -32,7 +31,7 @@ def _parse_json_robust(content: str) -> Dict[str, Any]:
     elif "```" in text:
         parts = text.split("```")
         if len(parts) > 1:
-            candidate = parts[-2].strip() if len(parts) > 2 else parts[1].split("```")[0].strip()
+            candidate = parts[1].split("```")[0].strip()
             try:
                 return json.loads(candidate)
             except Exception:
@@ -44,29 +43,7 @@ def _parse_json_robust(content: str) -> Dict[str, Any]:
     except Exception:
         pass
 
-    # 3. Find the LAST JSON object in the text (handles reasoning-before-answer models)
-    # Strategy: scan backwards from end for last closing brace, then find its opening brace
-    last_close = text.rfind("}")
-    if last_close != -1:
-        # Find the matching opening brace by counting
-        depth = 0
-        start_idx = -1
-        for i in range(last_close, -1, -1):
-            if text[i] == "}":
-                depth += 1
-            elif text[i] == "{":
-                depth -= 1
-                if depth == 0:
-                    start_idx = i
-                    break
-        if start_idx != -1:
-            candidate = text[start_idx:last_close + 1]
-            try:
-                return json.loads(candidate)
-            except Exception:
-                pass
-
-    # 4. Fallback: search for any { ... } block
+    # 3. Extract outermost { ... }
     m = re.search(r"(\{.*\})", text, re.DOTALL)
     if m:
         try:
@@ -171,10 +148,9 @@ class OpenRouterProvider(BaseAIProvider):
 
         # Prioritized free & working vision models on OpenRouter
         models_to_try = [
-            settings.OPENROUTER_MODEL_VISION,            # Primary from settings (inclusionai/ling-3.0-flash-vl)
-            "inclusionai/ling-3.0-flash-vl",             # Verified working 2026-10
-            "qwen/qwen2.5-vl-72b-instruct",              # Qwen Vision 72B
-            "openrouter/auto",                           # Auto-router last resort
+            settings.OPENROUTER_MODEL_VISION,
+            "openrouter/auto",
+            "openrouter/free",
         ]
         models_to_try = list(dict.fromkeys([m for m in models_to_try if m]))
 
@@ -186,31 +162,19 @@ class OpenRouterProvider(BaseAIProvider):
                 "temperature": 0.1,
                 "max_tokens": 1500
             }
-            # Retry up to 2 times for primary model on transient errors (422/503)
-            max_attempts = 2 if model in (settings.OPENROUTER_MODEL_VISION, "inclusionai/ling-3.0-flash-vl") else 1
-            for attempt in range(max_attempts):
-                try:
-                    logger.info(f"Calling OpenRouter vision model '{model}' (attempt {attempt + 1})...")
-                    with httpx.Client(timeout=30.0) as client:
-                        resp = client.post(f"{self.BASE_URL}/chat/completions", headers=self._headers(), json=payload)
-                        if resp.status_code in (422, 503) and attempt < max_attempts - 1:
-                            logger.warning(f"OpenRouter vision model '{model}' got {resp.status_code}, retrying...")
-                            import time
-                            time.sleep(1.5)
-                            continue
-                        resp.raise_for_status()
-                        data = resp.json()
-                        content = (data.get("choices") or [{}])[0].get("message", {}).get("content") or ""
-                        if not content.strip():
-                            raise ValueError("Empty LLM response")
-                        parsed = _parse_json_robust(content)
-                        logger.info(f"OpenRouter vision model '{model}' succeeded: extracted {list(parsed.keys())}")
-                        return parsed
-                except Exception as e:
-                    last_error = e
-                    if attempt == max_attempts - 1:
-                        logger.warning(f"OpenRouter vision model '{model}' failed: {e}. Trying fallback...")
-                    break
+            try:
+                logger.info(f"Calling OpenRouter vision model '{model}'...")
+                with httpx.Client(timeout=25.0) as client:
+                    resp = client.post(f"{self.BASE_URL}/chat/completions", headers=self._headers(), json=payload)
+                    resp.raise_for_status()
+                    data = resp.json()
+                    content = data["choices"][0]["message"]["content"]
+                    parsed = _parse_json_robust(content)
+                    logger.info(f"OpenRouter vision model '{model}' succeeded: extracted {list(parsed.keys())}")
+                    return parsed
+            except Exception as e:
+                logger.warning(f"OpenRouter vision model '{model}' failed: {e}. Trying fallback...")
+                last_error = e
 
         raise RuntimeError(f"All OpenRouter vision models failed. Last error: {last_error}")
 

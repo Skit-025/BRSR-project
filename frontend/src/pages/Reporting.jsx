@@ -191,8 +191,8 @@ function CustomTooltip({ active, payload }) {
 export default function Reporting() {
   const { user } = useAuth();
 
-  // Project Admins see the ProjectSummary read model, not the full corporate BRSR (spec §19, §50)
-  if (user?.role === 'project_admin') {
+  // Project users see the ProjectSummary read model, not the full corporate BRSR (spec §19, §50)
+  if (user?.role === 'project_data_entry_user' || user?.role === 'project_admin') {
     return <ProjectSummary />;
   }
 

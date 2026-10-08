@@ -221,15 +221,10 @@ def build_scoped_digital_form(
 
     all_metrics = db.query(Metric).filter(Metric.is_deleted == False).order_by(Metric.principle, Metric.code).all()
 
-    # Role capability flags (5-Role Architecture)
-    is_maker = user_role in [
-        Role.PROJECT_ADMIN.value, Role.SYSTEM_ADMIN.value
-    ]
-    is_checker = user_role in [
-        Role.BU_ADMIN.value, Role.SUBSIDIARY_ADMIN.value,
-        Role.GROUP_ADMIN.value, Role.SYSTEM_ADMIN.value
-    ]
-    is_auditor = user_role == Role.SYSTEM_ADMIN.value
+    # Role capability flags
+    is_maker = user_role in [Role.MAKER.value, Role.SYSTEM_ADMIN.value, Role.ESG_MANAGER.value]
+    is_checker = user_role in [Role.CHECKER.value, Role.SYSTEM_ADMIN.value, Role.ESG_MANAGER.value]
+    is_auditor = user_role in [Role.AUDITOR.value, Role.SYSTEM_ADMIN.value]
 
     # Determine the entity's node type for gating and entry_level filtering
     entity_node_type = (entity.type if entity else "group").lower()
