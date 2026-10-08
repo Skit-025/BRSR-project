@@ -29,6 +29,18 @@ router = APIRouter(prefix="/evidence", tags=["Evidence Vault & AI Pre-fill"])
 
 security = HTTPBearer(auto_error=False)
 
+# SECURITY: Enforce file size and MIME type limits server-side
+_MAX_FILE_SIZE_BYTES = 25 * 1024 * 1024  # 25 MB
+_ALLOWED_MIME_TYPES = {
+    "image/jpeg", "image/png", "image/webp", "image/gif", "image/tiff",
+    "application/pdf",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",  # xlsx
+    "application/vnd.ms-excel",  # xls
+    "text/csv",
+    "application/msword",  # doc
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",  # docx
+}
+
 @router.post("/upload", response_model=EvidenceUploadResponse, status_code=status.HTTP_201_CREATED)
 async def upload_evidence_file(
     file: UploadFile = File(...),
@@ -40,12 +52,30 @@ async def upload_evidence_file(
 ):
     """
     F09-F12 Evidence Vault Ingestion:
+    - Validates file size (≤25 MB) and MIME type allowlist
     - Verifies client SHA-256 hash
     - Stores file in immutable storage
     - Runs AI Engine E1 to extract numbers for instant form pre-fill.
     """
     file_bytes = await file.read()
     mime_type = file.content_type or "application/octet-stream"
+
+    # SECURITY: Enforce size limit before any processing
+    if len(file_bytes) > _MAX_FILE_SIZE_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=f"File too large. Maximum allowed size is {_MAX_FILE_SIZE_BYTES // (1024*1024)} MB."
+        )
+
+    # SECURITY: Enforce MIME type allowlist
+    if mime_type not in _ALLOWED_MIME_TYPES:
+        raise HTTPException(
+            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            detail=(
+                f"File type '{mime_type}' is not permitted. "
+                "Allowed types: PDF, images (JPEG/PNG/WebP), Excel, Word, CSV."
+            )
+        )
 
     uploader_id = None
     if credentials and credentials.credentials:

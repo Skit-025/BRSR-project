@@ -18,17 +18,93 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// ── Global Error Interceptor ──
+// ── 401 Refresh-then-retry / 403 surface interceptor ──
+let _isRefreshing = false;
+let _refreshSubscribers = [];
+
+function _subscribeTokenRefresh(cb) {
+  _refreshSubscribers.push(cb);
+}
+function _onTokenRefreshed(token) {
+  _refreshSubscribers.forEach((cb) => cb(token));
+  _refreshSubscribers = [];
+}
+function _onRefreshFailed() {
+  _refreshSubscribers = [];
+  // Clear all auth state and redirect to login
+  localStorage.removeItem('brsr_token');
+  localStorage.removeItem('brsr_refresh_token');
+  localStorage.removeItem('brsr_mock_mode');
+  // Use replace so the back button doesn't loop
+  window.location.replace('/login?reason=session_expired');
+}
+
 api.interceptors.response.use(
   (res) => res,
-  (err) => {
-    // If unauthorized, clear token only on protected paths
-    if (err.response?.status === 401 && !err.config?.url?.includes('/auth/login')) {
-      console.warn('Authentication token expired or invalid.');
+  async (err) => {
+    const originalRequest = err.config;
+
+    // ── 401: Token expired — try refresh once ──
+    if (
+      err.response?.status === 401 &&
+      !originalRequest._retry &&
+      !originalRequest.url?.includes('/auth/login') &&
+      !originalRequest.url?.includes('/auth/refresh')
+    ) {
+      if (_isRefreshing) {
+        // Queue the retry until refresh completes
+        return new Promise((resolve, reject) => {
+          _subscribeTokenRefresh((newToken) => {
+            originalRequest.headers.Authorization = `Bearer ${newToken}`;
+            resolve(api(originalRequest));
+          });
+        });
+      }
+
+      originalRequest._retry = true;
+      _isRefreshing = true;
+
+      const refreshToken = localStorage.getItem('brsr_refresh_token');
+      if (!refreshToken) {
+        _isRefreshing = false;
+        _onRefreshFailed();
+        return Promise.reject(err);
+      }
+
+      try {
+        const refreshRes = await axios.post(`${API_BASE}/auth/refresh`, {
+          refresh_token: refreshToken,
+        });
+        const newToken = refreshRes.data?.access_token;
+        const newRefresh = refreshRes.data?.refresh_token;
+        if (!newToken) throw new Error('No access token in refresh response');
+
+        localStorage.setItem('brsr_token', newToken);
+        if (newRefresh) localStorage.setItem('brsr_refresh_token', newRefresh);
+
+        api.defaults.headers.common['Authorization'] = `Bearer ${newToken}`;
+        _onTokenRefreshed(newToken);
+        _isRefreshing = false;
+
+        originalRequest.headers.Authorization = `Bearer ${newToken}`;
+        return api(originalRequest);
+      } catch (refreshErr) {
+        _isRefreshing = false;
+        _onRefreshFailed();
+        return Promise.reject(refreshErr);
+      }
     }
+
+    // ── 403: Forbidden — surface with a clear tag for pages to handle ──
+    if (err.response?.status === 403) {
+      err.isForbidden = true;
+    }
+
     return Promise.reject(err);
   }
 );
+
+
 
 // ─────────────────────────────────────────────────────────────────
 // Auth & Access Governance
@@ -74,6 +150,7 @@ export const dashboardsApi = {
 // ─────────────────────────────────────────────────────────────────
 export const orgApi = {
   getNodes: () => api.get('/org/nodes'),
+  getTree: () => api.get('/org/tree'),
   getNode: (id) => api.get(`/org/nodes/${id}`),
   createNode: (data) => api.post('/org/nodes', data),
   updateNode: (id, data) => api.put(`/org/nodes/${id}`, data),
@@ -82,6 +159,13 @@ export const orgApi = {
   updatePeriod: (id, data) => api.put(`/org/periods/${id}`, data),
   getApplicability: (nodeId, periodId) =>
     api.get(`/org/applicability/${nodeId}`, { params: periodId ? { period_id: periodId } : {} }),
+  overrideApplicability: (nodeIdOrData, payload) => {
+    if (typeof nodeIdOrData === 'object' && nodeIdOrData !== null) {
+      const nodeId = nodeIdOrData.node_id || nodeIdOrData.nodeId;
+      return api.post(`/org/applicability/${nodeId}/override`, nodeIdOrData);
+    }
+    return api.post(`/org/applicability/${nodeIdOrData}/override`, payload);
+  },
 };
 
 // ─────────────────────────────────────────────────────────────────
@@ -179,8 +263,10 @@ export const reportingApi = {
   compileReport: (data) => api.post('/reports/compile', data),
   getExportHtmlUrl: (entityId, periodId) =>
     `${API_BASE}/reports/export/html/${encodeURIComponent(entityId)}/${encodeURIComponent(periodId)}`,
-  getExportPdfUrl: (reportId) =>
-    `${API_BASE}/reports/export/pdf/${encodeURIComponent(reportId)}`,
+  getExportPdfUrl: (entityId, periodId) =>
+    `${API_BASE}/reports/export/pdf/${encodeURIComponent(entityId)}/${encodeURIComponent(periodId)}`,
+  getExportJsonUrl: (entityId, periodId) =>
+    `${API_BASE}/reports/export/json/${encodeURIComponent(entityId)}/${encodeURIComponent(periodId)}`,
 };
 
 // ─────────────────────────────────────────────────────────────────
@@ -309,3 +395,23 @@ export const validationApi = {
   check: (submissionId) => api.post(`/validation/check/${encodeURIComponent(submissionId)}`),
   justify: (data) => api.post('/validation/justify', data),
 };
+
+// ─────────────────────────────────────────────────────────────────
+// 3-Click Lineage Explorer
+// ─────────────────────────────────────────────────────────────────
+export const lineageApi = {
+  getMetricLineage: (metricCode, periodId, entityId) => {
+    let url = `/lineage/${encodeURIComponent(metricCode)}/${encodeURIComponent(periodId)}`;
+    if (entityId) url += `?entity_id=${encodeURIComponent(entityId)}`;
+    return api.get(url);
+  },
+  getTrace: (submissionId) => api.get(`/lineage/trace/${encodeURIComponent(submissionId)}`),
+};
+
+// ─────────────────────────────────────────────────────────────────
+// Offline PWA Sync
+// ─────────────────────────────────────────────────────────────────
+export const offlineSyncApi = {
+  syncBatch: (payload) => api.post('/sync/batch', payload),
+};
+

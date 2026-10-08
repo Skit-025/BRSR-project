@@ -1,0 +1,11 @@
+{
+  "entity_code": "GRP-001",
+  "financial_year": "2025-2026",
+  "period_code": "FY2025-26-ANNUAL",
+  "energy": 142000.0,
+  "water": 22100.0,
+  "waste": 1450.0,
+  "headcount": 1250,
+  "LTIFR": 0.05,
+  "MSME %": 24.5
+}

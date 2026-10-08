@@ -1,0 +1,41 @@
+{
+  "test_dataset": "MEIL Planted Data Quality Anomalies",
+  "issues": [
+    {
+      "issue_id": "ISSUE-DQ-001",
+      "metric_code": "ENV-ENERGY-001",
+      "reported_value": 52000000.0,
+      "expected_range": "40,000 - 70,000 kWh",
+      "unit": "kWh",
+      "severity": "CRITICAL",
+      "rule_code": "TOL-001-UNIT-SLIP",
+      "description": "Apparent 1000x unit slip spike (reported Wh instead of kWh)",
+      "status": "UNRESOLVED",
+      "blocks_submission": true
+    },
+    {
+      "issue_id": "ISSUE-DQ-002",
+      "metric_code": "ENV-WATER-001",
+      "reported_value": -150.0,
+      "expected_range": ">= 0 kL",
+      "unit": "kL",
+      "severity": "CRITICAL",
+      "rule_code": "VAL-002-NEGATIVE-PHYSICAL",
+      "description": "Negative water consumption value violates physical conservation rule",
+      "status": "UNRESOLVED",
+      "blocks_submission": true
+    },
+    {
+      "issue_id": "ISSUE-DQ-003",
+      "metric_code": "SOC-SAFE-001",
+      "reported_value": 14.5,
+      "expected_range": "0 - 1.0 (LTIFR)",
+      "unit": "rate",
+      "severity": "WARNING",
+      "rule_code": "TOL-003-BENCHMARK-OUTLIER",
+      "description": "LTIFR exceeds heavy infrastructure industry benchmark by 10x",
+      "status": "UNRESOLVED",
+      "blocks_submission": true
+    }
+  ]
+}

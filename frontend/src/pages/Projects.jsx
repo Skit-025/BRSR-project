@@ -9,14 +9,6 @@ import {
 import { useOrgNodes, useOrgPeriods } from '../hooks/useApi';
 import { useAuth } from '../context/AuthContext';
 
-/* ── Seeded project data for Aarohan Infrastructure & Energy Group ── */
-const MOCK_PROJECTS = [
-  { id: 'PRJ-ODISHA-SOLAR', name: '250 MW Odisha Solar Park', bu: 'Solar EPC & Operations', subsidiary: 'Aarohan Renewable Energy Pvt. Ltd.', status: 'IN_REVIEW', coverage: 92, period: 'FY 2025–26', type: 'Solar Power Generation', location: 'Odisha, India', lastActivity: '10m ago' },
-  { id: 'PRJ-RAJ-SOLAR', name: '50 MW Rajasthan Solar Expansion', bu: 'Solar EPC & Operations', subsidiary: 'Aarohan Renewable Energy Pvt. Ltd.', status: 'APPROVED', coverage: 100, period: 'FY 2025–26', type: 'Solar Power Generation', location: 'Rajasthan, India', lastActivity: '1h ago' },
-  { id: 'PRJ-KUTCH-WIND', name: 'Kutch Wind Farm', bu: 'Wind Energy Operations', subsidiary: 'Aarohan Renewable Energy Pvt. Ltd.', status: 'CALCULATED', coverage: 100, period: 'FY 2025–26', type: 'Wind Power Generation', location: 'Gujarat, India', lastActivity: '3h ago' },
-  { id: 'PRJ-PURI-HWY', name: 'Bhubaneswar–Puri Road Expansion', bu: 'Highway Development', subsidiary: 'Aarohan Infrastructure Projects Pvt. Ltd.', status: 'SUBMITTED', coverage: 85, period: 'FY 2025–26', type: 'Highway Construction', location: 'Odisha, India', lastActivity: '5h ago' },
-];
-
 const STATUS_CONFIG = {
   APPROVED:           { label: 'Ready',            badgeClass: 'badge-green',  dot: 'green',  icon: CheckCircle2 },
   CALCULATED:         { label: 'Calculated',        badgeClass: 'badge-green',  dot: 'green',  icon: CheckCircle2 },
@@ -55,7 +47,7 @@ const FILTER_STATUSES = ['All', 'Ready', 'In Review', 'Submitted', 'Changes Requ
 export default function Projects() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { data: nodes = [], isLoading } = useOrgNodes();
+  const { data: nodes = [], isLoading, isError, error, refetch } = useOrgNodes();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
   const [sortBy, setSortBy] = useState('name');
@@ -74,9 +66,8 @@ export default function Projects() {
 
   const projectsList = useMemo(() => {
     const projectNodes = nodes.filter(n => n.type === 'project' || n.type === 'site');
-    if (!projectNodes || projectNodes.length === 0) {
-      return MOCK_PROJECTS;
-    }
+    // No silent fallback to mock data — if API returned nodes but none are projects,
+    // show the real empty state so users can create their first project.
     return projectNodes.map(n => {
       const parentBu = nodes.find(b => b.id === n.parent_id);
       const parentSub = parentBu ? nodes.find(s => s.id === parentBu.parent_id) : null;
@@ -96,6 +87,8 @@ export default function Projects() {
       };
     });
   }, [nodes]);
+
+
 
   const filtered = useMemo(() => {
     let rows = [...projectsList];

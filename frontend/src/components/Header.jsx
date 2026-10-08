@@ -10,6 +10,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useAuth, ROLE_META } from '../context/AuthContext';
 import CommandPalette from './CommandPalette';
 import { notificationsApi } from '../api/client';
+import brsrLogo from '../assets/brsr_logo.jpg';
 
 const PLATFORM_JOURNEY_STEPS = [
   { step: '01', title: 'Organization', desc: 'Enterprise structure & entity roll-up', route: '/dashboard', icon: Building2, role: 'Group Admin' },
@@ -204,8 +205,32 @@ export default function Header() {
         zIndex: 50,
         fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
       }}>
-        {/* ── Left: Search & Org Scope ── */}
+        {/* ── Left: Logo + Search & Org Scope ── */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+          {/* BRSR Pro Logo */}
+          <div
+            onClick={() => navigate('/dashboard')}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              cursor: 'pointer',
+              paddingRight: 14,
+              borderRight: '1px solid #E2E8F0',
+              flexShrink: 0,
+            }}
+            title="BRSR Pro — Go to Dashboard"
+          >
+            <img
+              src={brsrLogo}
+              alt="BRSR Pro"
+              style={{
+                height: 30,
+                width: 'auto',
+                objectFit: 'contain',
+                display: 'block',
+              }}
+            />
+          </div>
           <button
             type="button"
             onClick={() => setIsPaletteOpen(true)}

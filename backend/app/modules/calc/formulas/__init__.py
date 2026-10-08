@@ -23,7 +23,13 @@ from app.modules.calc.formulas.scope3 import (
     calculate_scope3_waste,
 )
 from app.modules.calc.formulas.energy import calculate_total_energy
-from app.modules.calc.formulas.intensity import calculate_energy_intensity, calculate_ghg_intensity
+from app.modules.calc.formulas.intensity import (
+    calculate_energy_intensity,
+    calculate_ghg_intensity,
+    calculate_water_intensity,
+    calculate_women_pct,
+    calculate_msme_pct,
+)
 from app.modules.calc.formulas.safety import calculate_ltifr, calculate_fatality_rate
 
 __all__ = [
@@ -45,6 +51,9 @@ __all__ = [
     "calculate_total_energy",
     "calculate_energy_intensity",
     "calculate_ghg_intensity",
+    "calculate_water_intensity",
+    "calculate_women_pct",
+    "calculate_msme_pct",
     "calculate_ltifr",
     "calculate_fatality_rate",
 ]

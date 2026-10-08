@@ -1,0 +1,38 @@
+{
+  "submission_id": "test-submission-offline-sync",
+  "batch_id": "sync-batch-2026-03-01-001",
+  "sync_timestamp": "2026-03-01T10:15:30Z",
+  "client_device": "PWA-Rugged-Tablet-Site-04",
+  "items": [
+    {
+      "idempotency_key": "offline-item-energy-001",
+      "metric_code": "ENV-ENERGY-001",
+      "value_numeric": 54200.0,
+      "value_text": null,
+      "unit": "kWh",
+      "version": 1,
+      "collected_at": "2026-03-01T08:30:00Z",
+      "notes": "Main substation meter HT-01 reading taken during offline site inspection"
+    },
+    {
+      "idempotency_key": "offline-item-water-001",
+      "metric_code": "ENV-WATER-001",
+      "value_numeric": 8900.0,
+      "value_text": null,
+      "unit": "kL",
+      "version": 1,
+      "collected_at": "2026-03-01T08:45:00Z",
+      "notes": "Water supply flowmeter totalizer reading"
+    },
+    {
+      "idempotency_key": "offline-item-energy-001",
+      "metric_code": "ENV-ENERGY-001",
+      "value_numeric": 54200.0,
+      "value_text": null,
+      "unit": "kWh",
+      "version": 1,
+      "collected_at": "2026-03-01T08:30:00Z",
+      "notes": "Duplicate re-transmission of same item"
+    }
+  ]
+}

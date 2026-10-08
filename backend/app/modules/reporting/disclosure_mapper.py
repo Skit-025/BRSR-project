@@ -32,17 +32,11 @@ def compile_brsr_report(
     if not node:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Entity not found.")
 
-    # Guard: SEBI BRSR reports can only be generated at Group or Company level
-    allowed_report_types = ["group", "company", "subsidiary"]
+    # Allow compilation at any level: leaf (standalone), business unit, subsidiary, group (consolidated)
+    allowed_report_types = ["group", "company", "subsidiary", "business_unit", "project", "site"]
     if node.type.lower() not in allowed_report_types:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=(
-                f"Statutory SEBI BRSR reports can only be compiled at the Group or Company level. "
-                f"Entity '{node.name}' is of type '{node.type}'. "
-                "Data entry takes place at the Project level, while reporting compiles at Group/Company."
-            )
-        )
+        pass  # allow all node types
+
 
     period = db.query(ReportingPeriod).filter(ReportingPeriod.id == period_id).first()
     if not period:

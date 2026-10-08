@@ -3,7 +3,7 @@ import {
   FileBarChart, Download, Play, CheckCircle, Hash,
   Calendar, Building2, RefreshCw, AlertTriangle, TrendingUp,
   BarChart2, Leaf, Users, Shield, Globe, Activity,
-  ChevronDown, ChevronRight, Layers, Lock, GitCompare, RotateCcw, X, Plus, FileCheck
+  ChevronDown, ChevronRight, Layers, Lock, GitCompare, RotateCcw, X, Plus, FileCheck, Eye, ExternalLink
 } from 'lucide-react';
 import {
   RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
@@ -209,6 +209,7 @@ export default function Reporting() {
   const [expandedP, setExpandedP]   = useState({});
   const [lineageDrawerOpen, setLineageDrawerOpen] = useState(false);
   const [lineageMetricData, setLineageMetricData] = useState(null);
+  const [showHtmlPreview, setShowHtmlPreview]     = useState(false);
 
   React.useEffect(() => {
     if (!entityId && nodes.length > 0) {
@@ -242,6 +243,21 @@ export default function Reporting() {
     });
     setLineageDrawerOpen(true);
   };
+
+  // Listen to 3-click lineage events from the rendered official BRSR report iframe
+  React.useEffect(() => {
+    const handleLineageMessage = (event) => {
+      if (event?.data && event.data.type === 'OPEN_LINEAGE') {
+        handleOpenLineage({
+          metricCode: event.data.metricCode,
+          entityId: event.data.entityId,
+          periodId: event.data.periodId,
+        });
+      }
+    };
+    window.addEventListener('message', handleLineageMessage);
+    return () => window.removeEventListener('message', handleLineageMessage);
+  }, [entityId, periodId, selectedPeriod]);
 
   const { data: report, isLoading: reportLoading, refetch: refetchReport } =
     useBrsrReport(entityId || null, periodId || null);
@@ -300,10 +316,11 @@ export default function Reporting() {
     const token = localStorage.getItem('brsr_token');
     const url = reportingApi.getExportPdfUrl(entityId, periodId);
     try {
+      setNotice({ type: 'info', text: 'Generating official SEBI BRSR PDF report...' });
       const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
       if (!res.ok) {
-        handleExportHtml();
-        setNotice({ type: 'success', text: 'Exported print-ready HTML format (WeasyPrint server fallback mode).' });
+        const errJson = await res.json().catch(() => ({}));
+        setNotice({ type: 'error', text: errJson.detail || 'PDF generation failed on server.' });
         return;
       }
       const blob = await res.blob();
@@ -311,8 +328,32 @@ export default function Reporting() {
       link.href = URL.createObjectURL(blob);
       link.download = `BRSR_Report_${selectedEntity?.code || ''}_${selectedPeriod?.code || ''}.pdf`;
       link.click();
-    } catch {
-      handleExportHtml();
+      setNotice({ type: 'success', text: 'Official SEBI BRSR PDF downloaded successfully.' });
+    } catch (err) {
+      setNotice({ type: 'error', text: `Failed to download PDF: ${err.message}` });
+    }
+  };
+
+  const handleExportJson = async () => {
+    if (!entityId || !periodId) { setNotice({ type: 'error', text: 'Select entity and period first.' }); return; }
+    const token = localStorage.getItem('brsr_token');
+    const url = reportingApi.getExportJsonUrl(entityId, periodId);
+    try {
+      setNotice({ type: 'info', text: 'Exporting structured BRSR JSON dataset...' });
+      const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+      if (!res.ok) {
+        setNotice({ type: 'error', text: 'Export JSON failed.' });
+        return;
+      }
+      const data = await res.json();
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = `BRSR_Data_${selectedEntity?.code || ''}_${selectedPeriod?.code || ''}.json`;
+      link.click();
+      setNotice({ type: 'success', text: 'BRSR JSON dataset exported successfully.' });
+    } catch (err) {
+      setNotice({ type: 'error', text: `Failed to export JSON: ${err.message}` });
     }
   };
 
@@ -445,8 +486,39 @@ export default function Reporting() {
           </p>
         </div>
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-          <button onClick={handleExportHtml} className="btn btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '7px 14px', borderRadius: 6, border: '1px solid #e2e8f0', background: '#fff', color: '#09090b', fontWeight: 600 }}>
-            <Download size={13} /> Export HTML
+          <button
+            onClick={() => setShowHtmlPreview(true)}
+            disabled={!entityId || !periodId}
+            className="btn btn-secondary"
+            style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '7px 14px', borderRadius: 6, border: '1px solid #1F3F8F', background: '#eff6ff', color: '#1F3F8F', fontWeight: 600, cursor: (!entityId || !periodId) ? 'not-allowed' : 'pointer' }}
+            title="Preview interactive official SEBI BRSR report with 3-click lineage"
+          >
+            <Eye size={13} /> Preview Report
+          </button>
+          <button
+            onClick={handleExportPdf}
+            disabled={!entityId || !periodId}
+            className="btn btn-secondary"
+            style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '7px 14px', borderRadius: 6, border: '1px solid #cbd5e1', background: '#fff', color: '#09090b', fontWeight: 600, cursor: (!entityId || !periodId) ? 'not-allowed' : 'pointer' }}
+            title="Export official high-fidelity PDF report"
+          >
+            <Download size={13} /> Export PDF
+          </button>
+          <button
+            onClick={handleExportHtml}
+            disabled={!entityId || !periodId}
+            className="btn btn-secondary"
+            style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '7px 14px', borderRadius: 6, border: '1px solid #e2e8f0', background: '#fff', color: '#475569', fontWeight: 600, cursor: (!entityId || !periodId) ? 'not-allowed' : 'pointer' }}
+          >
+            <Download size={13} /> HTML
+          </button>
+          <button
+            onClick={handleExportJson}
+            disabled={!entityId || !periodId}
+            className="btn btn-secondary"
+            style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '7px 14px', borderRadius: 6, border: '1px solid #e2e8f0', background: '#fff', color: '#475569', fontWeight: 600, cursor: (!entityId || !periodId) ? 'not-allowed' : 'pointer' }}
+          >
+            <Download size={13} /> JSON
           </button>
           <button
             onClick={handleCompile}
@@ -1319,6 +1391,56 @@ export default function Reporting() {
               <button onClick={handleRestate} disabled={restateSnapshotMutation.isPending || !restateReason} className="btn btn-primary">
                 {restateSnapshotMutation.isPending ? 'Filing...' : 'Submit Restatement'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Official Report Interactive Preview Modal */}
+      {showHtmlPreview && entityId && periodId && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.75)', backdropFilter: 'blur(4px)', zIndex: 1050, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+          <div style={{ width: '96vw', height: '92vh', maxWidth: '1200px', background: '#ffffff', borderRadius: '12px', display: 'flex', flexDirection: 'column', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)', overflow: 'hidden' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 20px', borderBottom: '1px solid #e2e8f0', background: '#f8fafc' }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: '#1F3F8F', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <FileBarChart size={18} />
+                  SEBI BRSR Statutory Report Preview — {selectedEntity?.name || selectedEntity?.code} ({selectedPeriod?.code})
+                </h3>
+                <span style={{ fontSize: '12px', color: '#64748b' }}>
+                  Click any numeric cell in the report to inspect 3-click data lineage and audit evidence.
+                </span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <button
+                  onClick={handleExportPdf}
+                  className="btn btn-secondary"
+                  style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 12px', fontSize: '12px', fontWeight: 600, border: '1px solid #cbd5e1', borderRadius: '6px', background: '#fff' }}
+                >
+                  <Download size={13} /> Download PDF
+                </button>
+                <a
+                  href={reportingApi.getExportHtmlUrl(entityId, periodId)}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="btn btn-secondary"
+                  style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 12px', fontSize: '12px', fontWeight: 600, border: '1px solid #cbd5e1', borderRadius: '6px', background: '#fff', textDecoration: 'none', color: '#09090b' }}
+                >
+                  <ExternalLink size={13} /> New Tab
+                </a>
+                <button
+                  onClick={() => setShowHtmlPreview(false)}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '6px', color: '#64748b' }}
+                >
+                  <X size={20} />
+                </button>
+              </div>
+            </div>
+            <div style={{ flex: 1, position: 'relative', background: '#f1f5f9' }}>
+              <iframe
+                title="BRSR Report Preview"
+                src={reportingApi.getExportHtmlUrl(entityId, periodId)}
+                style={{ width: '100%', height: '100%', border: 'none', background: '#fff' }}
+              />
             </div>
           </div>
         </div>

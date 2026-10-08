@@ -103,7 +103,8 @@ class MetricApplicabilityRead(BaseModel):
     approved_by: Optional[str] = None
 
 class ApplicabilityOverrideRequest(BaseModel):
+    node_id: Optional[str] = None
     metric_code: str
     is_applicable: bool
     reason: str
-    approved_by: str
+    approved_by: Optional[str] = None

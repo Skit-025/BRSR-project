@@ -112,6 +112,7 @@ export default function ProjectWizard() {
   const [form, setForm] = useState({
     name: '', description: '', type: '', location: '', stage: 'Planning', bu: '',
     activities: [], applicability: [], template: null, period: 'FY 2026',
+    projectId: 'PRJ-' + Math.random().toString(36).substring(2, 7).toUpperCase(),
   });
   const [aiAnalyzing, setAiAnalyzing] = useState(false);
   const [aiDone, setAiDone] = useState(false);
@@ -125,7 +126,9 @@ export default function ProjectWizard() {
     setSubmitting(true);
     setCreateError(null);
     try {
-      const code = 'PRJ-' + form.name.replace(/[^a-zA-Z0-9]/g, '-').toUpperCase().slice(0, 15) + '-' + Date.now().toString().slice(-4);
+      const code = form.projectId.trim()
+        ? form.projectId.trim().toUpperCase().replace(/[^A-Z0-9\-]/g, '-')
+        : 'PRJ-' + form.name.replace(/[^a-zA-Z0-9]/g, '-').toUpperCase().slice(0, 15) + '-' + Date.now().toString().slice(-4);
       const parentId = form.bu && form.bu.length > 10 ? form.bu : (buNodes[0]?.id || null);
       // Use the exact enum value from PROJECT_TYPES — never transform the value
       const projectType = form.type || 'corporate';
@@ -274,6 +277,26 @@ export default function ProjectWizard() {
                   This helps us accurately assign the ESG template and applicability.
                 </p>
               </div>
+
+              {/* Project ID - full width at top */}
+              <div className="form-group">
+                <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <Tag size={13} />
+                  Project ID
+                  <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-muted)', marginLeft: 2 }}>(auto-generated, editable)</span>
+                </label>
+                <input
+                  className="form-control"
+                  placeholder="e.g. PRJ-SOLAR-MH"
+                  value={form.projectId}
+                  onChange={e => setForm(f => ({ ...f, projectId: e.target.value }))}
+                  style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontWeight: 700, fontSize: 14, letterSpacing: '0.03em', color: '#1D4ED8' }}
+                />
+                <span style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4, display: 'block' }}>
+                  This ID will be used in Evidence Repository to tag and filter uploaded bills.
+                </span>
+              </div>
+
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                 <div className="form-group">
                   <label className="form-label">Project Type</label>
@@ -420,7 +443,8 @@ export default function ProjectWizard() {
                 <div className="card">
                   <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                     {[
-                      { label: 'Project Name', value: form.name },
+                      { label: 'Project ID', value: form.projectId || '(auto)' },
+                       { label: 'Project Name', value: form.name },
                       { label: 'Business Unit', value: BUS.find(b => b.id === form.bu)?.name || '-' },
                       { label: 'Type', value: form.type },
                       { label: 'Location', value: form.location },

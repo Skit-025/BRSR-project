@@ -92,6 +92,13 @@ def get_sebi_brsr_core_report(
     """
     return compile_brsr_report(db, entity_id, period_id, ReportType.BRSR_CORE.value)
 
+from app.modules.reporting.brsr_generator import (
+    compile_brsr_full_data,
+    generate_brsr_html,
+    render_brsr_pdf_bytes_from_html,
+    export_brsr_json,
+)
+
 @router.get("/export/html/{entity_id}/{period_id}", response_class=Response)
 def export_html_report(
     entity_id: str,
@@ -99,77 +106,62 @@ def export_html_report(
     db: Session = Depends(get_db)
 ):
     """
-    Renders official SEBI BRSR report in printable HTML/CSS format with assurance seal footer.
+    Renders official SEBI BRSR report in printable HTML/CSS format matching reference L&T Report.
+    Every number is clickable for 3-click lineage.
     """
-    report = compile_brsr_report(db, entity_id, period_id, ReportType.BRSR_FULL.value)
+    try:
+        data = compile_brsr_full_data(db, entity_id, period_id)
+        html_content = generate_brsr_html(data)
+        return Response(content=html_content, media_type="text/html")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
-    rows_html = ""
-    for item in report.section_c:
-        core_badge = "<span style='background:#e0f2fe;color:#0369a1;padding:2px 6px;border-radius:4px;font-size:11px;'>BRSR CORE</span>" if item.brsr_core else ""
-        evidence_badge = "<span style='color:#15803d;'>&#10003; Verified</span>" if item.evidence_verified else "<span style='color:#b45309;'>Reported</span>"
-        rows_html += f"""
-        <tr>
-            <td style="padding:10px;border-bottom:1px solid #e5e7eb;"><b>{item.metric_code}</b></td>
-            <td style="padding:10px;border-bottom:1px solid #e5e7eb;">{item.indicator_name} {core_badge}</td>
-            <td style="padding:10px;border-bottom:1px solid #e5e7eb;text-align:right;"><b>{item.disclosed_value:,.2f} {item.unit}</b></td>
-            <td style="padding:10px;border-bottom:1px solid #e5e7eb;text-align:center;">{item.aggregation_method.upper()}</td>
-            <td style="padding:10px;border-bottom:1px solid #e5e7eb;text-align:center;">{evidence_badge}</td>
-        </tr>
-        """
 
-    html_content = f"""
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <meta charset="utf-8"/>
-        <title>SEBI BRSR Report - {report.entity_name} ({report.financial_year})</title>
-        <style>
-            body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 40px; color: #1f2937; }}
-            .header {{ border-bottom: 3px solid #0f766e; padding-bottom: 15px; margin-bottom: 25px; }}
-            .seal {{ background: #f0fdfa; border: 1px solid #99f6e4; padding: 12px; border-radius: 6px; font-family: monospace; font-size: 12px; margin-bottom: 25px; }}
-            table {{ width: 100%; border-collapse: collapse; margin-top: 15px; }}
-            th {{ background: #f8fafc; padding: 10px; text-align: left; border-bottom: 2px solid #cbd5e1; font-size: 13px; }}
-            .footer {{ margin-top: 50px; border-top: 1px solid #cbd5e1; padding-top: 15px; font-size: 12px; color: #64748b; }}
-        </style>
-    </head>
-    <body>
-        <div class="header">
-            <h1 style="margin:0 0 5px 0;color:#0f766e;">MEIL ESG-BRSR Reporting Portal</h1>
-            <h2 style="margin:0;color:#334155;font-size:18px;">Business Responsibility and Sustainability Report (SEBI Guidelines)</h2>
-            <p style="margin:5px 0 0 0;color:#64748b;">Entity: <b>{report.entity_name} ({report.entity_code})</b> | Period: <b>{report.period_code} ({report.financial_year})</b></p>
-        </div>
-
-        <div class="seal">
-            <b>&#128274; CRYPTOGRAPHIC ASSURANCE SEAL (SHA-256):</b><br/>
-            {report.snapshot_hash}<br/>
-            <i>Generated: {report.generated_at.strftime("%Y-%m-%d %H:%M:%S UTC")} | Report ID: {report.report_id}</i>
-        </div>
-
-        <h3>Section A: General Information</h3>
-        <p>Corporate Name: <b>{report.section_a.corporate_name}</b> | CIN: <b>{report.section_a.cin}</b></p>
-        <p>Reporting Boundary: <b>{report.section_a.reporting_boundary}</b> | Operating Sites: <b>{report.section_a.operating_plants_and_sites_count}</b></p>
-
-        <h3>Section C: Principle-wise Performance Indicators</h3>
-        <table>
-            <thead>
-                <tr>
-                    <th style="width:150px;">Metric Code</th>
-                    <th>Indicator Description</th>
-                    <th style="text-align:right;">Disclosed Quantity</th>
-                    <th style="text-align:center;">Method</th>
-                    <th style="text-align:center;">Assurance Proof</th>
-                </tr>
-            </thead>
-            <tbody>
-                {rows_html}
-            </tbody>
-        </table>
-
-        <div class="footer">
-            <p>Certified in compliance with Securities and Exchange Board of India (SEBI) BRSR framework. Traceable to verified evidence documents in MEIL Evidence Vault.</p>
-        </div>
-    </body>
-    </html>
+@router.get("/export/pdf/{entity_id}/{period_id}", response_class=Response)
+def export_pdf_report(
+    entity_id: str,
+    period_id: str,
+    db: Session = Depends(get_db)
+):
     """
+    P0 PDF EXPORT:
+    Renders official SEBI BRSR report to PDF matching reference L&T Report layout and styling.
+    Works for ANY hierarchy level (Standalone leaf, BU, Subsidiary, Group).
+    """
+    try:
+        data = compile_brsr_full_data(db, entity_id, period_id)
+        html_content = generate_brsr_html(data)
+        pdf_bytes = render_brsr_pdf_bytes_from_html(html_content)
+        
+        filename = f"BRSR_Report_{data.get('entity_code', 'ENT')}_{data.get('financial_year', 'FY')}.pdf"
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": f'attachment; filename="{filename}"',
+                "Content-Length": str(len(pdf_bytes)),
+            }
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to generate PDF report: {str(e)}"
+        )
 
-    return Response(content=html_content, media_type="text/html")
+
+@router.get("/export/json/{entity_id}/{period_id}")
+def export_json_report(
+    entity_id: str,
+    period_id: str,
+    db: Session = Depends(get_db)
+):
+    """
+    Exports complete BRSR report as structured JSON data model.
+    """
+    return export_brsr_json(db, entity_id, period_id)
+
+

@@ -1,15 +1,17 @@
-import React, { useState, useMemo, useCallback } from "react";
+import React, { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
   CheckCircle2, Clock, AlertTriangle, AlertCircle, ChevronRight, Info,
   Send, Save, RefreshCw, Eye, MessageSquare, Lock,
   Leaf, Droplets, Trash2, Shield, Users, Flame, Zap, BarChart3,
   HelpCircle, FileText, Building2, ArrowRight, X, ChevronDown,
-  Upload, Paperclip, Sparkles
+  Upload, Paperclip, Sparkles, WifiOff, Wifi, CloudUpload
 } from "lucide-react";
-import { useOrgNodes, useOrgPeriods, useScopedForm, useSavePack, useSubmitPack, useFuelCatalog } from "../hooks/useApi";
+import { useOrgNodes, useOrgPeriods, useScopedForm, useSavePack, useSubmitPack, useFuelCatalog, useSyncOfflineBatch } from "../hooks/useApi";
 import { useAuth } from "../context/AuthContext";
 import { collectionApi, evidenceApi, calcApi, validationApi, aiApi } from "../api/client";
+import { saveOfflineItem, getPendingCount, processOfflineSyncBatch } from "../utils/offlineQueue";
+import { offlineSyncApi } from "../api/client";
 
 
 // ── Domain colour map ─────────────────────────────────────────────────────────
@@ -851,6 +853,67 @@ export default function DataEntry() {
   // Track submission ID returned from savePack so submitPack always has a valid ID
   const [activeSubmissionId, setActiveSubmissionId] = React.useState(null);
 
+  // ── Offline queue state ──────────────────────────────────────────────────
+  const [isOnline, setIsOnline] = useState(() => (typeof navigator !== 'undefined' ? navigator.onLine : true));
+  const [pendingOfflineCount, setPendingOfflineCount] = useState(0);
+  const [syncing, setSyncing] = useState(false);
+  const [syncResult, setSyncResult] = useState(null);
+
+  // Refresh pending count from IndexedDB
+  const refreshPendingCount = useCallback(async () => {
+    try {
+      const count = await getPendingCount(form?.submission_id || activeSubmissionId || null);
+      setPendingOfflineCount(count);
+    } catch { /* IndexedDB not available */ }
+  }, [form?.submission_id, activeSubmissionId]);
+
+  // Network status listeners + auto-sync on reconnect
+  useEffect(() => {
+    const handleOnline = async () => {
+      setIsOnline(true);
+      // Auto-trigger sync when connectivity returns
+      const count = await getPendingCount();
+      if (count > 0) {
+        setSyncing(true);
+        try {
+          const res = await processOfflineSyncBatch(offlineSyncApi.batch);
+          setSyncResult(res);
+          await refreshPendingCount();
+        } catch (err) {
+          console.warn('Auto offline sync failed:', err);
+        } finally {
+          setSyncing(false);
+        }
+      }
+    };
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, [refreshPendingCount]);
+
+  // Refresh pending count on mount and when form/submissionId changes
+  useEffect(() => { refreshPendingCount(); }, [refreshPendingCount]);
+
+  // Manual sync handler
+  const handleManualSync = useCallback(async () => {
+    setSyncing(true);
+    setSyncResult(null);
+    try {
+      const res = await processOfflineSyncBatch(offlineSyncApi.batch);
+      setSyncResult(res);
+      await refreshPendingCount();
+      if (res.applied_count > 0) refetchForm();
+    } catch (err) {
+      setSyncResult({ status: 'error', error: err?.message || 'Sync failed' });
+    } finally {
+      setSyncing(false);
+    }
+  }, [refreshPendingCount]);
+
 
   // ── Group form fields into ESG domains ──────────────────────────────────
   const domainGroups = useMemo(() => {
@@ -882,16 +945,17 @@ export default function DataEntry() {
   const handleSave = async () => {
     if (!selectedEntity || !selectedPeriod) return;
     setSaving(true);
+    const allFormFields = form?.sections?.flatMap(s => s.fields || []) || [];
+    const dataPoints = Object.entries(values).map(([metric_code, val]) => ({
+      metric_code,
+      value_numeric: typeof val === "number" || (val && !isNaN(Number(val))) ? Number(val) : null,
+      value_text: typeof val === "string" && isNaN(Number(val)) ? val : null,
+      unit: allFormFields.find(f => f.metric_code === metric_code)?.unit || "",
+      status: "ACTUAL",
+      entry_method: "manual_form",
+      evidence_file_ids: evidenceIds[metric_code] || [],
+    }));
     try {
-      const dataPoints = Object.entries(values).map(([metric_code, val]) => ({
-        metric_code,
-        value_numeric: typeof val === "number" || (val && !isNaN(Number(val))) ? Number(val) : null,
-        value_text: typeof val === "string" && isNaN(Number(val)) ? val : null,
-        unit: form?.sections?.flatMap(s => s.fields || []).find(f => f.metric_code === metric_code)?.unit || "",
-        status: "ACTUAL",
-        entry_method: "manual_form",
-        evidence_file_ids: evidenceIds[metric_code] || [],
-      }));
       const res = await savePack({
         entity_id: selectedEntity,
         period_id: selectedPeriod,
@@ -904,10 +968,37 @@ export default function DataEntry() {
       if (savedId) setActiveSubmissionId(savedId);
       setNotice({ type: "success", msg: "Draft saved successfully." });
     } catch (e) {
-      setNotice({ type: "error", msg: e?.response?.data?.detail || "Save failed." });
+      // ── Offline fallback: queue each datapoint in IndexedDB ──────────────
+      const isNetworkError =
+        !navigator.onLine ||
+        e?.code === 'ERR_NETWORK' ||
+        e?.message?.toLowerCase().includes('network') ||
+        !e?.response;
+      if (isNetworkError && dataPoints.length > 0) {
+        const subId = form?.submission_id || activeSubmissionId || `pending_${selectedEntity}_${selectedPeriod}`;
+        let queued = 0;
+        for (const dp of dataPoints) {
+          try {
+            await saveOfflineItem({
+              submission_id: subId,
+              metric_code: dp.metric_code,
+              value_numeric: dp.value_numeric,
+              value_text: dp.value_text,
+              unit: dp.unit,
+              notes: `Offline save at ${new Date().toLocaleTimeString()}`,
+              version: 1,
+            });
+            queued++;
+          } catch { /* individual item queue failure — skip */ }
+        }
+        await refreshPendingCount();
+        setNotice({ type: "warn", msg: `You're offline. ${queued} datapoint(s) saved locally — will auto-sync when reconnected.` });
+      } else {
+        setNotice({ type: "error", msg: e?.response?.data?.detail || "Save failed." });
+      }
     } finally {
       setSaving(false);
-      setTimeout(() => setNotice(null), 3000);
+      setTimeout(() => setNotice(null), 5000);
     }
   };
 
@@ -1009,15 +1100,76 @@ export default function DataEntry() {
     <div className="page-content anim-fade-up" style={{ background: "#f8fafc" }}>
       <div style={{ maxWidth: 1200, margin: "0 auto", width: "100%" }}>
 
+        {/* ── Offline / Sync Banner ─────────────────────────────────────── */}
+        {(!isOnline || pendingOfflineCount > 0) && (
+          <div style={{
+            marginBottom: 12, padding: "10px 16px", borderRadius: 10,
+            background: isOnline ? "#fefce8" : "#fef2f2",
+            border: `1px solid ${isOnline ? "#fde68a" : "#fca5a5"}`,
+            display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap"
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              {isOnline
+                ? <Wifi size={15} color="#d97706" />
+                : <WifiOff size={15} color="#b91c1c" />}
+              <span style={{ fontSize: 12.5, fontWeight: 600, color: isOnline ? "#92400e" : "#7f1d1d" }}>
+                {isOnline
+                  ? `Back online — ${pendingOfflineCount} datapoint(s) queued offline, ready to sync`
+                  : `You're offline — changes will be saved locally (${pendingOfflineCount} queued)`}
+              </span>
+            </div>
+            {isOnline && pendingOfflineCount > 0 && (
+              <button
+                id="offline-sync-now-btn"
+                onClick={handleManualSync}
+                disabled={syncing}
+                style={{
+                  display: "inline-flex", alignItems: "center", gap: 6,
+                  padding: "6px 14px", borderRadius: 6, border: "none",
+                  background: "#d97706", color: "#fff",
+                  fontSize: 12, fontWeight: 700, cursor: syncing ? "not-allowed" : "pointer"
+                }}
+              >
+                {syncing ? <RefreshCw size={13} className="spin" /> : <CloudUpload size={13} />}
+                {syncing ? "Syncing…" : "Sync Now"}
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Sync result toast */}
+        {syncResult && syncResult.status === 'completed' && (
+          <div style={{
+            marginBottom: 10, padding: "8px 14px", borderRadius: 8,
+            background: "#f0fdf4", border: "1px solid #bbf7d0",
+            fontSize: 12, color: "#166534", display: "flex", alignItems: "center", gap: 8
+          }}>
+            <CheckCircle2 size={13} color="#15803d" />
+            Sync complete — {syncResult.applied_count} applied, {syncResult.already_synced_count} already synced, {syncResult.conflicts_count} conflict(s).
+            <button onClick={() => setSyncResult(null)} style={{ marginLeft: "auto", background: "none", border: "none", cursor: "pointer", color: "#64748b" }}><X size={13} /></button>
+          </div>
+        )}
+        {syncResult && syncResult.status === 'error' && (
+          <div style={{
+            marginBottom: 10, padding: "8px 14px", borderRadius: 8,
+            background: "#fef2f2", border: "1px solid #fca5a5",
+            fontSize: 12, color: "#b91c1c", display: "flex", alignItems: "center", gap: 8
+          }}>
+            <AlertTriangle size={13} />
+            Sync failed: {syncResult.error}
+            <button onClick={() => setSyncResult(null)} style={{ marginLeft: "auto", background: "none", border: "none", cursor: "pointer", color: "#64748b" }}><X size={13} /></button>
+          </div>
+        )}
+
         {/* ── Status Ticker / Header Micro-badge ── */}
         <div style={{
           display: "flex", alignItems: "center", gap: 16, marginBottom: 8,
           fontSize: 11, fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
           fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", color: "#64748b"
         }}>
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 6, color: "#15803d" }}>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 6, color: isOnline ? "#15803d" : "#ef4444" }}>
             <span className="status-beacon-live" style={{ marginRight: 2 }} />
-            OPERATIONAL DATA INGESTION
+            {isOnline ? "OPERATIONAL DATA INGESTION" : "OFFLINE MODE — LOCAL QUEUE ACTIVE"}
           </span>
           <span style={{ color: "#cbd5e1" }}>/</span>
           <span>PROJECT TIER-1 EVIDENCE COLLECTION</span>
@@ -1216,12 +1368,16 @@ export default function DataEntry() {
         {notice && (
           <div style={{
             padding: "12px 20px", marginBottom: 16, borderRadius: 10,
-            background: notice.type === "success" ? "#f0fdf4" : "#fef2f2",
-            border: `1px solid ${notice.type === "success" ? "#bbf7d0" : "#fca5a5"}`,
-            color: notice.type === "success" ? "#15803d" : "#b91c1c",
+            background: notice.type === "success" ? "#f0fdf4" : notice.type === "warn" ? "#fffbeb" : "#fef2f2",
+            border: `1px solid ${notice.type === "success" ? "#bbf7d0" : notice.type === "warn" ? "#fde68a" : "#fca5a5"}`,
+            color: notice.type === "success" ? "#15803d" : notice.type === "warn" ? "#92400e" : "#b91c1c",
             fontSize: 13, fontWeight: 600, display: "flex", alignItems: "center", gap: 8
           }}>
-            {notice.type === "success" ? <CheckCircle2 size={15} /> : <AlertTriangle size={15} />}
+            {notice.type === "success"
+              ? <CheckCircle2 size={15} />
+              : notice.type === "warn"
+              ? <WifiOff size={15} />
+              : <AlertTriangle size={15} />}
             {notice.msg}
           </div>
         )}

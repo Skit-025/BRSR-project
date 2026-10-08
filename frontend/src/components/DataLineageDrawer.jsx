@@ -3,7 +3,7 @@ import {
   X, CheckCircle2, Shield, FileText, ArrowDown, ExternalLink, 
   Hash, Building2, Calculator, Clock, UserCheck, RefreshCw, AlertCircle, Download
 } from 'lucide-react';
-import { api, API_BASE } from '../api/client';
+import { lineageApi, API_BASE } from '../api/client';
 
 export default function DataLineageDrawer({ isOpen, onClose, metricData, metricCode, periodId, entityId }) {
   const [liveLineage, setLiveLineage] = useState(null);
@@ -33,9 +33,7 @@ export default function DataLineageDrawer({ isOpen, onClose, metricData, metricC
 
     const fetchLiveLineage = async () => {
       try {
-        let url = `/lineage/${encodeURIComponent(activeMetricCode)}/${encodeURIComponent(activePeriodId)}`;
-        if (activeEntityId) url += `?entity_id=${encodeURIComponent(activeEntityId)}`;
-        const res = await api.get(url);
+        const res = await lineageApi.getMetricLineage(activeMetricCode, activePeriodId, activeEntityId);
         if (isMounted) {
           if (res.data) {
             setLiveLineage(res.data);

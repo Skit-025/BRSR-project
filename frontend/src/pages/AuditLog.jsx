@@ -6,7 +6,7 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { api } from '../api/client';
+import { auditApi } from '../api/client';
 
 const ACTION_TYPES = {
   SUBMISSION_CREATED:   { label: 'Submission Created',  icon: FileText,     color: 'var(--accent)',  bg: 'var(--accent-subtle)',  border: 'var(--accent-border)'  },
@@ -53,7 +53,7 @@ export default function AuditLog() {
     if (actionFilter !== 'All') params.action = actionFilter;
     if (targetTypeFilter !== 'All') params.target_type = targetTypeFilter;
 
-    api.get('/audit/logs', { params })
+    auditApi.getLogs(params)
       .then(res => {
         setLogs(res.data || []);
       })
@@ -73,7 +73,7 @@ export default function AuditLog() {
   const handleVerifyChain = async () => {
     setVerifyingChain(true);
     try {
-      const res = await api.get('/audit/verify-chain');
+      const res = await auditApi.verifyChain();
       setChainStatus(res.data);
     } catch (err) {
       setChainStatus({ is_valid: false, error_message: err.response?.data?.detail || 'Verification error' });

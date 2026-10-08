@@ -4,7 +4,17 @@ import {
   Globe, AlertCircle, CheckCircle2, X, RefreshCw, Filter, Search, Lock, Unlock,
   Info, Eye, ExternalLink, ShieldCheck, Clock, FileText, Edit3, ShieldAlert, Sparkles
 } from 'lucide-react';
-import { useOrgNodes, useOrgPeriods, useCreateNode, useCreatePeriod, useUpdateNode, useUpdatePeriod } from '../hooks/useApi';
+import { 
+  useOrgNodes, 
+  useOrgPeriods, 
+  useCreateNode, 
+  useCreatePeriod, 
+  useUpdateNode, 
+  useUpdatePeriod,
+  useOrgTree,
+  useApplicability,
+  useOverrideApplicability
+} from '../hooks/useApi';
 import { useAuth } from '../context/AuthContext';
 import { authApi } from '../api/client';
 import Modal from '../components/Modal';
@@ -28,14 +38,158 @@ const PROJECT_TYPES = [
   { value: 'corporate', label: 'Corporate Office' },
 ];
 
+function flattenTree(tree, depth = 0) {
+  if (!tree || !Array.isArray(tree)) return [];
+  const list = [];
+  for (const item of tree) {
+    list.push({ ...item, treeDepth: depth });
+    if (item.children && item.children.length > 0) {
+      list.push(...flattenTree(item.children, depth + 1));
+    }
+  }
+  return list;
+}
+
+function NodeApplicabilitySection({ nodeId, isAdmin, onOpenOverride }) {
+  const { data: applicability = [], isLoading, refetch } = useApplicability(nodeId);
+
+  return (
+    <div style={{ marginTop: 16, borderTop: '1px solid var(--border-default)', paddingTop: 16 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+        <div>
+          <div style={{ fontSize: '13px', fontWeight: 700, color: '#fff', display: 'flex', alignItems: 'center', gap: 6 }}>
+            <ShieldCheck size={16} color="var(--brand-400)" />
+            <span>Metric Applicability &amp; Statutory Rules ({applicability.length})</span>
+          </div>
+          <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+            Mandatory BRSR parameters evaluated for this unit based on operational activity &amp; boundary
+          </div>
+        </div>
+        <button
+          type="button"
+          className="btn btn-secondary btn-sm"
+          onClick={() => refetch()}
+          style={{ padding: '3px 8px', fontSize: '11px', display: 'flex', alignItems: 'center', gap: 4 }}
+        >
+          <RefreshCw size={11} /> Refresh
+        </button>
+      </div>
+
+      {isLoading ? (
+        <div style={{ padding: '16px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '12px' }}>
+          <RefreshCw size={14} className="spin" style={{ margin: '0 auto 6px', display: 'block' }} />
+          Evaluating applicability matrix...
+        </div>
+      ) : applicability.length === 0 ? (
+        <div style={{ padding: '14px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '12px', background: 'var(--bg-elevated)', borderRadius: 6 }}>
+          No specific metric applicability rules bound to this entity level yet.
+        </div>
+      ) : (
+        <div style={{ maxHeight: 240, overflowY: 'auto', border: '1px solid var(--border-default)', borderRadius: 8 }}>
+          <table className="data-table" style={{ fontSize: '12px' }}>
+            <thead>
+              <tr>
+                <th style={{ padding: '8px 10px' }}>Metric</th>
+                <th style={{ padding: '8px 10px' }}>Status</th>
+                <th style={{ padding: '8px 10px' }}>Evaluation Reason</th>
+                {isAdmin && <th style={{ padding: '8px 10px', textAlign: 'right' }}>Override</th>}
+              </tr>
+            </thead>
+            <tbody>
+              {applicability.map((item) => (
+                <tr key={item.id || item.metric_code}>
+                  <td style={{ padding: '6px 10px', fontFamily: 'JetBrains Mono', color: 'var(--brand-400)', fontWeight: 600 }}>
+                    {item.metric_code}
+                  </td>
+                  <td style={{ padding: '6px 10px' }}>
+                    <span className={`badge ${item.is_applicable ? 'badge-emerald' : 'badge-gray'}`} style={{ fontSize: '10px' }}>
+                      {item.is_applicable ? 'Applicable' : 'Exempt'}
+                    </span>
+                    {item.is_exception && (
+                      <span className="badge badge-indigo" style={{ fontSize: '9px', marginLeft: 4 }}>
+                        Overridden
+                      </span>
+                    )}
+                  </td>
+                  <td style={{ padding: '6px 10px', color: 'var(--text-secondary)', fontSize: '11px', maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={item.reason || item.exception_reason}>
+                    {item.reason || item.exception_reason || 'Evaluated standard statutory rule'}
+                  </td>
+                  {isAdmin && (
+                    <td style={{ padding: '6px 10px', textAlign: 'right' }}>
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-sm"
+                        style={{ padding: '2px 8px', fontSize: '10px' }}
+                        onClick={() => onOpenOverride(item)}
+                      >
+                        Override
+                      </button>
+                    </td>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function OrgHierarchy() {
   const { data: nodes = [], isLoading: loadN, refetch: refetchNodes } = useOrgNodes();
+  const { data: orgTree = [], refetch: refetchTree } = useOrgTree();
   const { data: periods = [], isLoading: loadP, refetch: refetchPeriods } = useOrgPeriods();
   const { user, isAdmin } = useAuth();
   const createNode = useCreateNode();
   const updateNode = useUpdateNode();
   const createPeriod = useCreatePeriod();
   const updatePeriod = useUpdatePeriod();
+  const overrideApplicability = useOverrideApplicability();
+
+  // Applicability Override Modal state
+  const [overrideModalData, setOverrideModalData] = useState(null); // { item, node }
+  const [overrideTargetState, setOverrideTargetState] = useState(false);
+  const [overrideReason, setOverrideReason] = useState('');
+  const [overrideSubmitting, setOverrideSubmitting] = useState(false);
+  const [overrideError, setOverrideError] = useState('');
+
+  const handleOpenOverride = (item, node) => {
+    setOverrideModalData({ item, node });
+    setOverrideTargetState(!item.is_applicable);
+    setOverrideReason('');
+    setOverrideError('');
+  };
+
+  const handleConfirmOverride = async (e) => {
+    e.preventDefault();
+    if (!overrideReason.trim()) {
+      setOverrideError('A justification reason is strictly mandatory to override applicability rules.');
+      return;
+    }
+    setOverrideSubmitting(true);
+    setOverrideError('');
+    try {
+      await overrideApplicability.mutateAsync({
+        nodeId: overrideModalData.node.id,
+        data: {
+          metric_code: overrideModalData.item.metric_code,
+          is_applicable: overrideTargetState,
+          reason: overrideReason.trim(),
+          approved_by: user?.email || user?.full_name || 'System Admin',
+        },
+      });
+      setNotice({
+        type: 'success',
+        text: `Metric ${overrideModalData.item.metric_code} applicability updated to ${overrideTargetState ? 'Applicable' : 'Exempt'}. Cryptographic audit event logged.`,
+      });
+      setOverrideModalData(null);
+    } catch (err) {
+      setOverrideError(err.response?.data?.detail || err.message || 'Failed to override applicability.');
+    } finally {
+      setOverrideSubmitting(false);
+    }
+  };
 
   // Modals & Detail states
   const [showNodeModal, setShowNodeModal] = useState(false);
@@ -281,8 +435,15 @@ export default function OrgHierarchy() {
     }
   };
 
-  // Safe array guards
-  const nodeList = Array.isArray(nodes) ? nodes : [];
+  // Safe array guards: prefer tree nodes flattened in true hierarchy order from /api/v1/org/tree
+  const treeFlattened = React.useMemo(() => {
+    if (orgTree && orgTree.length > 0) {
+      return flattenTree(orgTree);
+    }
+    return Array.isArray(nodes) ? nodes : [];
+  }, [orgTree, nodes]);
+
+  const nodeList = treeFlattened;
   const periodList = Array.isArray(periods) ? periods : [];
 
   // Filtered nodes
@@ -1292,6 +1453,13 @@ export default function OrgHierarchy() {
                 {selectedNodeDetail?.location_state ? `${selectedNodeDetail.location_state}, ` : ''}{selectedNodeDetail?.location_country || 'India'}
               </div>
             </div>
+
+            {/* Metric Applicability Rules & Override Desk */}
+            <NodeApplicabilitySection 
+              nodeId={selectedNodeDetail?.id} 
+              isAdmin={isAdmin} 
+              onOpenOverride={(item) => handleOpenOverride(item, selectedNodeDetail)} 
+            />
           </div>
 
           <div className="modal-footer" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -1463,6 +1631,87 @@ export default function OrgHierarchy() {
               >
                 {updatingNodePending ? <RefreshCw size={14} className="spin" /> : <CheckCircle2 size={14} />}
                 <span>{updatingNodePending ? 'Authorizing...' : 'Authorize & Save Changes'}</span>
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {/* Modal: Applicability Override (Admin Only) */}
+      {overrideModalData && (
+        <Modal
+          isOpen={Boolean(overrideModalData)}
+          onClose={() => setOverrideModalData(null)}
+          maxWidth="520px"
+        >
+          <div className="modal-header">
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div className="modal-header-icon" style={{ background: 'rgba(99, 102, 241, 0.15)', color: 'var(--brand-400)' }}>
+                <ShieldAlert size={18} />
+              </div>
+              <div>
+                <h3 style={{ fontSize: '16px', color: '#fff', margin: 0 }}>Override Metric Applicability</h3>
+                <p style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: '2px 0 0 0' }}>
+                  {overrideModalData.item.metric_code} on {overrideModalData.node.name}
+                </p>
+              </div>
+            </div>
+            <button className="icon-btn" onClick={() => setOverrideModalData(null)}>
+              <X size={18} />
+            </button>
+          </div>
+
+          {overrideError && (
+            <div className="login-error-banner" style={{ margin: '16px 24px 0' }}>
+              <AlertCircle size={16} />
+              <span>{overrideError}</span>
+            </div>
+          )}
+
+          <form onSubmit={handleConfirmOverride} className="modal-body">
+            <div className="form-group">
+              <label>Target Scope State <span className="text-rose">*</span></label>
+              <select
+                className="form-control"
+                value={overrideTargetState ? 'true' : 'false'}
+                onChange={(e) => setOverrideTargetState(e.target.value === 'true')}
+              >
+                <option value="true">Applicable (Include in statutory data collection &amp; BRSR disclosures)</option>
+                <option value="false">Exempt / Excluded (Exclude from monthly reporting requirements)</option>
+              </select>
+            </div>
+
+            <div className="form-group">
+              <label>Audited Justification Reason <span className="text-rose">*</span></label>
+              <textarea
+                className="form-control"
+                rows={3}
+                placeholder="Provide a mandatory formal reason (e.g. Unit operates purely off-grid solar and does not purchase grid power)..."
+                value={overrideReason}
+                onChange={(e) => setOverrideReason(e.target.value)}
+                required
+              />
+              <span style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: 4, display: 'block' }}>
+                * A justification is mandatory. This override will be recorded into the cryptographic SHA-256 audit ledger.
+              </span>
+            </div>
+
+            <div className="modal-footer" style={{ borderTop: '1px solid var(--border-default)', paddingTop: 14, marginTop: 10 }}>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => setOverrideModalData(null)}
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="btn btn-primary"
+                disabled={overrideSubmitting}
+                style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+              >
+                {overrideSubmitting ? <RefreshCw size={14} className="spin" /> : <CheckCircle2 size={14} />}
+                <span>{overrideSubmitting ? 'Recording Audit...' : 'Confirm & Audit Override'}</span>
               </button>
             </div>
           </form>

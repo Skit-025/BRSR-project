@@ -16,8 +16,24 @@ from app.modules.org.schemas import (
 )
 from app.modules.org.tree import build_materialized_path, build_tree_hierarchy
 from app.modules.org.applicability.engine import evaluate_applicability_for_node
+from app.security.deps import get_current_user, TokenData
+from app.security.rbac import Role
 
 router = APIRouter(prefix="/org", tags=["Organization Hierarchy & Applicability"])
+
+ADMIN_ROLES = {
+    Role.SYSTEM_ADMIN.value,
+    Role.SUPER_ADMIN.value,
+    Role.GROUP_ADMIN.value,
+    Role.SUBSIDIARY_ADMIN.value,
+    Role.BU_ADMIN.value,
+    "system_admin",
+    "super_admin",
+    "group_admin",
+    "subsidiary_admin",
+    "bu_admin",
+    "admin",
+}
 
 # --- ORG NODES ---
 
@@ -163,31 +179,99 @@ def get_node_applicability(node_id: str, period_id: Optional[str] = None, db: Se
     records = evaluate_applicability_for_node(node, db, period_id)
     return records
 
-@router.post("/applicability/{node_id}/override", response_model=MetricApplicabilityRead)
-def override_applicability(node_id: str, override_req: ApplicabilityOverrideRequest, db: Session = Depends(get_db)):
-    node = db.query(OrgNode).filter(OrgNode.id == node_id).first()
+def _handle_applicability_override(
+    target_node_id: str,
+    override_req: ApplicabilityOverrideRequest,
+    current_user: TokenData,
+    db: Session,
+) -> MetricApplicability:
+    user_role = (current_user.role or "").lower()
+    if user_role not in ADMIN_ROLES or user_role in ["maker", "project_data_entry_user", "viewer", "auditor"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only ESG Platform Administrators can override metric applicability rules. MAKER role forbidden."
+        )
+
+    clean_reason = (override_req.reason or "").strip()
+    if not clean_reason:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="A mandatory justification reason must be provided to override metric applicability."
+        )
+
+    node = db.query(OrgNode).filter(OrgNode.id == target_node_id, OrgNode.is_deleted == False).first()
     if not node:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Node not found.")
 
     rec = db.query(MetricApplicability).filter(
-        MetricApplicability.org_node_id == node_id,
+        MetricApplicability.org_node_id == target_node_id,
         MetricApplicability.metric_code == override_req.metric_code
     ).first()
 
     if not rec:
         rec = MetricApplicability(
-            org_node_id=node_id,
+            org_node_id=target_node_id,
             metric_code=override_req.metric_code,
             rule_id="MANUAL-OVERRIDE"
         )
 
+    approved_by = override_req.approved_by or current_user.user_id
     rec.is_applicable = override_req.is_applicable
     rec.is_exception = True
-    rec.exception_reason = override_req.reason
-    rec.approved_by = override_req.approved_by
-    rec.reason = f"Audited Exception: {override_req.reason} (Approved by {override_req.approved_by})"
+    rec.exception_reason = clean_reason
+    rec.approved_by = approved_by
+    rec.reason = f"Audited Exception: {clean_reason} (Approved by {approved_by})"
 
     db.add(rec)
     db.commit()
     db.refresh(rec)
+
+    # Immutable Audit Log
+    try:
+        from app.modules.audit.service import AuditService
+        from app.modules.audit.schemas import AuditLogCreate
+        audit_svc = AuditService(db)
+        audit_svc.log_event(AuditLogCreate(
+            action="APPLICABILITY_OVERRIDE",
+            actor_id=current_user.user_id,
+            actor_role=current_user.role,
+            target_type="METRIC_APPLICABILITY",
+            target_id=str(rec.id),
+            changes={
+                "org_node_id": target_node_id,
+                "metric_code": override_req.metric_code,
+                "is_applicable": override_req.is_applicable,
+                "reason": clean_reason,
+            },
+            details={"description": f"Overrode applicability of {override_req.metric_code} to {override_req.is_applicable}: {clean_reason}"},
+        ))
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning("Could not record audit log for override: %s", e)
+
     return rec
+
+
+@router.post("/applicability/{node_id}/override", response_model=MetricApplicabilityRead)
+def override_applicability(
+    node_id: str,
+    override_req: ApplicabilityOverrideRequest,
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    return _handle_applicability_override(node_id, override_req, current_user, db)
+
+
+@router.post("/applicability/override", response_model=MetricApplicabilityRead)
+def override_applicability_body(
+    override_req: ApplicabilityOverrideRequest,
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    if not override_req.node_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="node_id is required in request payload."
+        )
+    return _handle_applicability_override(override_req.node_id, override_req, current_user, db)
+

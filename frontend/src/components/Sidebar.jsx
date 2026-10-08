@@ -125,44 +125,17 @@ export default function Sidebar() {
         borderBottom: '1px solid #F1F5F9'
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
-          {/* Logo mark */}
-          <div style={{
-            width: 28,
-            height: 28,
-            borderRadius: 7,
-            background: 'linear-gradient(135deg, #0070F3 0%, #10B981 100%)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            boxShadow: '0 1px 3px rgba(0, 112, 243, 0.25)',
-          }}>
-            <Leaf size={14} color="#FFFFFF" />
-          </div>
-          <div>
-            <span style={{
-              fontSize: 13,
-              fontWeight: 800,
-              letterSpacing: '-0.01em',
-              color: '#09090B',
-              fontFamily: 'Inter, sans-serif',
+          {/* Aarohan Logo */}
+          <img
+            src="/aarohan-logo.png"
+            alt="Aarohan"
+            style={{
+              height: 36,
+              width: 'auto',
+              objectFit: 'contain',
               display: 'block',
-              lineHeight: 1.1,
-            }}>
-              AAROHAN ESG
-            </span>
-            <span style={{
-              fontSize: 9,
-              fontWeight: 700,
-              letterSpacing: '0.06em',
-              color: '#94A3B8',
-              textTransform: 'uppercase',
-              display: 'block',
-              lineHeight: 1.2,
-              marginTop: 1,
-            }}>
-              SEBI BRSR CORE
-            </span>
-          </div>
+            }}
+          />
         </div>
 
         {/* Live indicator */}

@@ -1090,7 +1090,8 @@ export default function EvidenceVault() {
           <thead>
             <tr style={{ borderBottom: '1px solid var(--border-default)', background: 'var(--bg-elevated)', color: 'var(--text-secondary)' }}>
               <th style={{ padding: '12px 16px', textAlign: 'left' }}>Bill Document</th>
-              <th style={{ padding: '12px 16px', textAlign: 'left' }}>Project / Facility</th>
+              <th style={{ padding: '12px 16px', textAlign: 'left' }}>Project Name</th>
+              <th style={{ padding: '12px 16px', textAlign: 'left' }}>Project ID</th>
               <th style={{ padding: '12px 16px', textAlign: 'left' }}>Bill Type</th>
               <th style={{ padding: '12px 16px', textAlign: 'left' }}>Scraped Consumption &amp; Formula</th>
               <th style={{ padding: '12px 16px', textAlign: 'left' }}>SHA-256 Hash</th>
@@ -1101,9 +1102,9 @@ export default function EvidenceVault() {
           </thead>
           <tbody>
             {isLoading ? (
-              <tr><td colSpan={8} style={{ textAlign: 'center', padding: '40px', color: 'var(--text-secondary)' }}>Loading vault documents…</td></tr>
+              <tr><td colSpan={9} style={{ textAlign: 'center', padding: '40px', color: 'var(--text-secondary)' }}>Loading vault documents…</td></tr>
             ) : displayEvidenceList.length === 0 ? (
-              <tr><td colSpan={8} style={{ textAlign: 'center', padding: '40px', color: 'var(--text-secondary)' }}>No bill evidence uploaded yet. Select project and bill type above to add a bill.</td></tr>
+              <tr><td colSpan={9} style={{ textAlign: 'center', padding: '40px', color: 'var(--text-secondary)' }}>No bill evidence uploaded yet. Select project and bill type above to add a bill.</td></tr>
             ) : (
               displayEvidenceList.map((ev) => {
                 const verifyState = VERIFY_STATUS[ev.verify_status] || VERIFY_STATUS.verified;
@@ -1138,12 +1139,31 @@ export default function EvidenceVault() {
                       </div>
                     </td>
 
-                    {/* Project / Site */}
+                    {/* Project Name */}
                     <td style={{ padding: '12px 16px', fontWeight: 600, color: 'var(--text-primary)' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                         <Building2 size={13} color="var(--brand-400)" />
-                        <span>{projName}</span>
+                        <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 160 }} title={projName}>{projName}</span>
                       </div>
+                    </td>
+
+                    {/* Project ID */}
+                    <td style={{ padding: '12px 16px' }}>
+                      <span style={{
+                        display: 'inline-block',
+                        fontFamily: 'monospace',
+                        fontSize: '11px',
+                        fontWeight: 700,
+                        color: '#1D4ED8',
+                        background: '#EFF6FF',
+                        border: '1px solid #BFDBFE',
+                        borderRadius: '4px',
+                        padding: '2px 7px',
+                        letterSpacing: '0.01em',
+                        whiteSpace: 'nowrap',
+                      }} title={ev.entity_id || '—'}>
+                        {ev.entity_id || '—'}
+                      </span>
                     </td>
 
                     {/* Bill Type */}

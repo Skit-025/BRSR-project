@@ -18,6 +18,9 @@ import {
   jobsApi,
   calcApi,
   auditApi,
+  lineageApi,
+  offlineSyncApi,
+  validationApi,
 } from '../api/client';
 
 // ── Mock API (only imported/used in Mock Mode) ───────────────────────────────
@@ -73,7 +76,7 @@ export const useApplicability = (nodeId, periodId, opts) => {
   return useQuery({
     queryKey: ['applicability', nodeId, periodId],
     queryFn: () => orgApi.getApplicability(nodeId, periodId).then(r => r.data),
-    enabled: !!nodeId && !!periodId,
+    enabled: Boolean(nodeId),
     ...opts,
   });
 };
@@ -495,3 +498,80 @@ export const useProjectSubmission = (entityId, periodId, opts) => {
     ...opts,
   });
 };
+
+// ── Org Tree Hierarchy ──
+export const useOrgTree = (opts) => {
+  return useQuery({
+    queryKey: ['org-tree'],
+    queryFn: () => orgApi.getTree().then(r => r.data),
+    ...opts,
+  });
+};
+
+// ── Applicability Override ──
+export const useOverrideApplicability = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ nodeId, data }) => orgApi.overrideApplicability(nodeId, data).then(r => r.data),
+    onSuccess: (_, vars) => {
+      qc.invalidateQueries({ queryKey: ['applicability', vars.nodeId] });
+      qc.invalidateQueries({ queryKey: ['org-tree'] });
+      qc.invalidateQueries({ queryKey: ['audit-logs'] });
+    },
+  });
+};
+
+// ── 3-Click Lineage Explorer ──
+export const useMetricLineage = (metricCode, periodId, entityId, opts) => {
+  return useQuery({
+    queryKey: ['metric-lineage', metricCode, periodId, entityId],
+    queryFn: () => lineageApi.getMetricLineage(metricCode, periodId, entityId).then(r => r.data),
+    enabled: Boolean(metricCode && periodId),
+    ...opts,
+  });
+};
+
+export const useLineageTrace = (submissionId, opts) => {
+  return useQuery({
+    queryKey: ['lineage-trace', submissionId],
+    queryFn: () => lineageApi.getTrace(submissionId).then(r => r.data),
+    enabled: Boolean(submissionId),
+    ...opts,
+  });
+};
+
+// ── Offline Sync ──
+export const useSyncOfflineBatch = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (payload) => offlineSyncApi.syncBatch(payload).then(r => r.data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['submission-pack'] });
+      qc.invalidateQueries({ queryKey: ['project-submission'] });
+    },
+  });
+};
+
+// ── Deterministic Validation Engine ──
+export const useValidationCheck = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (submissionId) => validationApi.check(submissionId).then(r => r.data),
+    onSuccess: (_, submissionId) => {
+      qc.invalidateQueries({ queryKey: ['validation-results', submissionId] });
+      qc.invalidateQueries({ queryKey: ['submission-pack'] });
+    },
+  });
+};
+
+export const useJustifyValidation = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data) => validationApi.justify(data).then(r => r.data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['validation-results'] });
+      qc.invalidateQueries({ queryKey: ['exceptions'] });
+    },
+  });
+};
+
