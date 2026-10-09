@@ -194,6 +194,19 @@ def login(login_data: UserLogin, db: Session = Depends(get_db)):
             detail="Incorrect username/employee ID or password.",
             headers={"WWW-Authenticate": "Bearer"}
         )
+
+    # If this user was onboarded via invitation, automatically transition pending invitation to ACCEPTED
+    from app.modules.auth.models import UserInvitation
+    from datetime import datetime, timezone
+    pending_inv = db.query(UserInvitation).filter(
+        UserInvitation.email.ilike(user.email),
+        UserInvitation.status.in_(["PENDING", "SENT"]),
+        UserInvitation.is_deleted == False
+    ).first()
+    if pending_inv:
+        pending_inv.status = "ACCEPTED"
+        pending_inv.accepted_at = datetime.now(timezone.utc)
+        db.commit()
     
     access_token = create_access_token(
         subject=user.id,

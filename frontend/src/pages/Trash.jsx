@@ -19,6 +19,12 @@ export default function Trash() {
   const [orgRestoreTarget, setOrgRestoreTarget] = useState(null);
   const [notice, setNotice] = useState(null);
 
+  // System Admin Clean Trash State
+  const [showCleanModal, setShowCleanModal] = useState(false);
+  const [cleanPassword, setCleanPassword] = useState('');
+  const [cleanError, setCleanError] = useState('');
+  const [cleanPending, setCleanPending] = useState(false);
+
   const canManageOrgTrash = currentUser?.role !== 'project_admin';
 
   // Fetch hierarchical trash can records
@@ -80,6 +86,31 @@ export default function Trash() {
     }
   });
 
+  // Clean / Empty Trash Handler for System Admin
+  const handleCleanTrash = async (e) => {
+    e.preventDefault();
+    if (!cleanPassword) return;
+    setCleanPending(true);
+    setCleanError('');
+    try {
+      if (activeTab === 'org') {
+        const res = await orgApi.cleanTrash(cleanPassword);
+        setNotice({ type: 'success', text: res.data.message || 'Organization Trash Can cleaned successfully.' });
+      } else {
+        const res = await evidenceApi.cleanTrash(cleanPassword);
+        setNotice({ type: 'success', text: res.data.message || 'Evidence Trash Can cleaned successfully.' });
+      }
+      setShowCleanModal(false);
+      setCleanPassword('');
+      qc.invalidateQueries({ queryKey: ['evidence-trash'] });
+      qc.invalidateQueries({ queryKey: ['org-trash'] });
+    } catch (err) {
+      setCleanError(err.response?.data?.detail || err.message || 'Failed to clean trash can.');
+    } finally {
+      setCleanPending(false);
+    }
+  };
+
   // Filter items
   const filteredItems = trashItems.filter(item => {
     const term = searchTerm.toLowerCase();
@@ -140,19 +171,40 @@ export default function Trash() {
             Controlled archive of soft-deleted records within your authorized organizational boundary.
           </p>
         </div>
-        <button
-          onClick={() => { refetch(); refetchOrgTrash(); }}
-          disabled={isRefetching || orgRefetching}
-          style={{
-            display: 'flex', alignItems: 'center', gap: 8,
-            padding: '8px 16px', background: '#FFFFFF', border: '1px solid #E2E8F0',
-            borderRadius: 6, fontSize: 13, fontWeight: 600, color: '#475569',
-            cursor: 'pointer'
-          }}
-        >
-          <RefreshCw size={14} className={isRefetching || orgRefetching ? 'spin' : ''} />
-          {isRefetching || orgRefetching ? 'Refreshing...' : 'Refresh'}
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          {currentUser?.role === 'system_admin' && (
+            <button
+              onClick={() => {
+                setShowCleanModal(true);
+                setCleanPassword('');
+                setCleanError('');
+              }}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 8,
+                padding: '8px 16px', background: '#FEE2E2', border: '1px solid #FCA5A5',
+                borderRadius: 6, fontSize: 13, fontWeight: 700, color: '#DC2626',
+                cursor: 'pointer'
+              }}
+              title="Permanently delete all soft-deleted records"
+            >
+              <Trash2 size={14} />
+              <span>Clean Trash (Delete All)</span>
+            </button>
+          )}
+          <button
+            onClick={() => { refetch(); refetchOrgTrash(); }}
+            disabled={isRefetching || orgRefetching}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 8,
+              padding: '8px 16px', background: '#FFFFFF', border: '1px solid #E2E8F0',
+              borderRadius: 6, fontSize: 13, fontWeight: 600, color: '#475569',
+              cursor: 'pointer'
+            }}
+          >
+            <RefreshCw size={14} className={isRefetching || orgRefetching ? 'spin' : ''} />
+            {isRefetching || orgRefetching ? 'Refreshing...' : 'Refresh'}
+          </button>
+        </div>
       </div>
 
       {/* Notification Banner */}
@@ -637,6 +689,77 @@ export default function Trash() {
               </button>
             </div>
           </div>
+        </Modal>
+      )}
+
+      {/* Confirmation Modal: Clean / Empty Trash */}
+      {showCleanModal && (
+        <Modal
+          isOpen={showCleanModal}
+          onClose={() => { setShowCleanModal(false); setCleanError(''); setCleanPassword(''); }}
+          maxWidth="480px"
+        >
+          <div className="modal-header">
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div className="modal-header-icon" style={{ background: 'rgba(239, 68, 68, 0.15)' }}>
+                <Trash2 size={18} color="#ef4444" />
+              </div>
+              <div>
+                <h3 style={{ fontSize: 16, color: '#fff', margin: 0 }}>
+                  Clean {activeTab === 'org' ? 'Organization' : 'Evidence'} Trash Can
+                </h3>
+                <p style={{ fontSize: 12, color: 'var(--text-secondary)', margin: '2px 0 0 0' }}>
+                  Permanently purge all soft-deleted records (no recovery)
+                </p>
+              </div>
+            </div>
+            <button className="icon-btn" onClick={() => { setShowCleanModal(false); setCleanError(''); setCleanPassword(''); }}>
+              <X size={18} />
+            </button>
+          </div>
+
+          <form onSubmit={handleCleanTrash} className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div style={{ padding: '10px 14px', borderRadius: 6, background: 'rgba(239, 68, 68, 0.08)', border: '1px solid rgba(239, 68, 68, 0.25)', fontSize: 12, color: 'var(--text-secondary)' }}>
+              ⚠️ <strong>Warning:</strong> This will permanently delete all {activeTab === 'org' ? 'organization units' : 'evidence files'} currently in the Trash Can. This action is irreversible.
+            </div>
+
+            <div className="form-group">
+              <label className="form-label" style={{ fontWeight: 600 }}>System Administrator Password <span style={{ color: '#ef4444' }}>*</span></label>
+              <input
+                type="password"
+                className="form-control"
+                value={cleanPassword}
+                onChange={(e) => setCleanPassword(e.target.value)}
+                placeholder="Enter administrator password to authorize purge"
+                required
+              />
+            </div>
+
+            {cleanError && (
+              <div className="login-error-banner" style={{ margin: 0 }}>
+                <AlertCircle size={15} />
+                <span>{cleanError}</span>
+              </div>
+            )}
+
+            <div className="modal-actions" style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 4 }}>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => { setShowCleanModal(false); setCleanError(''); setCleanPassword(''); }}
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="btn"
+                disabled={cleanPending || !cleanPassword}
+                style={{ background: '#dc2626', color: '#fff', border: 'none' }}
+              >
+                {cleanPending ? 'Purging...' : 'Delete All / Empty Trash'}
+              </button>
+            </div>
+          </form>
         </Modal>
       )}
     </div>

@@ -598,3 +598,65 @@ def restore_org_node(
         details={"code": node.code}
     )
     return node
+
+
+class CleanOrgTrashRequest(BaseModel):
+    admin_password: str
+
+
+@router.post("/trash/clean", status_code=status.HTTP_200_OK)
+def clean_org_trash(
+    req: CleanOrgTrashRequest,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Permanently purges all soft-deleted organizational units.
+    Restricted to System Admin. Requires password confirmation, no comment needed.
+    """
+    from app.modules.auth.service import verify_admin_password_check, log_admin_audit
+    from app.modules.audit.service import AuditService
+    from app.modules.audit.schemas import AuditLogCreate
+
+    if current_user.role != Role.SYSTEM_ADMIN.value:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only System Administrator can empty/clean the Organization Trash Can."
+        )
+
+    if not verify_admin_password_check(current_user, req.admin_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid administrator password. Trash cleaning unauthorized."
+        )
+
+    deleted_nodes = db.query(OrgNode).filter(OrgNode.is_deleted == True).all()
+    count = len(deleted_nodes)
+
+    for node in deleted_nodes:
+        db.delete(node)
+
+    AuditService(db).log_event(
+        AuditLogCreate(
+            action="PURGE",
+            target_type="ORG_NODE_TRASH",
+            target_id="ALL",
+            actor_id=str(current_user.id),
+            actor_email=current_user.email,
+            actor_role=current_user.role,
+            changes={"purged_count": count},
+            details={"action": "clean_org_trash", "items_purged": count},
+            ip_address="0.0.0.0"
+        )
+    )
+
+    log_admin_audit(
+        db, actor=current_user, action="ORG_NODE_TRASH_CLEANED",
+        target_name=f"{count} units", target_role=current_user.role,
+        target_scope_id="GLOBAL",
+        details={"purged_count": count}
+    )
+
+    db.commit()
+    return {"success": True, "message": f"Successfully cleaned Organization Trash Can ({count} units purged).", "count": count}
+

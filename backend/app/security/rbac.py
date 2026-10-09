@@ -155,7 +155,7 @@ ROLE_PERMISSIONS: dict[Role, Set[Permission]] = {
     # Inherits Project Admin + Project Data Entry User (Maker) capabilities.
     # SoD: cannot approve their own submissions (enforced by maker_id != reviewer_id).
     Role.PROJECT_ADMIN: {
-        Permission.AI_E1_USE, Permission.AI_E2_USE, Permission.AI_E6_USE,
+        Permission.AI_E1_USE, Permission.AI_E2_USE, Permission.AI_E3_USE, Permission.AI_E6_USE,
         Permission.ORG_READ,
         Permission.METRIC_READ,
         Permission.FORM_SUBMIT,
@@ -186,13 +186,17 @@ ROLES_THAT_CAN_MANAGE_USERS_SCOPED: set[str] = {
     "project_admin",
 }
 
-# Roles each admin tier can create/assign
+# Roles each admin tier can create/assign (strict one-level-down hierarchy)
+# group_admin → subsidiary_admin only
+# subsidiary_admin → bu_admin only
+# bu_admin → project_admin only
+# project_admin → cannot create any users
 MANAGEABLE_ROLES_BY_ROLE: dict[str, list[str]] = {
-    "system_admin":    [r.value for r in Role],
-    "group_admin":     ["group_admin", "subsidiary_admin", "bu_admin", "project_admin"],
-    "subsidiary_admin": ["subsidiary_admin", "bu_admin", "project_admin"],
-    "bu_admin":        ["bu_admin", "project_admin"],
-    "project_admin":   [],
+    "system_admin":    [r.value for r in Role],   # System admin can assign any role
+    "group_admin":     ["subsidiary_admin"],        # Group admin can ONLY create Subsidiary Admins
+    "subsidiary_admin": ["bu_admin"],              # Subsidiary admin can ONLY create BU Admins
+    "bu_admin":        ["project_admin"],           # BU admin can ONLY create Project Admins
+    "project_admin":   [],                          # Project admin cannot create any users
 }
 
 

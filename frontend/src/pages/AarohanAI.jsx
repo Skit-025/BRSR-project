@@ -1325,26 +1325,43 @@ function E1Result({ result }) {
       )}
 
       {/* Document preview if evidence file attached */}
-      {evidenceId && (
-        <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 10, padding: 14 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-            <span style={{ fontSize: 12, fontWeight: 700, color: C.ink }}>Original Document Image / Preview</span>
-            <a href={evidenceApi.getViewUrl(evidenceId)} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: C.blue, textDecoration: 'none', fontWeight: 600 }}>
-              Open Original in New Tab ↗
-            </a>
+      {evidenceId && (() => {
+        const mime = result.mime_type || result.evidence?.mime_type || '';
+        const name = result.original_name || result.evidence?.original_name || result.filename || '';
+        const isMimeImage = mime.startsWith('image/');
+        const isNameImage = /\.(jpg|jpeg|png|webp|gif|bmp)$/i.test(name);
+        const isImage = isMimeImage || isNameImage;
+        const viewUrl = evidenceApi.getViewUrl(evidenceId);
+        const displayUrl = result._localObjectUrl || viewUrl;
+        return (
+          <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 10, padding: 14 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <span style={{ fontSize: 12, fontWeight: 700, color: C.ink }}>Original Document Image / Preview</span>
+              <a href={viewUrl} target="_blank" rel="noreferrer"
+                style={{ fontSize: 11, color: C.blue, textDecoration: 'none', fontWeight: 600 }}>
+                Open Original in New Tab ↗
+              </a>
+            </div>
+            <div style={{ borderRadius: 6, overflow: 'hidden', background: '#0F172A', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 180 }}>
+              {isImage ? (
+                <img
+                  src={displayUrl}
+                  alt="Document Evidence"
+                  style={{ maxWidth: '100%', maxHeight: 260, objectFit: 'contain' }}
+                  onError={(e) => { e.target.style.display = 'none'; }}
+                />
+              ) : (
+                <iframe
+                  src={displayUrl}
+                  title="Document Preview"
+                  style={{ width: '100%', height: 280, border: 'none' }}
+                  onError={() => {}}
+                />
+              )}
+            </div>
           </div>
-          <div style={{ maxHeight: 280, borderRadius: 6, overflow: 'hidden', background: '#0F172A', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <img
-              src={evidenceApi.getViewUrl(evidenceId)}
-              alt="Document Evidence"
-              style={{ maxWidth: '100%', maxHeight: 260, objectFit: 'contain' }}
-              onError={(e) => {
-                e.target.style.display = 'none';
-              }}
-            />
-          </div>
-        </div>
-      )}
+        );
+      })()}
 
       {result.is_relevant === false && <ErrorBox msg={result.rejection_reason || result.message || 'The backend classified this document as unrelated to the requested evidence type.'} />}
       {fields.length > 0 ? (
@@ -1986,6 +2003,9 @@ export default function AarohanAI() {
             doc_type: response.data.evidence?.doc_type || payload.doc_type_hint,
             run_id: response.data.extracted_fields?.[0]?.run_id,
             evidence_id: response.data.evidence?.id,
+            original_name: response.data.evidence?.original_name || payload.file.name,
+            mime_type: response.data.evidence?.mime_type || payload.file.type,
+            _localObjectUrl: URL.createObjectURL(payload.file),
           };
         } else if (payload.evidence_id) {
           const response = await aarohanApi.runEngine('E1', payload);

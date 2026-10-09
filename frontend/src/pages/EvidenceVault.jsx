@@ -1115,24 +1115,68 @@ export default function EvidenceVault() {
               const localUrl = viewingDoc._localObjectUrl;
               const serverUrl = viewingDoc.id ? evidenceApi.getViewUrl(viewingDoc.id) : null;
               const mime = viewingDoc.mime_type || viewingDoc.mime || '';
-              const isImage = mime.startsWith('image/');
+              const isImage = mime.startsWith('image/') ||
+                /\.(jpg|jpeg|png|webp|gif|bmp)$/i.test(viewingDoc.original_name || '');
+              const isPdf = mime.includes('pdf') || /\.pdf$/i.test(viewingDoc.original_name || '');
               const viewSrc = localUrl || serverUrl;
               return (
-                <div style={{ flex: 1, overflowY: 'auto', background: 'var(--bg-elevated)', borderRadius: 10, padding: 16, display: 'flex', justifyContent: 'center', alignItems: 'flex-start', minHeight: 360 }}>
-                  {viewSrc && isImage ? (
-                    <div style={{ textAlign: 'center', width: '100%' }}>
-                      <img src={viewSrc} alt={viewingDoc.original_name} style={{ maxWidth: '100%', maxHeight: '65vh', objectFit: 'contain', borderRadius: 8, border: '1px solid var(--border-default)', background: '#fff' }} />
-                    </div>
-                  ) : viewSrc ? (
-                    <div style={{ width: '100%', height: '65vh' }}>
-                      <iframe src={viewSrc} title={viewingDoc.original_name} style={{ width: '100%', height: '100%', border: 'none', borderRadius: 8, background: '#fff' }} />
-                    </div>
-                  ) : (
-                    <div style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: 40 }}>
-                      <File size={40} style={{ margin: '0 auto 12px', opacity: 0.4 }} />
-                      <div style={{ fontWeight: 600 }}>No preview available</div>
+                <div style={{ flex: 1, overflowY: 'auto', background: 'var(--bg-elevated)', borderRadius: 10, padding: 16, display: 'flex', flexDirection: 'column', justifyContent: 'flex-start', minHeight: 360 }}>
+                  {/* Open in new tab bar for server docs */}
+                  {serverUrl && !localUrl && (
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', marginBottom: 8, gap: 8 }}>
+                      <a
+                        href={serverUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        style={{ fontSize: 12, color: 'var(--brand-500, #0070f3)', fontWeight: 600, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4 }}
+                      >
+                        <ArrowRight size={13} />
+                        Open in new tab
+                      </a>
                     </div>
                   )}
+                  <div style={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'flex-start' }}>
+                    {viewSrc && isImage ? (
+                      <div style={{ textAlign: 'center', width: '100%' }}>
+                        <img
+                          src={viewSrc}
+                          alt={viewingDoc.original_name}
+                          style={{ maxWidth: '100%', maxHeight: '60vh', objectFit: 'contain', borderRadius: 8, border: '1px solid var(--border-default)', background: '#fff' }}
+                          onError={(e) => {
+                            e.target.style.display = 'none';
+                            e.target.nextSibling && (e.target.nextSibling.style.display = 'flex');
+                          }}
+                        />
+                        <div style={{ display: 'none', flexDirection: 'column', alignItems: 'center', color: 'var(--text-secondary)', padding: 40 }}>
+                          <File size={40} style={{ margin: '0 auto 12px', opacity: 0.4 }} />
+                          <div style={{ fontWeight: 600 }}>Image failed to load</div>
+                          {serverUrl && <a href={serverUrl} target="_blank" rel="noreferrer" style={{ marginTop: 8, fontSize: 12, color: 'var(--brand-500, #0070f3)' }}>Open in new tab instead</a>}
+                        </div>
+                      </div>
+                    ) : viewSrc ? (
+                      <div style={{ width: '100%', height: isPdf ? '65vh' : '60vh', display: 'flex', flexDirection: 'column' }}>
+                        <iframe
+                          src={viewSrc}
+                          title={viewingDoc.original_name}
+                          style={{ width: '100%', flex: 1, border: 'none', borderRadius: 8, background: '#fff' }}
+                        />
+                        {serverUrl && !localUrl && (
+                          <div style={{ paddingTop: 8, fontSize: 12, color: 'var(--text-secondary)', textAlign: 'center' }}>
+                            PDF not displaying?{' '}
+                            <a href={serverUrl} target="_blank" rel="noreferrer" style={{ color: 'var(--brand-500, #0070f3)', fontWeight: 600 }}>
+                              Open in new tab
+                            </a>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: 40 }}>
+                        <File size={40} style={{ margin: '0 auto 12px', opacity: 0.4 }} />
+                        <div style={{ fontWeight: 600 }}>No preview available</div>
+                        {serverUrl && <a href={serverUrl} target="_blank" rel="noreferrer" style={{ marginTop: 8, fontSize: 12, color: 'var(--brand-500, #0070f3)', display: 'block' }}>Open in new tab</a>}
+                      </div>
+                    )}
+                  </div>
                 </div>
               );
             })()}

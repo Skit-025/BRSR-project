@@ -82,20 +82,37 @@ export default function Dashboard() {
     : '—';
 
   const operatingUnits = React.useMemo(() => {
-    const subNodes = nodes.filter(n => ['subsidiary', 'business_unit', 'bu'].includes(n.type?.toLowerCase()));
+    const icons = [Building2, Factory, HardHat, Truck];
+    if (summary?.operating_units && summary.operating_units.length > 0) {
+      return summary.operating_units.map((unit, idx) => ({
+        icon: icons[idx % icons.length],
+        name: unit.name,
+        type: unit.type,
+        coverage: `${unit.coverage_pct}%`,
+        coveragePct: Number(unit.coverage_pct || 0),
+        evidence: unit.evidence || '0/0',
+        status: unit.status || 'Draft',
+        statusType: unit.statusType || 'neutral',
+        action: 'Inspect ›',
+        route: unit.route || '#'
+      }));
+    }
+
+    const subNodes = nodes.filter(n => ['subsidiary', 'business_unit', 'bu', 'project'].includes(n.type?.toLowerCase()));
     if (subNodes.length > 0) {
       return subNodes.map((node, idx) => {
-        const icons = [Building2, Factory, HardHat, Truck];
+        const pct = summary?.submission_progress?.overall_progress_pct != null ? summary.submission_progress.overall_progress_pct : 0;
         return {
           icon: icons[idx % icons.length],
           name: node.name,
-          type: node.type?.toUpperCase() === 'BU' ? 'Business Unit' : 'Subsidiary Entity',
-          coverage: `${summary?.submission_progress?.overall_progress_pct != null ? Math.round(summary.submission_progress.overall_progress_pct) : 0}%`,
+          type: node.type?.toUpperCase() === 'BU' ? 'Business Unit' : (node.type?.toUpperCase() === 'PROJECT' ? 'Project Site' : 'Subsidiary Entity'),
+          coverage: `${pct}%`,
+          coveragePct: Number(pct),
           evidence: summary?.submission_progress ? `${summary.submission_progress.approved}/${summary.submission_progress.total_entities || 1}` : '0/0',
           status: summary?.submission_progress?.in_review > 0 ? 'In Review' : (summary?.submission_progress?.approved > 0 ? 'Ready' : 'Draft'),
           statusType: summary?.submission_progress?.in_review > 0 ? 'neutral' : (summary?.submission_progress?.approved > 0 ? 'success' : 'neutral'),
-          action: 'Inspect BU ›',
-          route: `/disclosure/bu?nodeId=${node.id}`
+          action: 'Inspect ›',
+          route: node.type?.toLowerCase() === 'project' ? `/projects/${node.id}` : `/disclosure/bu?nodeId=${node.id}`
         };
       });
     }
@@ -214,14 +231,36 @@ export default function Dashboard() {
                   fontSize: 12.5,
                   color: '#09090B',
                   outline: 'none',
-                  cursor: 'pointer'
+                  cursor: 'pointer',
+                  maxWidth: '240px'
                 }}
               >
-                {nodes
-                  .filter(n => ['group', 'subsidiary', 'company'].includes(n.type?.toLowerCase()))
-                  .map(n => (
-                    <option key={n.id} value={n.id}>{n.name} ({n.type?.toUpperCase()})</option>
-                  ))}
+                {/* Enterprise Group */}
+                {nodes.filter(n => n.type === 'group' || n.is_root).map(g => (
+                  <option key={g.id} value={g.id}>{g.name} (GROUP)</option>
+                ))}
+
+                {/* Subsidiaries */}
+                {nodes.filter(n => n.type === 'subsidiary').length > 0 && (
+                  <optgroup label="Subsidiaries">
+                    {nodes.filter(n => n.type === 'subsidiary').map(s => (
+                      <option key={s.id} value={s.id}>{s.name} (SUBSIDIARY)</option>
+                    ))}
+                  </optgroup>
+                )}
+
+                {/* Business Units and their nested Projects */}
+                {nodes.filter(n => ['business_unit', 'bu'].includes(n.type?.toLowerCase())).map(bu => {
+                  const buProjects = nodes.filter(p => ['project', 'site', 'plant'].includes(p.type?.toLowerCase()) && p.parent_id === bu.id);
+                  return (
+                    <optgroup key={bu.id} label={`BU: ${bu.name}`}>
+                      <option value={bu.id}>{bu.name} (Entire BU)</option>
+                      {buProjects.map(p => (
+                        <option key={p.id} value={p.id}>↳ Project: {p.name}</option>
+                      ))}
+                    </optgroup>
+                  );
+                })}
               </select>
             </div>
 
@@ -384,7 +423,7 @@ export default function Dashboard() {
 
             <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
               <span style={{ fontSize: 34, fontWeight: 800, color: '#09090B', letterSpacing: '-0.02em', lineHeight: 1 }}>
-                {summary?.data_quality_score != null ? summary.data_quality_score : 0}<span style={{ fontSize: 22, fontWeight: 600, color: '#64748B' }}>%</span>
+                {summary?.data_coverage_pct != null ? summary.data_coverage_pct : (summary?.data_quality_score != null ? summary.data_quality_score : 0)}<span style={{ fontSize: 22, fontWeight: 600, color: '#64748B' }}>%</span>
               </span>
               <span style={{ fontSize: 12.5, fontWeight: 600, color: '#64748B', fontFamily: 'ui-monospace, monospace' }}>
                 {summary?.submission_progress?.total_entities ? `${summary.submission_progress.total_submissions}/${summary.submission_progress.total_entities} entities` : '0/0 entities'}
@@ -394,12 +433,12 @@ export default function Dashboard() {
             {/* Progress bar */}
             <div>
               <div style={{ height: 4, width: '100%', background: '#F1F5F9', borderRadius: 99, overflow: 'hidden', marginBottom: 8 }}>
-                <div style={{ height: '100%', width: `${summary?.data_quality_score ?? 0}%`, background: '#0070F3', borderRadius: 99 }} />
+                <div style={{ height: '100%', width: `${summary?.data_coverage_pct ?? summary?.data_quality_score ?? 0}%`, background: '#0070F3', borderRadius: 99 }} />
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#64748B' }}>
                 <span>Target baseline: 90.0%</span>
-                <span style={{ color: (summary?.data_quality_score ?? 0) >= 90 ? '#15803D' : '#D97706', fontWeight: 600 }}>
-                  {(summary?.data_quality_score ?? 0) >= 90 ? 'Aligned with SEBI standard' : 'Improvement required'}
+                <span style={{ color: ((summary?.data_coverage_pct ?? summary?.data_quality_score ?? 0) >= 70) ? '#15803D' : '#D97706', fontWeight: 600 }}>
+                  {(summary?.data_coverage_pct ?? summary?.data_quality_score ?? 0) >= 90 ? 'Aligned with SEBI standard' : ((summary?.data_coverage_pct ?? summary?.data_quality_score ?? 0) >= 70 ? 'On pace to target' : 'Data collection pending')}
                 </span>
               </div>
             </div>
@@ -509,7 +548,7 @@ export default function Dashboard() {
 
             <div style={{ borderTop: '1px solid #F1F5F9', paddingTop: 8, display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#64748B' }}>
               <span>Assurance readiness</span>
-              <span>{summary?.data_quality_grade ? `Grade ${summary.data_quality_grade}` : 'In progress'}</span>
+              <span>{summary?.assurance_score != null && summary.assurance_score > 0 ? `${summary.assurance_score}% (Ready)` : (summary?.data_quality_grade ? `Grade ${summary.data_quality_grade}` : 'In progress')}</span>
             </div>
           </div>
         </div>
@@ -1006,10 +1045,19 @@ export default function Dashboard() {
                         padding: '12px',
                         textAlign: 'center',
                         fontWeight: 700,
-                        color: row.isWarning ? '#DC2626' : (row.coverage === '100%' ? '#15803D' : '#09090B'),
+                        color: row.coveragePct >= 70 ? '#15803D' : (row.coveragePct > 0 ? '#09090B' : '#94A3B8'),
                         fontFamily: 'ui-monospace, monospace'
                       }}>
-                        {row.coverage}
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                          <span>{row.coverage}</span>
+                          <div style={{ width: 44, height: 5, background: '#E2E8F0', borderRadius: 3, overflow: 'hidden' }}>
+                            <div style={{
+                              width: `${Math.min(row.coveragePct || 0, 100)}%`,
+                              height: '100%',
+                              background: (row.coveragePct || 0) >= 80 ? '#10B981' : ((row.coveragePct || 0) > 0 ? '#0070F3' : '#CBD5E1')
+                            }} />
+                          </div>
+                        </div>
                       </td>
                       <td style={{
                         padding: '12px',

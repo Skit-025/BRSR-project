@@ -23,9 +23,10 @@ ROLE_DISPLAY_NAMES = {
 def build_invitation_html(
     recipient_name: str,
     recipient_email: str,
+    temp_password: str,
     role: str,
     org_scope_name: Optional[str],
-    setup_link: str
+    login_url: str = "http://localhost:5173/login"
 ) -> str:
     role_label = ROLE_DISPLAY_NAMES.get(role, role.replace("_", " ").title())
     scope_display = org_scope_name if org_scope_name else "Enterprise Group Scope"
@@ -45,12 +46,14 @@ def build_invitation_html(
     .content {{ padding: 32px 28px; }}
     .greeting {{ font-size: 18px; font-weight: 700; color: #0f172a; margin-bottom: 16px; }}
     .card {{ background-color: #f1f5f9; border-radius: 8px; padding: 20px; margin: 24px 0; border-left: 4px solid #2563eb; }}
-    .card-row {{ display: flex; margin-bottom: 8px; font-size: 14px; }}
-    .card-label {{ font-weight: 600; width: 140px; color: #475569; }}
-    .card-value {{ font-weight: 700; color: #0f172a; }}
+    .cred-card {{ background-color: #0f172a; color: #f8fafc; border-radius: 8px; padding: 18px 20px; margin: 20px 0; border: 1px solid #334155; }}
+    .cred-title {{ font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: #94a3b8; font-weight: 700; margin-bottom: 8px; }}
+    .cred-row {{ display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; font-size: 13px; }}
+    .cred-val {{ font-family: ui-monospace, Menlo, Monaco, Consolas, monospace; font-weight: 700; color: #60a5fa; font-size: 14px; background: rgba(255,255,255,0.08); padding: 2px 8px; border-radius: 4px; }}
     .cta-container {{ text-align: center; margin: 32px 0; }}
     .btn {{ display: inline-block; background-color: #2563eb; color: #ffffff !important; text-decoration: none; font-weight: 700; font-size: 15px; padding: 14px 32px; border-radius: 8px; box-shadow: 0 2px 4px rgba(37,99,235,0.25); }}
-    .instructions {{ font-size: 14px; color: #64748b; margin-top: 24px; border-top: 1px solid #e2e8f0; padding-top: 20px; }}
+    .instructions {{ font-size: 13px; color: #64748b; margin-top: 24px; border-top: 1px solid #e2e8f0; padding-top: 20px; }}
+    .notice-box {{ background-color: #fef3c7; border: 1px solid #fde68a; color: #92400e; padding: 12px 16px; border-radius: 6px; font-size: 13px; margin: 16px 0; font-weight: 500; }}
     .footer {{ background-color: #f8fafc; padding: 20px 28px; font-size: 12px; color: #94a3b8; text-align: center; border-top: 1px solid #e2e8f0; }}
   </style>
 </head>
@@ -81,14 +84,30 @@ def build_invitation_html(
         </table>
       </div>
 
-      <p>To complete your account setup and activate your access, please click the secure button below to set your permanent password. For security reasons, temporary or plaintext passwords are never issued.</p>
+      <div class="cred-card">
+        <div class="cred-title">Your Login Credentials</div>
+        <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+          <tr>
+            <td style="padding: 4px 0; color: #cbd5e1;">Username / Email:</td>
+            <td style="padding: 4px 0; text-align: right;"><span class="cred-val">{recipient_email}</span></td>
+          </tr>
+          <tr>
+            <td style="padding: 4px 0; color: #cbd5e1;">Temporary Password:</td>
+            <td style="padding: 4px 0; text-align: right;"><span class="cred-val">{temp_password}</span></td>
+          </tr>
+        </table>
+      </div>
+
+      <div class="notice-box">
+        <strong>Notice:</strong> This invitation email and temporary access credentials will expire in 7 days. Please log in promptly to activate your account.
+      </div>
 
       <div class="cta-container">
-        <a href="{setup_link}" class="btn" target="_blank">Activate Account & Set Password</a>
+        <a href="{login_url}" class="btn" target="_blank">Log In to MEIL AAROHAN</a>
       </div>
 
       <div class="instructions">
-        <p><strong>Security Notice:</strong> This invitation link is valid for 7 days. If you did not anticipate this invitation or believe it was sent in error, please contact your organization's System Administrator immediately.</p>
+        <p>Upon your first login, your account will be fully activated. You will be prompted to replace this temporary password with your permanent password of choice.</p>
       </div>
     </div>
     <div class="footer">
@@ -103,9 +122,10 @@ def build_invitation_html(
 def build_invitation_text(
     recipient_name: str,
     recipient_email: str,
+    temp_password: str,
     role: str,
     org_scope_name: Optional[str],
-    setup_link: str
+    login_url: str = "http://localhost:5173/login"
 ) -> str:
     role_label = ROLE_DISPLAY_NAMES.get(role, role.replace("_", " ").title())
     scope_display = org_scope_name if org_scope_name else "Enterprise Group Scope"
@@ -117,16 +137,17 @@ Hello {recipient_name},
 
 You have been invited to join the MEIL AAROHAN platform as an administrator.
 
-Account Details:
+Account Credentials:
 - Email Address: {recipient_email}
+- Temporary Password: {temp_password}
 - Assigned Role: {role_label}
 - Scope: {scope_display}
 
-To activate your account and configure your secure permanent password, open the following link:
-{setup_link}
+Login Portal:
+{login_url}
 
-This setup link is cryptographically generated and will expire in 7 days.
-If you did not expect this invitation, please notify your administrator.
+Notice: This invitation email and temporary access credentials will expire in 7 days.
+Upon your initial login, your account will be activated and you will be prompted to set your permanent password.
 
 MEIL AAROHAN Enterprise Compliance System
 """
@@ -137,17 +158,19 @@ def send_invitation_email(
     recipient_email: str,
     role: str,
     org_scope_name: Optional[str],
-    setup_link: str
+    setup_link: str,
+    temp_password: str = ""
 ) -> Tuple[bool, Optional[str]]:
     """
-    Sends the branded MEIL AAROHAN invitation email via SMTP (Google Mail provider),
+    Sends the branded MEIL AAROHAN invitation email with strong generated credentials via SMTP,
     or safely simulates delivery in development/placeholder mode.
     Returns: (success: bool, error_message: Optional[str])
     """
     clean_email = recipient_email.lower().strip()
-    html_content = build_invitation_html(recipient_name, clean_email, role, org_scope_name, setup_link)
-    text_content = build_invitation_text(recipient_name, clean_email, role, org_scope_name, setup_link)
-    subject = "Invitation to join MEIL AAROHAN Platform"
+    login_url = "http://localhost:5173/login"
+    html_content = build_invitation_html(recipient_name, clean_email, temp_password, role, org_scope_name, login_url)
+    text_content = build_invitation_text(recipient_name, clean_email, temp_password, role, org_scope_name, login_url)
+    subject = "Welcome to MEIL AAROHAN — Your Account Credentials"
 
     from app.services.smtp_email_service import send_smtp_email
     return send_smtp_email(

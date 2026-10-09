@@ -92,6 +92,10 @@ def _run_engine(engine: str, payload: Dict[str, Any], db: Session):
     if engine == "E2":
         return e2_engine.evaluate(E2AnomalyRequest(**payload), db_session=db)
     if engine == "E3":
+        if "indicator_code" not in payload or not payload.get("indicator_code"):
+            payload["indicator_code"] = "GENERAL"
+        if "question" not in payload or not payload.get("question"):
+            payload["question"] = payload.get("topic") or "Explain BRSR reporting requirements"
         return e3_engine.explain(E3ExplainFieldRequest(**payload), db_session=db)
     if engine == "E4":
         return e4_engine.analyze(E4PolicyCheckRequest(**payload), db_session=db)

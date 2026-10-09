@@ -559,17 +559,46 @@ def create_invitation_by_admin(db: Session, admin_user: User, req) -> "UserInvit
         if node:
             scope_name = f"{node.name} ({node.type.replace('_', ' ').title()})"
 
-    # 3. Secure token & setup link generation
+    # 3. Generate strong random temporary credentials and create temporary account
+    temp_password = generate_secure_password(length=14)
+    hashed_pwd = get_password_hash(temp_password)
+
+    # Directly create temporary user until first login
+    temp_user = User(
+        email=clean_email,
+        phone=clean_phone,
+        hashed_password=hashed_pwd,
+        full_name=req.full_name.strip(),
+        role=req.role,
+        org_node_id=req.org_node_id,
+        created_by_id=admin_user.id,
+        is_active=True,
+        must_change_password=True,
+    )
+    db.add(temp_user)
+    db.flush()
+
+    assignment = UserRoleAssignment(
+        user_id=temp_user.id,
+        role=temp_user.role,
+        entity_id=temp_user.org_node_id,
+        assigned_by_id=admin_user.id,
+        is_active=True,
+    )
+    db.add(assignment)
+
+    # 4. Secure token & login link generation
     invitation_token = secrets.token_urlsafe(32)
     setup_link = generate_secure_password_setup_link(clean_email, invitation_token)
 
-    # 4. Dispatch branded email invitation
+    # 5. Dispatch branded email invitation with the generated password
     email_ok, email_err = send_invitation_email(
         recipient_name=req.full_name.strip(),
         recipient_email=clean_email,
         role=req.role,
         org_scope_name=scope_name,
-        setup_link=setup_link
+        setup_link=setup_link,
+        temp_password=temp_password
     )
 
     invitation = UserInvitation(
@@ -644,6 +673,14 @@ def resend_invitation(db: Session, admin_user: User, invitation_id: str) -> "Use
     inv.invitation_token = secrets.token_urlsafe(32)
     inv.expires_at = datetime.now(timezone.utc) + timedelta(days=7)
 
+    # If user hasn't logged in yet, regenerate temporary password and update account
+    temp_password = generate_secure_password(length=14)
+    if inv.status in ["PENDING", "SENT"]:
+        user_rec = db.query(User).filter(User.email == inv.email, User.is_deleted == False).first()
+        if user_rec:
+            user_rec.hashed_password = get_password_hash(temp_password)
+            user_rec.must_change_password = True
+
     scope_name = None
     if inv.org_node_id:
         node = db.query(OrgNode).filter(OrgNode.id == inv.org_node_id).first()
@@ -656,7 +693,8 @@ def resend_invitation(db: Session, admin_user: User, invitation_id: str) -> "Use
         recipient_email=inv.email,
         role=inv.role,
         org_scope_name=scope_name,
-        setup_link=setup_link
+        setup_link=setup_link,
+        temp_password=temp_password
     )
 
     inv.setup_link = setup_link
@@ -679,6 +717,16 @@ def revoke_invitation(db: Session, admin_user: User, invitation_id: str) -> "Use
     inv = db.query(UserInvitation).filter(UserInvitation.id == invitation_id, UserInvitation.is_deleted == False).first()
     if not inv:
         raise ValueError("Invitation not found.")
+
+    # If the user has not logged in yet (invitation is still PENDING or SENT), destroy the temporary account
+    if inv.status in ["PENDING", "SENT"]:
+        temp_user = db.query(User).filter(User.email == inv.email).first()
+        if temp_user:
+            # Delete role assignments
+            db.query(UserRoleAssignment).filter(UserRoleAssignment.user_id == temp_user.id).delete(synchronize_session=False)
+            # Destroy the temporary user account
+            db.delete(temp_user)
+
     inv.status = "REVOKED"
     inv.is_deleted = True
     db.commit()

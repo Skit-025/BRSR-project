@@ -115,8 +115,13 @@ class AIGateway:
         # Audit run logging
         if db_session:
             try:
+                run_id_val = getattr(validated_output, "run_id", None)
+                try:
+                    record_id = uuid.UUID(str(run_id_val)) if run_id_val else uuid.uuid4()
+                except Exception:
+                    record_id = uuid.uuid4()
                 run_record = AIRun(
-                    id=uuid.UUID(getattr(validated_output, "run_id", str(uuid.uuid4()))),
+                    id=record_id,
                     engine=engine,
                     model=provider_used,
                     prompt_version="v1.0",
@@ -178,8 +183,13 @@ class AIGateway:
 
         if db_session:
             try:
+                run_id_val = getattr(validated_output, "run_id", None)
+                try:
+                    record_id = uuid.UUID(str(run_id_val)) if run_id_val else uuid.uuid4()
+                except Exception:
+                    record_id = uuid.uuid4()
                 run_record = AIRun(
-                    id=uuid.UUID(getattr(validated_output, "run_id", str(uuid.uuid4()))),
+                    id=record_id,
                     engine=engine,
                     model=provider_used,
                     prompt_version="v1.0",

@@ -44,7 +44,7 @@ class ExtractedField(BaseModel):
     metadata: Optional[Dict[str, Any]] = Field(default_factory=dict, description="E.g. billing_period, meter_id, tariff")
 
 class E1ExtractRequest(BaseModel):
-    evidence_id: str = Field(..., description="UUID or identifier of the uploaded evidence file")
+    evidence_id: str = Field("", description="UUID or identifier of the uploaded evidence file")
     file_path: Optional[str] = Field(None, description="Direct file path or presigned URL if testing locally")
     file_bytes: Optional[bytes] = Field(None, description="Raw file bytes for in-memory OCR processing")
     filename: Optional[str] = Field(None, description="Original filename, used for extension-based type detection")
@@ -96,8 +96,9 @@ class Citation(BaseModel):
     score: Optional[float] = None
 
 class E3ExplainFieldRequest(BaseModel):
-    indicator_code: str = Field(..., description="BRSR Indicator Code, e.g. ENV-ENERGY-001 or Principle 6 Essential 1")
+    indicator_code: Optional[str] = Field("GENERAL", description="BRSR Indicator Code, e.g. ENV-ENERGY-001 or Principle 6 Essential 1")
     question: str = Field(..., description="User question or query about reporting rules/units")
+    topic: Optional[str] = None
 
 class E3ExplainFieldResponse(BaseModel):
     run_id: str = ""
@@ -118,8 +119,8 @@ class PolicyCheckItem(BaseModel):
     verified: bool = False
 
 class E4PolicyCheckRequest(BaseModel):
-    evidence_id: str
-    policy_type: str = Field(..., description="e.g. Anti-Corruption, Human Rights, Environmental Policy")
+    evidence_id: str = Field("", description="Evidence ID")
+    policy_type: str = Field("anti_corruption", description="e.g. Anti-Corruption, Human Rights, Environmental Policy")
     text_content: Optional[str] = None
 
 class E4PolicyCheckResponse(BaseModel):
@@ -180,10 +181,10 @@ class DriverContribution(BaseModel):
     share: float
 
 class E7ExplainNumberRequest(BaseModel):
-    consolidated_value_id: str
-    metric_code: str
-    period: str
-    question: str
+    consolidated_value_id: str = "CONSOLIDATED"
+    metric_code: str = "ENV-ENERGY-001"
+    period: str = "FY 2025-26"
+    question: str = "Explain drivers and lineage"
     lineage_data: Dict[str, Any] = Field(default_factory=dict)
 
 class E7ExplainNumberResponse(BaseModel):

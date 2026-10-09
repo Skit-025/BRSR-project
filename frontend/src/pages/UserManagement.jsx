@@ -556,7 +556,7 @@ export default function UserManagement() {
   };
 
   const activeUsersCount = users.filter(u => u.is_active !== false).length;
-  const pendingInvitesCount = invitations.filter(i => i.status === 'PENDING').length;
+  const pendingInvitesCount = invitations.filter(i => ['PENDING', 'SENT'].includes(i.status)).length;
   const suspendedUsersCount = users.filter(u => u.is_active === false).length;
 
   // Whether current user is a subsidiary_admin (request workflow) or approver
@@ -1069,25 +1069,41 @@ export default function UserManagement() {
                           {new Date(inv.created_at || Date.now()).toLocaleDateString()}
                         </td>
                         <td>
-                          <span className="badge badge-amber">Pending Activation</span>
+                          {inv.status === 'ACCEPTED' ? (
+                            <span className="badge badge-green" style={{ background: '#dcfce7', color: '#15803d', border: '1px solid #bbf7d0' }}>
+                              ✓ Accepted &amp; Active
+                            </span>
+                          ) : inv.status === 'REVOKED' ? (
+                            <span className="badge badge-rose" style={{ background: '#fee2e2', color: '#b91c1c', border: '1px solid #fecaca' }}>
+                              Revoked
+                            </span>
+                          ) : (
+                            <span className="badge badge-amber">Pending Activation</span>
+                          )}
                         </td>
                         <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
-                          <button
-                            className="btn btn-secondary btn-sm"
-                            style={{ marginRight: 8 }}
-                            onClick={() => resendMutation.mutate(inv.id)}
-                            disabled={resendMutation.isPending}
-                          >
-                            Resend
-                          </button>
-                          <button
-                            className="btn btn-secondary btn-sm"
-                            style={{ color: 'var(--rose-400)' }}
-                            onClick={() => revokeMutation.mutate(inv.id)}
-                            disabled={revokeMutation.isPending}
-                          >
-                            Revoke
-                          </button>
+                          {inv.status === 'ACCEPTED' ? (
+                            <span style={{ fontSize: 12, color: '#15803d', fontWeight: 600 }}>Active User</span>
+                          ) : (
+                            <>
+                              <button
+                                className="btn btn-secondary btn-sm"
+                                style={{ marginRight: 8 }}
+                                onClick={() => resendMutation.mutate(inv.id)}
+                                disabled={resendMutation.isPending}
+                              >
+                                Resend
+                              </button>
+                              <button
+                                className="btn btn-secondary btn-sm"
+                                style={{ color: 'var(--rose-400)' }}
+                                onClick={() => revokeMutation.mutate(inv.id)}
+                                disabled={revokeMutation.isPending}
+                              >
+                                Revoke
+                              </button>
+                            </>
+                          )}
                         </td>
                       </tr>
                     );

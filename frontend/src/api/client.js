@@ -140,6 +140,7 @@ export const orgApi = {
     api.delete(`/org/nodes/${id}`, { data: { admin_password: adminPassword, reason } }),
   getTrash: () => api.get('/org/trash'),
   restoreNode: (id) => api.post(`/org/trash/${id}/restore`),
+  cleanTrash: (adminPassword) => api.post('/org/trash/clean', { admin_password: adminPassword }),
   getPeriods: () => api.get('/org/periods'),
   createPeriod: (data) => api.post('/org/periods', data),
   updatePeriod: (id, data) => api.put(`/org/periods/${id}`, data),
@@ -197,9 +198,16 @@ export const evidenceApi = {
     api.post('/evidence/upload', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     }),
-  getDownloadUrl: (id) => `${API_BASE}/evidence/${id}/download`,
-  getViewUrl: (id) => `${API_BASE}/evidence/${id}/view`,
+  getDownloadUrl: (id) => {
+    const token = localStorage.getItem('brsr_token');
+    return `${API_BASE}/evidence/${id}/download${token ? `?token=${encodeURIComponent(token)}` : ''}`;
+  },
+  getViewUrl: (id) => {
+    const token = localStorage.getItem('brsr_token');
+    return `${API_BASE}/evidence/${id}/view${token ? `?token=${encodeURIComponent(token)}` : ''}`;
+  },
   delete: (id, password, reason) => api.delete(`/evidence/${id}`, { data: { password, reason } }),
+  cleanTrash: (adminPassword) => api.post('/evidence/trash/clean', { admin_password: adminPassword }),
   link: (data) => api.post('/evidence/link', data),
   extract: (id, docTypeHint) =>
     api.post(`/evidence/${id}/extract`, null, {
@@ -264,8 +272,9 @@ export const aiApi = {
 };
 
 export const aarohanApi = {
+  // AI engine calls use extended 120s timeout — LLM inference can be slow
   listEngines: () => api.get('/aarohan/engines'),
-  runEngine: (engine, data) => api.post(`/aarohan/run/${encodeURIComponent(engine)}`, data),
+  runEngine: (engine, data) => api.post(`/aarohan/run/${encodeURIComponent(engine)}`, data, { timeout: 120_000 }),
   listRuns: () => api.get('/aarohan/runs'),
   getRun: (runId) => api.get(`/aarohan/runs/${encodeURIComponent(runId)}`),
   submitDecision: (runId, data) => api.post(`/aarohan/runs/${encodeURIComponent(runId)}/decision`, data),

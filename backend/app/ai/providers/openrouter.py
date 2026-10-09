@@ -108,7 +108,7 @@ class OpenRouterProvider(BaseAIProvider):
                 "max_tokens": 1500
             }
             try:
-                with httpx.Client(timeout=30.0) as client:
+                with httpx.Client(timeout=90.0) as client:
                     resp = client.post(f"{self.BASE_URL}/chat/completions", headers=self._headers(), json=payload)
                     resp.raise_for_status()
                     data = resp.json()
@@ -166,7 +166,7 @@ class OpenRouterProvider(BaseAIProvider):
             }
             try:
                 logger.info(f"Calling OpenRouter vision model '{model}'...")
-                with httpx.Client(timeout=30.0) as client:
+                with httpx.Client(timeout=90.0) as client:
                     resp = client.post(f"{self.BASE_URL}/chat/completions", headers=self._headers(), json=payload)
                     resp.raise_for_status()
                     data = resp.json()
@@ -195,7 +195,7 @@ class OpenRouterProvider(BaseAIProvider):
             "temperature": 0.2
         }
 
-        with httpx.Client(timeout=30.0) as client:
+        with httpx.Client(timeout=90.0) as client:
             resp = client.post(f"{self.BASE_URL}/chat/completions", headers=self._headers(), json=payload)
             resp.raise_for_status()
             data = resp.json()

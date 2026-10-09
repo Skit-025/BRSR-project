@@ -30,6 +30,11 @@ class ExecutiveDashboardSummary(BaseModel):
     submission_progress: SubmissionProgressSummary
     data_quality_score: float
     data_quality_grade: str                    # "A" (90+), "B" (75-89), "C" (60-74), "D" (<60)
-    key_environmental_kpis: Dict[str, Any]     # energy_gj, renewable_pct, scope1_tco2e, scope2_tco2e, water_kl
+    assurance_score: Optional[float] = None    # 0 to 100 percentage
+    data_coverage_pct: Optional[float] = None  # 0 to 100 percentage
+    completeness_pct: Optional[float] = None   # 0 to 100 percentage
+    brsr_core_status: Optional[str] = None     # e.g. "SEBI Aligned" or "Submissions Pending"
+    key_environmental_kpis: Dict[str, Any]     # energy_gj, renewable_pct, scope1_tco2e, scope2_tco2e, water_kl, waste_generated_mt
     key_social_kpis: Dict[str, Any]            # ltifr, fatalities, employee_count, female_pct
     principles: List[PrincipleSummary] = []
+    operating_units: List[Dict[str, Any]] = [] # Child entities with individual progress percentages

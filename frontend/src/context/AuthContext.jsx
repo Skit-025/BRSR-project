@@ -73,7 +73,7 @@ const ROLE_PERMISSIONS = {
     'submission:create', 'submission:read', 'submission:submit',
     'evidence:upload', 'evidence:read', 'spreadsheet:upload',
     'report:read',
-    'ai:e1:use', 'ai:e2:use', 'ai:e6:use',
+    'ai:e1:use', 'ai:e2:use', 'ai:e3:use', 'ai:e6:use',
   ]),
 };
 

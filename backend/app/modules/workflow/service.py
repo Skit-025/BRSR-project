@@ -131,11 +131,81 @@ def _send_review_notification(db: Session, submission: Submission, action, stage
         )
 
 
+def derive_and_persist_calculated_kpis(db: Session, submission: Submission) -> None:
+    """
+    Computes GHG emissions (Scope 1 and Scope 2) and Gross Energy from raw activity data points
+    using SEBI BRSR and CEA/IPCC statutory formulas, and persists them into the submission pack.
+    """
+    from app.modules.collection.models import DataPoint, ValueStatus, EntryMethod
+    dps = db.query(DataPoint).filter(
+        DataPoint.submission_id == submission.id,
+        DataPoint.is_deleted == False
+    ).all()
+    if not dps:
+        return
+
+    grid_kwh = 0.0
+    diesel_litres = 0.0
+    for dp in dps:
+        val = float(dp.value_numeric or 0.0)
+        code = (dp.metric_code or "").upper()
+        if code == "ENV-ENERGY-001":
+            grid_kwh += val
+        elif code in ("ENV-ENERGY-002", "ENV-ENERGY-003", "ENV-DIESEL-001"):
+            diesel_litres += val
+
+    if grid_kwh <= 0 and diesel_litres <= 0:
+        return
+
+    # 1. Gross Energy Consumption (GJ)
+    gross_energy_gj = round((grid_kwh * 0.0036) + (diesel_litres * 0.03596), 2)
+    # 2. Scope 1: Diesel combustion * 0.00268 tCO2e / L
+    scope1_tco2e = round(diesel_litres * 0.00268, 2)
+    # 3. Scope 2: Grid electricity * 0.000716 tCO2e / kWh (CEA Baseline v20.0)
+    scope2_tco2e = round(grid_kwh * 0.000716, 2)
+    # 4. Total GHG
+    total_ghg_tco2e = round(scope1_tco2e + scope2_tco2e, 2)
+
+    derived = [
+        ("ENV-GHG-001", scope1_tco2e, "tCO2e", "Derived Scope 1 from fuel combustion (IPCC 2006)"),
+        ("ENV-GHG-002", scope2_tco2e, "tCO2e", "Derived Scope 2 from grid electricity (CEA v20.0)"),
+        ("ENV-GHG", total_ghg_tco2e, "tCO2e", "Derived Gross GHG Footprint (Scope 1 + Scope 2)"),
+        ("ENV-ENERGY-TOTAL", gross_energy_gj, "GJ", "Derived Gross Energy Consumption (Grid + Diesel)"),
+    ]
+
+    dp_map = {(dp.metric_code or "").upper(): dp for dp in dps}
+    for m_code, m_val, m_unit, m_notes in derived:
+        if m_code in dp_map:
+            dp_map[m_code].value_numeric = m_val
+            dp_map[m_code].unit = m_unit
+            dp_map[m_code].notes = m_notes
+        else:
+            new_dp = DataPoint(
+                submission_id=submission.id,
+                metric_code=m_code,
+                value_numeric=m_val,
+                unit=m_unit,
+                status=ValueStatus.ACTUAL.value,
+                entry_method=EntryMethod.MANUAL_FORM.value,
+                notes=m_notes,
+                version=1
+            )
+            db.add(new_dp)
+
+    db.commit()
+
+
 def _trigger_calculation_pipeline(db: Session, submission: Submission) -> None:
     """
-    Dispatch a Celery incremental aggregation job for the entity's root tree,
+    Derives GHG and energy metrics, and dispatches consolidation for the entity's root tree,
     scoped to the submission's reporting period.
     """
+    try:
+        derive_and_persist_calculated_kpis(db, submission)
+    except Exception as d_exc:
+        import logging
+        logging.getLogger(__name__).warning("Derived calculation failed: %s", d_exc)
+
     try:
         from app.workers.tasks_pipelines import run_incremental_aggregation
 
