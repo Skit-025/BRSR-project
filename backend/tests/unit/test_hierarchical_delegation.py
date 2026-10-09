@@ -3,24 +3,24 @@ from app.modules.auth.service import HIERARCHICAL_DELEGATION_RULES, validate_adm
 from app.modules.auth.models import User
 
 def test_hierarchical_delegation_rules_structure():
-    # Group Admin: can create Group Admin, Subsidiary Admin, BU Admin, Project Admin
+    # Group Admin: can ONLY delegate to Subsidiary Admin
     group_rules = HIERARCHICAL_DELEGATION_RULES["group_admin"]
-    assert "group_admin" in group_rules["allowed_roles"]
-    assert "subsidiary_admin" in group_rules["allowed_roles"]
-    assert "bu_admin" in group_rules["allowed_roles"]
-    assert "project_admin" in group_rules["allowed_roles"]
+    assert group_rules["allowed_roles"] == ["subsidiary_admin"]
+    assert "group_admin" not in group_rules["allowed_roles"]
+    assert "bu_admin" not in group_rules["allowed_roles"]
+    assert "project_admin" not in group_rules["allowed_roles"]
 
-    # Subsidiary Admin: can create Subsidiary Admin, BU Admin, Project Admin
+    # Subsidiary Admin: can ONLY delegate to BU Admin
     sub_rules = HIERARCHICAL_DELEGATION_RULES["subsidiary_admin"]
-    assert "subsidiary_admin" in sub_rules["allowed_roles"]
-    assert "bu_admin" in sub_rules["allowed_roles"]
-    assert "project_admin" in sub_rules["allowed_roles"]
+    assert sub_rules["allowed_roles"] == ["bu_admin"]
+    assert "subsidiary_admin" not in sub_rules["allowed_roles"]
     assert "group_admin" not in sub_rules["allowed_roles"]
+    assert "project_admin" not in sub_rules["allowed_roles"]
 
-    # BU Admin: can create BU Admin, Project Admin; cannot create Subsidiary Admin or Group Admin
+    # BU Admin: can ONLY delegate to Project Admin
     bu_rules = HIERARCHICAL_DELEGATION_RULES["bu_admin"]
-    assert "bu_admin" in bu_rules["allowed_roles"]
-    assert "project_admin" in bu_rules["allowed_roles"]
+    assert bu_rules["allowed_roles"] == ["project_admin"]
+    assert "bu_admin" not in bu_rules["allowed_roles"]
     assert "subsidiary_admin" not in bu_rules["allowed_roles"]
     assert "group_admin" not in bu_rules["allowed_roles"]
 

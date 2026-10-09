@@ -1,21 +1,43 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { 
   Building2, ChevronRight, Plus, Calendar, Layers, 
   Globe, AlertCircle, CheckCircle2, X, RefreshCw, Filter, Search, Lock, Unlock,
-  Info, Eye, ExternalLink, ShieldCheck, Clock, FileText, Edit3, ShieldAlert, Sparkles
+  Info, Eye, ExternalLink, ShieldCheck, Clock, FileText, Edit3, ShieldAlert, Sparkles,
+  Trash2
 } from 'lucide-react';
-import { useOrgNodes, useOrgPeriods, useCreateNode, useCreatePeriod, useUpdateNode, useUpdatePeriod } from '../hooks/useApi';
+import { useOrgNodes, useOrgPeriods, useCreateNode, useCreatePeriod, useUpdateNode, useUpdatePeriod, useDeleteNode } from '../hooks/useApi';
 import { useAuth } from '../context/AuthContext';
 import { authApi } from '../api/client';
 import Modal from '../components/Modal';
 
 const NODE_TYPES = [
-  { value: 'group', label: 'Group (Level 1 Root)', cls: 'badge-brand' },
-  { value: 'company', label: 'Company (Level 2)', cls: 'badge-emerald' },
-  { value: 'business_unit', label: 'Business Unit / BU (Level 3)', cls: 'badge-indigo' },
-  { value: 'project', label: 'Project (Level 4 - Data Entry)', cls: 'badge-purple' },
-  { value: 'subsidiary', label: 'Subsidiary (Legacy Company)', cls: 'badge-emerald' },
-  { value: 'site', label: 'Operational Site (Legacy Project)', cls: 'badge-teal' },
+  { value: 'group', label: 'Group (Level 1 Root)', cls: 'badge-brand', tier: 1 },
+  { value: 'subsidiary', label: 'Subsidiary (Level 2)', cls: 'badge-emerald', tier: 2 },
+  { value: 'company', label: 'Subsidiary Company (Level 2)', cls: 'badge-emerald', tier: 2 },
+  { value: 'business_unit', label: 'Business Unit / BU (Level 3)', cls: 'badge-indigo', tier: 3 },
+  { value: 'project', label: 'Project (Level 4 - Operational)', cls: 'badge-purple', tier: 4 },
+];
+
+const MEIL_SUBSIDIARY_TYPES = [
+  { value: 'ev_mobility', label: 'Electric Mobility & EV Buses (Olectra Greentech)' },
+  { value: 'hydrocarbon_cgd', label: 'Hydrocarbons & City Gas Distribution (Megha City Gas / Drillmec / Petreven)' },
+  { value: 'water_irrigation', label: 'Water Infrastructure & Lift Irrigation (Kaleshwaram / Mission Bhagiratha)' },
+  { value: 'renewable_energy', label: 'Renewable Energy, Solar PV & Wind Power' },
+  { value: 'transport_infra', label: 'Highways, Roads & High-Altitude Tunnels (Zojila Tunnel / Char Dham)' },
+  { value: 'telecom_defence', label: 'Telecom Networks & Defence Systems (Icomm Tele)' },
+  { value: 'heavy_engineering', label: 'Heavy Engineering & Industrial Manufacturing' },
+  { value: 'corporate_holding', label: 'Corporate Holding & Infrastructure Services' },
+];
+
+const BU_SECTORS = [
+  { value: 'irrigation', label: 'Lift Irrigation & Water Supply Systems' },
+  { value: 'hydrocarbon', label: 'Hydrocarbons, CGD & Drilling Operations' },
+  { value: 'solar', label: 'Solar PV & Renewable Generation' },
+  { value: 'road', label: 'Expressways & Road Works' },
+  { value: 'tunnel', label: 'Underground & High-Altitude Tunnels' },
+  { value: 'ev_bus', label: 'Electric Mobility & Fleet Depots' },
+  { value: 'telecom', label: 'Telecom & Defense Systems' },
+  { value: 'corporate', label: 'Corporate & Administrative Operations' },
 ];
 
 const PROJECT_TYPES = [
@@ -32,10 +54,11 @@ export default function OrgHierarchy() {
   const { data: nodes = [], isLoading: loadN, refetch: refetchNodes } = useOrgNodes();
   const { data: periods = [], isLoading: loadP, refetch: refetchPeriods } = useOrgPeriods();
   const { user, isAdmin, isProjectAdmin, canWriteOrg } = useAuth();
-  const canCreateUnits = user?.role !== 'project_admin' && (isAdmin || ['group_admin', 'subsidiary_admin', 'bu_admin'].includes(user?.role));
+  const canCreateUnits = user?.role === 'system_admin' || user?.role === 'group_admin' || user?.role === 'subsidiary_admin';
   const canManagePeriods = ['system_admin', 'group_admin'].includes(user?.role);
   const createNode = useCreateNode();
   const updateNode = useUpdateNode();
+  const deleteNode = useDeleteNode();
   const createPeriod = useCreatePeriod();
   const updatePeriod = useUpdatePeriod();
 
@@ -53,6 +76,31 @@ export default function OrgHierarchy() {
   const [adminPasswordForNode, setAdminPasswordForNode] = useState('');
   const [nodeUpdateError, setNodeUpdateError] = useState('');
   const [updatingNodePending, setUpdatingNodePending] = useState(false);
+
+  // Soft Delete to Trash Can states
+  const [deletingNode, setDeletingNode] = useState(null);
+  const [deleteReason, setDeleteReason] = useState('');
+  const [deleteAdminPassword, setDeleteAdminPassword] = useState('');
+  const [deleteError, setDeleteError] = useState('');
+  const [isDeletingPending, setIsDeletingPending] = useState(false);
+
+  // Allowed Hierarchy Level options (Strict 1-level down rule)
+  const allowedLevelOptions = useMemo(() => {
+    if (user?.role === 'group_admin') {
+      return [{ value: 'subsidiary', label: 'Subsidiary (Level 2)' }];
+    }
+    if (user?.role === 'subsidiary_admin') {
+      return [{ value: 'business_unit', label: 'Business Unit / BU (Level 3)' }];
+    }
+    if (user?.role === 'system_admin') {
+      return [
+        { value: 'group', label: 'Group (Level 1 Root)' },
+        { value: 'subsidiary', label: 'Subsidiary (Level 2)' },
+        { value: 'business_unit', label: 'Business Unit / BU (Level 3)' },
+      ];
+    }
+    return [];
+  }, [user?.role]);
 
   const [notice, setNotice] = useState(null);
   const [errorMsg, setErrorMsg] = useState('');
@@ -287,8 +335,100 @@ export default function OrgHierarchy() {
   const nodeList = Array.isArray(nodes) ? nodes : [];
   const periodList = Array.isArray(periods) ? periods : [];
 
+  const handleOpenAddModal = () => {
+    setErrorMsg('');
+    const defaultType = user?.role === 'subsidiary_admin' ? 'business_unit' : 'subsidiary';
+    let defaultParent = '';
+    if (user?.role === 'subsidiary_admin') {
+      defaultParent = user?.org_node_id || '';
+    } else if (user?.role === 'group_admin') {
+      defaultParent = user?.org_node_id || (nodeList.find(n => n.type === 'group')?.id || '');
+    }
+    setNodeForm({
+      code: '',
+      name: '',
+      type: defaultType,
+      parent_id: defaultParent,
+      ownership_pct: 100.0,
+      control_type: 'operational_control',
+      boundary: true,
+      project_type: user?.role === 'group_admin' ? 'water_irrigation' : 'irrigation',
+      location_state: '',
+      location_country: 'India',
+    });
+    setShowNodeModal(true);
+  };
+
+  const handleConfirmDeleteNode = async (e) => {
+    e.preventDefault();
+    setDeleteError('');
+    if (!deleteReason.trim()) {
+      setDeleteError('A mandatory reason is required for unit deletion.');
+      return;
+    }
+    if (!deleteAdminPassword.trim()) {
+      setDeleteError('Please enter your administrator password to authorize deletion.');
+      return;
+    }
+    setIsDeletingPending(true);
+    try {
+      await deleteNode.mutateAsync({
+        id: deletingNode.id,
+        adminPassword: deleteAdminPassword.trim(),
+        reason: deleteReason.trim(),
+      });
+      setNotice({
+        type: 'success',
+        text: `Unit "${deletingNode.name}" (${deletingNode.code}) was soft-deleted and moved to the Trash Can.`
+      });
+      setDeletingNode(null);
+      setDeleteReason('');
+      setDeleteAdminPassword('');
+      refetchNodes();
+    } catch (err) {
+      setDeleteError(err.response?.data?.detail || err.message || 'Failed to delete unit.');
+    } finally {
+      setIsDeletingPending(false);
+    }
+  };
+
+  // Scoped nodes for Org Hierarchy View (strict isolation)
+  const scopedNodes = useMemo(() => {
+    if (user?.role === 'system_admin') {
+      return nodeList;
+    }
+    if (user?.role === 'group_admin') {
+      // Group Admin can ONLY see Group (Level 1) and Subsidiaries (Level 2)
+      return nodeList.filter(n => n.type === 'group' || n.type === 'subsidiary' || n.type === 'company');
+    }
+    if (user?.role === 'subsidiary_admin') {
+      // Subsidiary Admin can ONLY see their Subsidiary (Level 2) and direct BUs (Level 3) under them
+      const subId = user?.org_node_id ? String(user.org_node_id) : null;
+      return nodeList.filter(n => {
+        if (subId && String(n.id) === subId) return true;
+        if (subId && String(n.parent_id) === subId && (n.type === 'business_unit' || n.type === 'bu')) return true;
+        if (!subId && (n.type === 'business_unit' || n.type === 'bu' || n.type === 'subsidiary')) return true;
+        return false;
+      });
+    }
+    return [];
+  }, [nodeList, user]);
+
+  const canDeleteNode = (node) => {
+    if (user?.role === 'system_admin') {
+      return node.type !== 'group';
+    }
+    if (user?.role === 'group_admin') {
+      return (node.type === 'subsidiary' || node.type === 'company');
+    }
+    if (user?.role === 'subsidiary_admin') {
+      return (node.type === 'business_unit' || node.type === 'bu');
+    }
+    return false;
+  };
+
   // Filtered nodes
-  const filteredNodes = nodeList.filter((n) => {
+  const filteredNodes = scopedNodes.filter((n) => {
     const matchType = filterType === 'ALL' || n.type === filterType;
     const term = (searchNode || '').toLowerCase();
     const matchSearch = !term || 
@@ -297,6 +437,34 @@ export default function OrgHierarchy() {
       (n.path && n.path.toLowerCase().includes(term));
     return matchType && matchSearch;
   });
+
+  if (user?.role === 'bu_admin' || user?.role === 'project_admin') {
+    return (
+      <div className="page-content anim-fade-up">
+        <div className="card" style={{ padding: '48px 32px', textAlign: 'center', maxWidth: 640, margin: '60px auto' }}>
+          <div style={{ width: 64, height: 64, borderRadius: '50%', background: 'rgba(59, 130, 246, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px' }}>
+            <Layers size={32} color="#3b82f6" />
+          </div>
+          <h2 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--text-primary)', marginBottom: 10 }}>
+            Projects Console Dedicated Workspace
+          </h2>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '14px', lineHeight: 1.6, marginBottom: 24 }}>
+            {user?.role === 'bu_admin'
+              ? 'Business Unit Admins create and manage operational projects directly from the Projects feature. The 4-Tier Org Hierarchy administration is reserved for Group and Subsidiary Admins.'
+              : 'Project Admins are assigned to specific operational projects and do not have access to Organization Hierarchy configuration.'}
+          </p>
+          <button 
+            className="btn btn-primary" 
+            onClick={() => window.location.href = '/projects'}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '10px 24px', margin: '0 auto' }}
+          >
+            <span>Proceed to Projects Console</span>
+            <ChevronRight size={15} />
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="page-content anim-fade-up">
@@ -307,9 +475,9 @@ export default function OrgHierarchy() {
             <span className="status-beacon-live" style={{ marginRight: 2 }} />
             ENTERPRISE STRUCTURE &amp; AUDIT BOUNDARY
           </div>
-          <h1 className="page-title">7-Tier Organization Hierarchy & Reporting Periods</h1>
+          <h1 className="page-title">4-Tier Organization Hierarchy &amp; Reporting Periods</h1>
           <p className="page-subtitle">
-            Define corporate nodes, subsidiaries, projects, and operational reporting periods across Aarohan Group.
+            Define corporate nodes, subsidiaries, business units, and operational reporting periods across Aarohan Group.
           </p>
         </div>
         <div className="header-actions">
@@ -335,7 +503,7 @@ export default function OrgHierarchy() {
             </button>
           )}
           {canCreateUnits && (
-            <button className="btn btn-primary" onClick={() => { setShowNodeModal(true); setErrorMsg(''); }}>
+            <button className="btn btn-primary" onClick={handleOpenAddModal}>
               <Plus size={15} />
               <span>+ Add Entity Unit</span>
             </button>
@@ -511,7 +679,7 @@ export default function OrgHierarchy() {
           <div>
             <div className="card-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <Building2 size={16} color="var(--brand-400)" />
-              <span>7-Tier Organizational Boundary ({filteredNodes.length} Units)</span>
+              <span>4-Tier Organizational Boundary ({filteredNodes.length} Units)</span>
             </div>
             <div className="card-subtitle text-muted text-sm">
               Tree path mapping with PostgreSQL ltree resolution and automatic applicability derivation
@@ -548,7 +716,7 @@ export default function OrgHierarchy() {
             {canCreateUnits && (
               <button 
                 className="btn btn-primary btn-sm"
-                onClick={() => { setShowNodeModal(true); setErrorMsg(''); }}
+                onClick={handleOpenAddModal}
               >
                 <Plus size={13} /> Add Unit
               </button>
@@ -664,15 +832,38 @@ export default function OrgHierarchy() {
                         </span>
                       </td>
                       <td style={{ textAlign: 'right' }}>
-                        <button 
-                          className="btn btn-secondary btn-sm"
-                          onClick={() => setSelectedNodeDetail(node)}
-                          style={{ padding: '4px 10px', fontSize: '11px', display: 'inline-flex', alignItems: 'center', gap: 4 }}
-                          title="Show unit details"
-                        >
-                          <Eye size={12} color="var(--brand-400)" />
-                          <span>Details</span>
-                        </button>
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                          <button 
+                            className="btn btn-secondary btn-sm"
+                            onClick={() => setSelectedNodeDetail(node)}
+                            style={{ padding: '4px 10px', fontSize: '11px', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                            title="Show unit details"
+                          >
+                            <Eye size={12} color="var(--brand-400)" />
+                            <span>Details</span>
+                          </button>
+                          {canDeleteNode(node) && (
+                            <button
+                              className="btn btn-sm"
+                              onClick={() => {
+                                setDeletingNode(node);
+                                setDeleteReason('');
+                                setDeleteAdminPassword('');
+                                setDeleteError('');
+                              }}
+                              style={{
+                                padding: '4px 10px', fontSize: '11px',
+                                display: 'inline-flex', alignItems: 'center', gap: 4,
+                                background: 'rgba(239,68,68,0.1)', color: '#ef4444',
+                                border: '1px solid rgba(239,68,68,0.3)', borderRadius: 'var(--radius-sm)'
+                              }}
+                              title="Delete this unit (to Trash Can)"
+                            >
+                              <Trash2 size={12} />
+                              <span>Delete</span>
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );
@@ -697,7 +888,7 @@ export default function OrgHierarchy() {
                 <div>
                   <h3 style={{ fontSize: '16px', color: '#fff' }}>Add Organization Unit</h3>
                   <p style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-                    Create a new node within Aarohan's 7-tier hierarchy structure
+                    Create a new node within Aarohan's 4-tier MEIL hierarchy structure
                   </p>
                 </div>
               </div>
@@ -742,29 +933,49 @@ export default function OrgHierarchy() {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
                 <div className="form-group">
                   <label>Hierarchy Level</label>
-                  <select
-                    className="form-control"
-                    value={nodeForm.type}
-                    onChange={(e) => setNodeForm({ ...nodeForm, type: e.target.value })}
-                  >
-                    {NODE_TYPES.map(t => (
-                      <option key={t.value} value={t.value}>{t.label}</option>
-                    ))}
-                  </select>
+                  {allowedLevelOptions.length === 1 ? (
+                    <div style={{
+                      padding: '8px 12px', borderRadius: 6,
+                      background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.3)',
+                      fontSize: '13px', color: 'var(--brand-400)', fontWeight: 600
+                    }}>
+                      {allowedLevelOptions[0].label}
+                    </div>
+                  ) : (
+                    <select
+                      className="form-control"
+                      value={nodeForm.type}
+                      onChange={(e) => setNodeForm({ ...nodeForm, type: e.target.value })}
+                    >
+                      {allowedLevelOptions.map(t => (
+                        <option key={t.value} value={t.value}>{t.label}</option>
+                      ))}
+                    </select>
+                  )}
                 </div>
 
                 <div className="form-group">
                   <label>Parent Entity Unit</label>
-                  <select
-                    className="form-control"
-                    value={nodeForm.parent_id}
-                    onChange={(e) => setNodeForm({ ...nodeForm, parent_id: e.target.value })}
-                  >
-                    <option value="">None (Root Node)</option>
-                    {nodeList.map(n => (
-                      <option key={n.id} value={n.id}>[{n.type.toUpperCase()}] {n.name}</option>
-                    ))}
-                  </select>
+                  {user?.role === 'group_admin' || user?.role === 'subsidiary_admin' ? (
+                    <div style={{
+                      padding: '8px 12px', borderRadius: 6,
+                      background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.2)',
+                      fontSize: '12px', color: 'var(--text-secondary)'
+                    }}>
+                      {nodeList.find(n => String(n.id) === String(nodeForm.parent_id))?.name || 'Auto-assigned from your scope'}
+                    </div>
+                  ) : (
+                    <select
+                      className="form-control"
+                      value={nodeForm.parent_id}
+                      onChange={(e) => setNodeForm({ ...nodeForm, parent_id: e.target.value })}
+                    >
+                      <option value="">None (Root Node)</option>
+                      {nodeList.map(n => (
+                        <option key={n.id} value={n.id}>[{n.type.toUpperCase()}] {n.name}</option>
+                      ))}
+                    </select>
+                  )}
                 </div>
               </div>
 
@@ -824,15 +1035,22 @@ export default function OrgHierarchy() {
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
                 <div className="form-group">
-                  <label>Project Sector</label>
+                  <label>
+                    {user?.role === 'group_admin' ? 'Subsidiary Portfolio Type' :
+                     user?.role === 'subsidiary_admin' ? 'BU Operational Sector' :
+                     'Project Sector'}
+                  </label>
                   <select
                     className="form-control"
                     value={nodeForm.project_type}
                     onChange={(e) => setNodeForm({ ...nodeForm, project_type: e.target.value })}
                   >
-                    {PROJECT_TYPES.map(p => (
-                      <option key={p.value} value={p.value}>{p.label}</option>
-                    ))}
+                    {user?.role === 'group_admin'
+                      ? MEIL_SUBSIDIARY_TYPES.map(p => <option key={p.value} value={p.value}>{p.label}</option>)
+                      : user?.role === 'subsidiary_admin'
+                      ? BU_SECTORS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)
+                      : PROJECT_TYPES.map(p => <option key={p.value} value={p.value}>{p.label}</option>)
+                    }
                   </select>
                 </div>
 
@@ -1235,7 +1453,7 @@ export default function OrgHierarchy() {
               <div>
                 <h3 style={{ fontSize: '16px', color: '#fff' }}>Entity Unit Details</h3>
                 <p style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-                  7-Tier Hierarchy Node: {selectedNodeDetail?.name}
+                  4-Tier Hierarchy Node: {selectedNodeDetail?.name}
                 </p>
               </div>
             </div>
@@ -1471,6 +1689,101 @@ export default function OrgHierarchy() {
               >
                 {updatingNodePending ? <RefreshCw size={14} className="spin" /> : <CheckCircle2 size={14} />}
                 <span>{updatingNodePending ? 'Authorizing...' : 'Authorize & Save Changes'}</span>
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
+      {/* Modal: Delete to Trash Confirm */}
+      {deletingNode && (
+        <Modal
+          isOpen={Boolean(deletingNode)}
+          onClose={() => { setDeletingNode(null); setDeleteError(''); }}
+          maxWidth="520px"
+        >
+          <div className="modal-header">
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div className="modal-header-icon" style={{ background: 'rgba(239,68,68,0.15)' }}>
+                <Trash2 size={18} color="#ef4444" />
+              </div>
+              <div>
+                <h3 style={{ fontSize: '16px', color: '#fff' }}>Delete Organization Unit</h3>
+                <p style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                  Unit will be soft-deleted and moved to the Trash Can (restorable)
+                </p>
+              </div>
+            </div>
+            <button className="icon-btn" onClick={() => { setDeletingNode(null); setDeleteError(''); }}>
+              <X size={18} />
+            </button>
+          </div>
+
+          <form onSubmit={handleConfirmDeleteNode} className="modal-body">
+            <div style={{
+              padding: '12px 16px', borderRadius: 8,
+              background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.3)',
+              marginBottom: 16
+            }}>
+              <div style={{ fontSize: '13px', fontWeight: 700, color: '#ef4444', marginBottom: 4 }}>
+                ⚠ You are about to delete:
+              </div>
+              <div style={{ fontSize: '14px', color: '#fff', fontWeight: 600 }}>{deletingNode.name}</div>
+              <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: 2 }}>
+                Code: {deletingNode.code} | Type: {deletingNode.type?.replace('_', ' ').toUpperCase()}
+              </div>
+            </div>
+
+            <div className="form-group">
+              <label>Reason for Deletion <span className="text-rose">*</span></label>
+              <textarea
+                rows={3}
+                className="form-control"
+                placeholder="Provide a mandatory reason (e.g. Subsidiary demerged, BU consolidated into parent, Data correction...)"
+                value={deleteReason}
+                onChange={(e) => setDeleteReason(e.target.value)}
+                required
+              />
+              <span className="form-help">This reason is permanently logged in the Audit Trail.</span>
+            </div>
+
+            <div className="form-group">
+              <label>Your Administrator Password <span className="text-rose">*</span></label>
+              <input
+                type="password"
+                className="form-control"
+                placeholder="Enter your password to authorize deletion"
+                value={deleteAdminPassword}
+                onChange={(e) => setDeleteAdminPassword(e.target.value)}
+                required
+              />
+            </div>
+
+            {deleteError && (
+              <div className="login-error-banner">
+                <AlertCircle size={15} />
+                <span>{deleteError}</span>
+              </div>
+            )}
+
+            <div className="modal-footer">
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => { setDeletingNode(null); setDeleteError(''); }}
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="btn"
+                disabled={isDeletingPending}
+                style={{
+                  background: 'linear-gradient(135deg, #ef4444, #dc2626)',
+                  color: '#fff', border: 'none', display: 'flex', alignItems: 'center', gap: 6
+                }}
+              >
+                {isDeletingPending ? <RefreshCw size={14} className="spin" /> : <Trash2 size={14} />}
+                <span>{isDeletingPending ? 'Deleting...' : 'Confirm Delete to Trash'}</span>
               </button>
             </div>
           </form>

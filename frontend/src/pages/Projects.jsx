@@ -73,9 +73,31 @@ export default function Projects() {
   };
 
   const projectsList = useMemo(() => {
-    const projectNodes = nodes.filter(n => n.type === 'project' || n.type === 'site');
+    let projectNodes = nodes.filter(n => n.type === 'project' || n.type === 'site');
+    if (user?.role === 'project_admin') {
+      const allowedId = user.assigned_project_id || user.org_node_id;
+      if (allowedId) {
+        projectNodes = projectNodes.filter(n => String(n.id) === String(allowedId) || n.code === String(allowedId));
+      } else {
+        projectNodes = [];
+      }
+    } else if (user?.role === 'bu_admin') {
+      const buId = user.org_node_id ? String(user.org_node_id) : null;
+      if (buId) {
+        projectNodes = projectNodes.filter(n => String(n.parent_id) === buId || String(n.id) === buId);
+      }
+    } else if (user?.role === 'subsidiary_admin') {
+      const subId = user.org_node_id ? String(user.org_node_id) : null;
+      if (subId) {
+        projectNodes = projectNodes.filter(n => {
+          if (String(n.parent_id) === subId) return true;
+          const parentBu = nodes.find(b => String(b.id) === String(n.parent_id));
+          return parentBu && String(parentBu.parent_id) === subId;
+        });
+      }
+    }
     if (!projectNodes || projectNodes.length === 0) {
-      return MOCK_PROJECTS;
+      return [];
     }
     return projectNodes.map(n => {
       const parentBu = nodes.find(b => b.id === n.parent_id);
@@ -85,17 +107,17 @@ export default function Projects() {
         id: n.id,
         name: n.name,
         code: n.code,
-        bu: parentBu?.name || 'Renewable BU',
+        bu: parentBu?.name || 'Assigned BU',
         subsidiary: parentSub?.name || 'Aarohan Group',
-        status: knownStatus.status || (n.is_active ? 'APPROVED' : 'DRAFT'),
-        coverage: knownStatus.coverage || 95,
+        status: knownStatus.status || 'DRAFT',
+        coverage: knownStatus.coverage || 0,
         period: 'FY 2025–26',
         type: n.project_type || 'Infrastructure',
         location: n.location_state ? `${n.location_state}, India` : 'India',
-        lastActivity: knownStatus.lastActivity || 'Active',
+        lastActivity: knownStatus.lastActivity || 'Not started',
       };
     });
-  }, [nodes]);
+  }, [nodes, user]);
 
   const filtered = useMemo(() => {
     let rows = [...projectsList];

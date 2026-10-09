@@ -237,16 +237,16 @@ export default function App() {
                 {/* Dashboard — all authenticated users */}
                 <Route path="/dashboard" element={<Dashboard />} />
 
-                {/* Administration — system_admin only */}
+                {/* Administration — User Governance */}
                 <Route path="/admin/users" element={
-                  <PermissionGuard perms={['user:manage']}>
+                  <PermissionGuard perms={['user:manage', 'users:manage_scoped']}>
                     <UserManagement />
                   </PermissionGuard>
                 } />
 
-                {/* Configuration — org:read */}
+                {/* Configuration — org:hierarchy_view (System, Group, Subsidiary Admins only; BU & Project use Projects console) */}
                 <Route path="/org" element={
-                  <PermissionGuard perms={['org:read']}>
+                  <PermissionGuard perms={['org:hierarchy_view']}>
                     <OrgHierarchy />
                   </PermissionGuard>
                 } />

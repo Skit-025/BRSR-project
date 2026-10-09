@@ -22,6 +22,7 @@ class UserProvisionRequest(BaseModel):
     role: UserRole
     org_node_id: Optional[str] = None  # Scoped subsidiary / project ID (None for group wide)
     initial_password: Optional[str] = Field(None, min_length=6, description="Custom initial password; if omitted, a strong temporary password is generated")
+    phone: Optional[str] = None
 
 
 class UserProvisionResponse(BaseModel):
@@ -35,6 +36,7 @@ class UserProvisionResponse(BaseModel):
     role: str
     org_node_id: Optional[str]
     initial_password: str
+    phone: Optional[str] = None
     message: str = "User provisioned successfully. Hand these credentials to the employee."
 
 
@@ -44,6 +46,7 @@ class UserRead(BaseModel):
     id: str
     email: str
     full_name: str
+    phone: Optional[str] = None
     role: str
     org_node_id: Optional[str] = None
     is_active: bool
@@ -106,6 +109,7 @@ class AdminVerifyPasswordRequest(BaseModel):
 class AdminUpdateUserRequest(BaseModel):
     full_name: Optional[str] = None
     email: Optional[str] = None
+    phone: Optional[str] = None
     role: Optional[UserRole] = None
     org_node_id: Optional[str] = None
     is_active: Optional[bool] = None
@@ -126,12 +130,17 @@ class UserInvitationRead(BaseModel):
 
     id: str
     email: str
+    phone: Optional[str] = None
     full_name: str
     role: str
     org_node_id: Optional[str] = None
     invited_by_id: str
     status: str
     invitation_token: str
+    firebase_uid: Optional[str] = None
+    setup_link: Optional[str] = None
+    delivery_status: Optional[str] = "PENDING"
+    delivery_error: Optional[str] = None
     expires_at: datetime
     created_at: Optional[datetime] = None
 

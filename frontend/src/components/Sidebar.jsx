@@ -18,8 +18,36 @@ export default function Sidebar() {
   const { data: nodes = [] } = useOrgNodes();
   const { data: wfQueue = [] } = useWorkflowQueue();
 
-  // Live entity list: derive meaningful display names from org nodes
+  // Live entity list: strictly scoped by role
   const entityOptions = useMemo(() => {
+    if (!nodes || nodes.length === 0) return [];
+
+    // Project Admin: ONLY their assigned project node!
+    if (user?.role === 'project_admin') {
+      const assignedId = user.assigned_project_id || user.org_node_id;
+      const assignedNode = nodes.find(n => String(n.id) === String(assignedId) || n.code === assignedId);
+      if (assignedNode) {
+        return [{ id: assignedNode.id, label: assignedNode.name, type: assignedNode.type }];
+      }
+      return [];
+    }
+
+    // BU Admin: their BU + projects under their BU
+    if (user?.role === 'bu_admin' && user?.org_node_id) {
+      const buId = String(user.org_node_id);
+      return nodes.filter(n => String(n.id) === buId || String(n.parent_id) === buId)
+                  .map(n => ({ id: n.id, label: n.name, type: n.type }));
+    }
+
+    // Subsidiary Admin: their Subsidiary + BUs + projects under it
+    if (user?.role === 'subsidiary_admin' && user?.org_node_id) {
+      const subId = String(user.org_node_id);
+      const subBUs = new Set(nodes.filter(n => String(n.parent_id) === subId).map(n => String(n.id)));
+      return nodes.filter(n => String(n.id) === subId || subBUs.has(String(n.id)) || subBUs.has(String(n.parent_id)))
+                  .map(n => ({ id: n.id, label: n.name, type: n.type }));
+    }
+
+    // Group Admin & System Admin: all levels
     const ordered = [];
     const grouped = { group: [], company: [], subsidiary: [], business_unit: [], bu: [], project: [], site: [] };
     nodes.forEach(n => { if (grouped[n.type]) grouped[n.type].push(n); });
@@ -27,8 +55,8 @@ export default function Sidebar() {
      ...grouped.business_unit, ...grouped.bu,
      ...grouped.project, ...grouped.site
     ].forEach(n => ordered.push({ id: n.id, label: n.name, type: n.type }));
-    return ordered.slice(0, 12); // max 12 in dropdown
-  }, [nodes]);
+    return ordered.slice(0, 15);
+  }, [nodes, user]);
 
   const [selectedEntity, setSelectedEntity] = useState('');
   const [entityMenuOpen, setEntityMenuOpen] = useState(false);
@@ -45,16 +73,20 @@ export default function Sidebar() {
 
   // Role-filtered navigation
   const navGroups = useMemo(() => {
+    const isProjectAdmin = user?.role === 'project_admin';
     const groups = [
       {
         section: 'OVERVIEW',
         items: [
-          { to: '/dashboard', label: 'Group Overview', icon: LayoutDashboard, perm: null }
+          isProjectAdmin
+            ? { to: '/dashboard', label: 'Project Overview', icon: LayoutDashboard, perm: null }
+            : { to: '/dashboard', label: 'Group Overview', icon: LayoutDashboard, perm: null }
         ]
       },
       {
         section: 'ORGANIZATION',
         items: [
+          hasPermission('org:read') && !['bu_admin', 'project_admin'].includes(user?.role) && { to: '/org', label: 'Org Hierarchy', icon: Layers },
           hasPermission('subsidiary_disclosure:read') && { to: '/disclosure/subsidiary', label: 'Subsidiaries', icon: Building2 },
           hasPermission('bu_disclosure:read') && { to: '/disclosure/bu', label: 'Business Units', icon: Factory },
           { to: '/projects', label: 'Projects', icon: HardHat },
@@ -77,7 +109,8 @@ export default function Sidebar() {
           { to: '/data-quality', label: 'Data Quality & Desk', icon: AlertTriangle },
         ].filter(Boolean)
       },
-      hasPermission('report:read') && {
+      // Phase 11: Project Admin sees their project BRSR summary via dashboard; BRSR Disclosures link is hidden for project_admin
+      hasPermission('report:read') && !isProjectAdmin && {
         section: 'REPORTING',
         items: [
           { to: '/reporting', label: 'BRSR Disclosures', icon: FileSpreadsheet },
@@ -92,17 +125,17 @@ export default function Sidebar() {
           { to: '/aarohan', label: 'Ask AAROHAN AI', icon: Command },
         ]
       },
-      (hasPermission('user:manage') || hasPermission('consolidation:read') || hasPermission('evidence:read')) && {
+      (hasPermission('user:manage') || hasPermission('users:manage_scoped') || ['system_admin', 'group_admin', 'subsidiary_admin', 'bu_admin'].includes(user?.role) || hasPermission('consolidation:read') || hasPermission('evidence:read')) && {
         section: 'ADMINISTRATION',
         items: [
-          hasPermission('user:manage') && { to: '/admin/users', label: 'User Governance', icon: Settings },
+          ['system_admin', 'group_admin', 'subsidiary_admin', 'bu_admin'].includes(user?.role) && { to: '/admin/users', label: 'User Governance', icon: Settings },
           hasPermission('consolidation:read') && { to: '/admin/jobs', label: 'Pipeline Tasks', icon: RefreshCw },
           { to: '/trash', label: 'Trash Can', icon: Trash2 },
         ].filter(Boolean)
       },
     ].filter(Boolean);
     return groups.filter(g => g.items && g.items.length > 0);
-  }, [hasPermission, pendingReviewsCount]);
+  }, [hasPermission, pendingReviewsCount, user]);
 
   const initials = user?.full_name
     ? user.full_name.split(' ').slice(0, 2).map(w => w[0]).join('').toUpperCase()

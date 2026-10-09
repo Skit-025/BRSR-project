@@ -138,6 +138,8 @@ export const orgApi = {
   updateNode: (id, data) => api.put(`/org/nodes/${id}`, data),
   deleteNode: (id, adminPassword, reason) =>
     api.delete(`/org/nodes/${id}`, { data: { admin_password: adminPassword, reason } }),
+  getTrash: () => api.get('/org/trash'),
+  restoreNode: (id) => api.post(`/org/trash/${id}/restore`),
   getPeriods: () => api.get('/org/periods'),
   createPeriod: (data) => api.post('/org/periods', data),
   updatePeriod: (id, data) => api.put(`/org/periods/${id}`, data),

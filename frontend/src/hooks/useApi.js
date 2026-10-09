@@ -204,6 +204,18 @@ export const useUpdateNode = () => {
   });
 };
 
+export const useDeleteNode = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, adminPassword, reason }) => orgApi.deleteNode(id, adminPassword, reason),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['org-nodes'] });
+      qc.invalidateQueries({ queryKey: ['org-trash'] });
+      qc.invalidateQueries({ queryKey: ['evidence-trash'] });
+    },
+  });
+};
+
 export const useCreatePeriod = () => {
   if (isMock()) return MockApi.useMockCreatePeriod();
   const qc = useQueryClient();

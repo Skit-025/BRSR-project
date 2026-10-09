@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { useOrgNodes, useOrgPeriods } from '../hooks/useApi';
 import { orgApi } from '../api/client';
+import { useAuth } from '../context/AuthContext';
 
 
 /* ── Steps config ── */
@@ -65,13 +66,6 @@ const PROJECT_TYPES = [
   { label: 'Corporate / Office Operations', value: 'corporate' },
 ];
 
-const BUS = [
-  { id: 'bu-solar', name: 'Solar EPC Business Unit', subsidiary: 'Aarohan Renewable Energy' },
-  { id: 'bu-wind', name: 'Wind Power Business Unit', subsidiary: 'Aarohan Renewable Energy' },
-  { id: 'bu-civil', name: 'Civil Infrastructure BU', subsidiary: 'Aarohan Infrastructure Projects' },
-  { id: 'bu-trans', name: 'Power Transmission BU', subsidiary: 'Aarohan Infrastructure Projects' },
-];
-
 function StepBar({ currentStep }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', marginBottom: 40 }}>
@@ -108,25 +102,77 @@ export default function ProjectWizard() {
   const { data: periods = [] } = useOrgPeriods();
   const [step, setStep] = useState(1);
   const [submitting, setSubmitting] = useState(false);
+  const { user } = useAuth();
   const [createError, setCreateError] = useState(null);
   const [form, setForm] = useState({
-    name: '', description: '', type: '', location: '', stage: 'Planning', bu: '',
+    name: '', description: '', type: '', location: '', stage: 'Planning',
+    subsidiary: '', bu: '',
     activities: [], applicability: [], template: null, period: 'FY 2026',
   });
   const [aiAnalyzing, setAiAnalyzing] = useState(false);
   const [aiDone, setAiDone] = useState(false);
 
-  const buNodes = useMemo(() => {
-    const list = nodes.filter(n => n.type === 'business_unit' || n.type === 'bu');
-    return list.length > 0 ? list : BUS;
+  // Derive assigned scope for bu_admin or subsidiary_admin
+  const assignedBuNode = useMemo(() => {
+    if (user?.role === 'bu_admin' && user?.org_node_id) {
+      return nodes.find(n => n.id === user.org_node_id || n.code === user.org_node_id) || null;
+    }
+    return null;
+  }, [user, nodes]);
+
+  const assignedSubNode = useMemo(() => {
+    if (user?.role === 'subsidiary_admin' && user?.org_node_id) {
+      return nodes.find(n => n.id === user.org_node_id || n.code === user.org_node_id) || null;
+    }
+    if (assignedBuNode) {
+      return nodes.find(n => n.id === assignedBuNode.parent_id) || null;
+    }
+    return null;
+  }, [user, nodes, assignedBuNode]);
+
+  const assignedGroupNode = useMemo(() => {
+    if (assignedSubNode) {
+      return nodes.find(n => n.id === assignedSubNode.parent_id) || null;
+    }
+    return nodes.find(n => n.type === 'group' || n.is_root) || null;
+  }, [nodes, assignedSubNode]);
+
+  // Available subsidiaries list for group_admin / system_admin
+  const subsidiariesList = useMemo(() => {
+    return nodes.filter(n => ['subsidiary', 'company', 'associate', 'jv'].includes(n.type?.toLowerCase()));
   }, [nodes]);
+
+  // Filtered BUs: if subsidiary is selected, only show BUs of that subsidiary
+  const availableBUs = useMemo(() => {
+    if (assignedBuNode) {
+      return [assignedBuNode];
+    }
+    const allBUs = nodes.filter(n => ['business_unit', 'bu'].includes(n.type?.toLowerCase()));
+    const targetSubId = assignedSubNode?.id || form.subsidiary;
+    if (targetSubId) {
+      return allBUs.filter(n => n.parent_id === targetSubId);
+    }
+    return allBUs;
+  }, [nodes, assignedBuNode, assignedSubNode, form.subsidiary]);
+
+  // Pre-fill BU when locked or when choices update
+  React.useEffect(() => {
+    if (assignedBuNode && form.bu !== assignedBuNode.id) {
+      setForm(f => ({ ...f, bu: assignedBuNode.id, subsidiary: assignedBuNode.parent_id || '' }));
+    } else if (assignedSubNode && form.subsidiary !== assignedSubNode.id) {
+      setForm(f => ({ ...f, subsidiary: assignedSubNode.id }));
+    }
+  }, [assignedBuNode, assignedSubNode]);
 
   const handleCreateProject = async () => {
     setSubmitting(true);
     setCreateError(null);
     try {
       const code = 'PRJ-' + form.name.replace(/[^a-zA-Z0-9]/g, '-').toUpperCase().slice(0, 15) + '-' + Date.now().toString().slice(-4);
-      const parentId = form.bu && form.bu.length > 10 ? form.bu : (buNodes[0]?.id || null);
+      const parentId = form.bu || assignedBuNode?.id;
+      if (!parentId) {
+        throw new Error('A parent Business Unit must be selected.');
+      }
       // Use the exact enum value from PROJECT_TYPES — never transform the value
       const projectType = form.type || 'corporate';
 
@@ -156,7 +202,10 @@ export default function ProjectWizard() {
   const canNext = () => {
     if (step === 1) return form.name.trim().length >= 3;
     if (step === 2) return form.description.trim().length >= 10;
-    if (step === 3) return form.type && form.bu && form.location;
+    if (step === 3) {
+      const hasBu = Boolean(form.bu || assignedBuNode?.id);
+      return form.type && hasBu && form.location;
+    }
     if (step === 4) return form.applicability.length > 0;
     return true;
   };
@@ -274,6 +323,50 @@ export default function ProjectWizard() {
                   This helps us accurately assign the ESG template and applicability.
                 </p>
               </div>
+              {/* Organizational Hierarchy Path Context */}
+              <div style={{
+                background: '#F8FAFC',
+                border: '1px solid #E2E8F0',
+                borderRadius: 8,
+                padding: '12px 16px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                fontSize: 12.5,
+                color: '#64748B',
+                flexWrap: 'wrap'
+              }}>
+                <Building2 size={15} color="#0070F3" />
+                <span style={{ fontWeight: 600, color: '#09090B' }}>
+                  {assignedGroupNode?.name || 'Aarohan Group'}
+                </span>
+                <span>›</span>
+                <span style={{ fontWeight: 600, color: '#09090B' }}>
+                  {assignedSubNode?.name || (subsidiariesList.find(s => s.id === form.subsidiary)?.name || 'Select Subsidiary')}
+                </span>
+                <span>›</span>
+                <span style={{ fontWeight: 700, color: '#0070F3' }}>
+                  {assignedBuNode?.name || (availableBUs.find(b => b.id === form.bu)?.name || 'Select BU')}
+                </span>
+                <span style={{ color: '#94A3B8' }}>›</span>
+                <span style={{ fontStyle: 'italic', color: '#09090B' }}>
+                  {form.name || 'New Project'}
+                </span>
+                {assignedBuNode && (
+                  <span style={{
+                    marginLeft: 'auto',
+                    background: '#EFF6FF',
+                    color: '#1D4ED8',
+                    fontSize: 11,
+                    fontWeight: 700,
+                    padding: '2px 8px',
+                    borderRadius: 99
+                  }}>
+                    Assigned BU (Locked)
+                  </span>
+                )}
+              </div>
+
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                 <div className="form-group">
                   <label className="form-label">Project Type</label>
@@ -282,13 +375,51 @@ export default function ProjectWizard() {
                     {PROJECT_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
                   </select>
                 </div>
+
+                {/* Subsidiary selector (for Group Admin or System Admin) */}
+                {!assignedBuNode && !assignedSubNode && (
+                  <div className="form-group">
+                    <label className="form-label">Subsidiary Entity</label>
+                    <select
+                      className="form-control"
+                      value={form.subsidiary}
+                      onChange={e => setForm(f => ({ ...f, subsidiary: e.target.value, bu: '' }))}
+                    >
+                      <option value="">Select Subsidiary...</option>
+                      {subsidiariesList.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                    </select>
+                  </div>
+                )}
+
+                {/* Business Unit dropdown */}
                 <div className="form-group">
-                  <label className="form-label">Business Unit</label>
-                  <select className="form-control" value={form.bu} onChange={e => setForm(f => ({ ...f, bu: e.target.value }))}>
-                    <option value="">Select BU...</option>
-                    {BUS.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-                  </select>
+                  <label className="form-label">
+                    Business Unit {assignedBuNode ? '(Locked)' : ''}
+                  </label>
+                  {assignedBuNode ? (
+                    <input
+                      className="form-control"
+                      value={assignedBuNode.name}
+                      disabled
+                      style={{ background: '#F1F5F9', color: '#334155', fontWeight: 600 }}
+                    />
+                  ) : (
+                    <select
+                      className="form-control"
+                      value={form.bu}
+                      onChange={e => setForm(f => ({ ...f, bu: e.target.value }))}
+                      disabled={!form.subsidiary && !assignedSubNode && subsidiariesList.length > 0}
+                    >
+                      <option value="">
+                        {!form.subsidiary && !assignedSubNode && subsidiariesList.length > 0
+                          ? 'Select a Subsidiary first...'
+                          : 'Select BU...'}
+                      </option>
+                      {availableBUs.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                    </select>
+                  )}
                 </div>
+
                 <div className="form-group">
                   <label className="form-label">Location / State</label>
                   <input

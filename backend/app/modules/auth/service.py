@@ -101,6 +101,12 @@ def provision_user_by_admin(
     if existing and not existing.is_deleted:
         raise ValueError(f"An active user with identifier '{identifier}' already exists.")
 
+    clean_phone = (getattr(req, "phone", None) or "").strip() or None
+    if clean_phone:
+        existing_phone = db.query(User).filter(User.phone == clean_phone, User.is_deleted == False).first()
+        if existing_phone and (not existing or existing_phone.id != existing.id):
+            raise ValueError(f"An active user with phone '{clean_phone}' already exists.")
+
     password_to_use = req.initial_password or generate_secure_password()
     hashed_pwd = get_password_hash(password_to_use)
 
@@ -109,6 +115,7 @@ def provision_user_by_admin(
         existing.is_deleted = False
         existing.is_active = True
         existing.full_name = req.full_name
+        existing.phone = clean_phone
         existing.hashed_password = hashed_pwd
         existing.role = req.role.value
         existing.org_node_id = req.org_node_id
@@ -118,6 +125,7 @@ def provision_user_by_admin(
     else:
         user = User(
             email=identifier,
+            phone=clean_phone,
             hashed_password=hashed_pwd,
             full_name=req.full_name,
             role=req.role.value,
@@ -157,32 +165,29 @@ def delete_user_by_admin(
     Requires administrator password and mandatory reason.
     Group Admin cannot delete System Admin or Group Admin accounts.
     """
-    if admin_user.role not in (Role.SYSTEM_ADMIN.value, Role.GROUP_ADMIN.value):
-        raise PermissionError("Only System Admin or Group Admin is authorized to delete users.")
-
-    if not admin_password or not admin_password.strip():
-        raise ValueError("Administrator password is required to confirm user deletion.")
-
-    if not reason or not reason.strip():
-        raise ValueError("A mandatory reason must be provided for user deletion.")
-
-    # Re-verify the administrator's password
-    if not verify_admin_password_check(admin_user, admin_password):
-        raise PermissionError("Incorrect administrator password. Deletion unauthorized.")
-
-    if str(admin_user.id) == str(user_id):
-        raise ValueError("You cannot delete your own account.")
-
-    target_user = db.query(User).filter(User.id == user_id, User.is_deleted == False).first()
-    if not target_user:
-        raise ValueError("User not found or already deleted.")
-
-    if admin_user.role == Role.GROUP_ADMIN.value:
-        if target_user.role in (Role.SYSTEM_ADMIN.value, Role.GROUP_ADMIN.value):
-            raise PermissionError("Group Admin cannot delete System Admin or Group Admin accounts.")
+    # Hierarchical role gate & scope validation
+    if admin_user.role == Role.SYSTEM_ADMIN.value:
+        pass
+    elif admin_user.role == Role.GROUP_ADMIN.value:
+        if target_user.role != Role.SUBSIDIARY_ADMIN.value:
+            raise PermissionError("Group Admin can only delete Subsidiary Admin accounts.")
         if admin_user.org_node_id and target_user.org_node_id:
             if not is_node_descendant(db, str(admin_user.org_node_id), str(target_user.org_node_id)):
                 raise PermissionError("You cannot delete a user outside your authorized organizational scope.")
+    elif admin_user.role == Role.SUBSIDIARY_ADMIN.value:
+        if target_user.role != Role.BU_ADMIN.value:
+            raise PermissionError("Subsidiary Admin can only delete BU Admin accounts.")
+        if admin_user.org_node_id and target_user.org_node_id:
+            if not is_node_descendant(db, str(admin_user.org_node_id), str(target_user.org_node_id)):
+                raise PermissionError("You cannot delete a user outside your authorized subsidiary scope.")
+    elif admin_user.role == Role.BU_ADMIN.value:
+        if target_user.role != Role.PROJECT_ADMIN.value:
+            raise PermissionError("BU Admin can only delete Project Admin accounts.")
+        if admin_user.org_node_id and target_user.org_node_id:
+            if not is_node_descendant(db, str(admin_user.org_node_id), str(target_user.org_node_id)):
+                raise PermissionError("You cannot delete a user outside your authorized BU scope.")
+    else:
+        raise PermissionError(f"Role '{admin_user.role}' is not authorized to delete users.")
 
     target_user.is_deleted = True
     target_user.is_active = False
@@ -222,6 +227,7 @@ def update_user_by_admin(
     user_id: str,
     full_name: Optional[str] = None,
     email: Optional[str] = None,
+    phone: Optional[str] = None,
     role: Optional[str] = None,
     org_node_id: Optional[str] = None,
     is_active: Optional[bool] = None,
@@ -252,6 +258,14 @@ def update_user_by_admin(
             if existing:
                 raise ValueError(f"Email '{new_email}' is already in use by another user.")
             user.email = new_email
+
+    if phone is not None:
+        clean_phone = phone.strip() or None
+        if clean_phone and clean_phone != user.phone:
+            existing_phone = db.query(User).filter(User.phone == clean_phone, User.is_deleted == False, User.id != user_id).first()
+            if existing_phone:
+                raise ValueError(f"Phone number '{clean_phone}' is already in use by another user.")
+        user.phone = clean_phone
 
     target_role = role if role is not None else user.role
     target_node_id = org_node_id if org_node_id is not None else (str(user.org_node_id) if user.org_node_id else None)
@@ -348,25 +362,25 @@ def bootstrap_system_admin(db: Session, req: BootstrapAdminRequest) -> User:
 # ─── Hierarchical Admin Delegation (Spec §1-§3, §16-§18, §26) ────────────────
 
 HIERARCHICAL_DELEGATION_RULES = {
-    # System Admin: unrestricted across platform
+    # System Admin: unrestricted across platform (can create/delegate any role)
     "system_admin": None,
 
-    # Group Admin: can create Group Admins, Subsidiary Admins, BU Admins, Project Admins within Group
+    # Group Admin: can ONLY add/invite Subsidiary Admin
     "group_admin": {
-        "allowed_roles": ["group_admin", "subsidiary_admin", "bu_admin", "project_admin"],
-        "allowed_levels": ["company", "subsidiary", "business_unit", "bu", "project", "site"],
+        "allowed_roles": ["subsidiary_admin"],
+        "allowed_levels": ["company", "subsidiary"],
     },
 
-    # Subsidiary Admin: can create Subsidiary Admins, BU Admins and Project Admins within Subsidiary
+    # Subsidiary Admin: can ONLY add/invite BU Admin
     "subsidiary_admin": {
-        "allowed_roles": ["subsidiary_admin", "bu_admin", "project_admin"],
-        "allowed_levels": ["company", "subsidiary", "business_unit", "bu", "project", "site"],
+        "allowed_roles": ["bu_admin"],
+        "allowed_levels": ["business_unit", "bu"],
     },
 
-    # BU Admin: can create BU Admins and Project Admins within BU
+    # BU Admin: can ONLY add/invite Project Admin
     "bu_admin": {
-        "allowed_roles": ["bu_admin", "project_admin"],
-        "allowed_levels": ["business_unit", "bu", "project", "site"],
+        "allowed_roles": ["project_admin"],
+        "allowed_levels": ["project", "site"],
     },
 
     # Project Admin: no role creation or delegation
@@ -509,22 +523,68 @@ def log_admin_audit(
 
 def create_invitation_by_admin(db: Session, admin_user: User, req) -> "UserInvitation":
     from app.modules.auth.models import UserInvitation
+    from app.modules.org.models import OrgNode
+    from app.services.firebase_auth_service import reconcile_or_create_firebase_user, generate_secure_password_setup_link
+    from app.services.email_invitation_service import send_invitation_email
+
     validate_admin_delegation(db, admin_user, req.role, req.org_node_id)
 
     # Check if active user already exists
-    existing_user = db.query(User).filter(User.email == req.email.lower().strip(), User.is_deleted == False).first()
+    clean_email = req.email.lower().strip()
+    existing_user = db.query(User).filter(User.email == clean_email, User.is_deleted == False).first()
     if existing_user:
         raise ValueError(f"An active user with email '{req.email}' already exists.")
 
+    # Check phone uniqueness
+    clean_phone = (getattr(req, "phone", None) or "").strip() or None
+    if clean_phone:
+        existing_phone_user = db.query(User).filter(User.phone == clean_phone, User.is_deleted == False).first()
+        if existing_phone_user:
+            raise ValueError(f"An active user with phone '{clean_phone}' already exists.")
+        existing_phone_inv = db.query(UserInvitation).filter(
+            UserInvitation.phone == clean_phone,
+            UserInvitation.status.in_(["PENDING", "SENT"]),
+            UserInvitation.is_deleted == False
+        ).first()
+        if existing_phone_inv:
+            raise ValueError(f"A pending invitation for phone '{clean_phone}' already exists.")
+
+    # 1. Local account reconciliation
+    firebase_uid, _ = reconcile_or_create_firebase_user(clean_email, req.full_name.strip())
+
+    # 2. Scope name derivation for email
+    scope_name = None
+    if req.org_node_id:
+        node = db.query(OrgNode).filter(OrgNode.id == req.org_node_id).first()
+        if node:
+            scope_name = f"{node.name} ({node.type.replace('_', ' ').title()})"
+
+    # 3. Secure token & setup link generation
     invitation_token = secrets.token_urlsafe(32)
+    setup_link = generate_secure_password_setup_link(clean_email, invitation_token)
+
+    # 4. Dispatch branded email invitation
+    email_ok, email_err = send_invitation_email(
+        recipient_name=req.full_name.strip(),
+        recipient_email=clean_email,
+        role=req.role,
+        org_scope_name=scope_name,
+        setup_link=setup_link
+    )
+
     invitation = UserInvitation(
-        email=req.email.lower().strip(),
+        email=clean_email,
+        phone=clean_phone,
         full_name=req.full_name.strip(),
         role=req.role,
         org_node_id=req.org_node_id,
         invited_by_id=admin_user.id,
-        status="PENDING",
+        status="SENT" if email_ok else "FAILED",
         invitation_token=invitation_token,
+        firebase_uid=firebase_uid,
+        setup_link=setup_link,
+        delivery_status="SENT" if email_ok else "FAILED",
+        delivery_error=email_err,
         expires_at=datetime.now(timezone.utc) + timedelta(days=7)
     )
     db.add(invitation)
@@ -535,7 +595,12 @@ def create_invitation_by_admin(db: Session, admin_user: User, req) -> "UserInvit
         db, actor=admin_user, action="USER_INVITED",
         target_name=req.full_name, target_role=req.role,
         target_scope_id=req.org_node_id,
-        details={"email": req.email, "invitation_id": str(invitation.id)}
+        details={
+            "email": clean_email,
+            "invitation_id": str(invitation.id),
+            "firebase_uid": firebase_uid,
+            "delivery_status": invitation.delivery_status
+        }
     )
     return invitation
 
@@ -545,9 +610,18 @@ def list_invitations_for_admin(db: Session, admin_user: User) -> List["UserInvit
     if admin_user.role == "system_admin":
         return db.query(UserInvitation).filter(UserInvitation.is_deleted == False).order_by(UserInvitation.created_at.desc()).all()
 
-    q = db.query(UserInvitation).filter(UserInvitation.is_deleted == False)
+    target_role = None
+    if admin_user.role == "group_admin":
+        target_role = "subsidiary_admin"
+    elif admin_user.role == "subsidiary_admin":
+        target_role = "bu_admin"
+    elif admin_user.role == "bu_admin":
+        target_role = "project_admin"
+    else:
+        return []
+
+    q = db.query(UserInvitation).filter(UserInvitation.is_deleted == False, UserInvitation.role == target_role)
     if admin_user.org_node_id:
-        # Filter invitations to this admin or their descendants
         from app.modules.org.models import OrgNode
         invs = q.order_by(UserInvitation.created_at.desc()).all()
         return [i for i in invs if not i.org_node_id or is_node_descendant(db, str(admin_user.org_node_id), str(i.org_node_id))]
@@ -556,19 +630,46 @@ def list_invitations_for_admin(db: Session, admin_user: User) -> List["UserInvit
 
 def resend_invitation(db: Session, admin_user: User, invitation_id: str) -> "UserInvitation":
     from app.modules.auth.models import UserInvitation
+    from app.modules.org.models import OrgNode
+    from app.services.firebase_auth_service import generate_secure_password_setup_link
+    from app.services.email_invitation_service import send_invitation_email
+
     inv = db.query(UserInvitation).filter(UserInvitation.id == invitation_id, UserInvitation.is_deleted == False).first()
     if not inv:
         raise ValueError("Invitation not found.")
+
+    # Re-validate requester authorization
+    validate_admin_delegation(db, admin_user, inv.role, inv.org_node_id)
+
     inv.invitation_token = secrets.token_urlsafe(32)
     inv.expires_at = datetime.now(timezone.utc) + timedelta(days=7)
-    inv.status = "PENDING"
+
+    scope_name = None
+    if inv.org_node_id:
+        node = db.query(OrgNode).filter(OrgNode.id == inv.org_node_id).first()
+        if node:
+            scope_name = f"{node.name} ({node.type.replace('_', ' ').title()})"
+
+    setup_link = generate_secure_password_setup_link(inv.email, inv.invitation_token)
+    email_ok, email_err = send_invitation_email(
+        recipient_name=inv.full_name,
+        recipient_email=inv.email,
+        role=inv.role,
+        org_scope_name=scope_name,
+        setup_link=setup_link
+    )
+
+    inv.setup_link = setup_link
+    inv.status = "SENT" if email_ok else "FAILED"
+    inv.delivery_status = "SENT" if email_ok else "FAILED"
+    inv.delivery_error = email_err
     db.commit()
     db.refresh(inv)
 
     log_admin_audit(
         db, actor=admin_user, action="INVITATION_RESENT",
         target_name=inv.full_name, target_role=inv.role,
-        details={"invitation_id": str(inv.id), "email": inv.email}
+        details={"invitation_id": str(inv.id), "email": inv.email, "delivery_status": inv.delivery_status}
     )
     return inv
 
@@ -598,11 +699,11 @@ def deactivate_user_scoped(
     admin_password: str,
     reason: str = "Deactivated by Administrator"
 ) -> User:
-    # 1. Role gate: only system_admin or group_admin may deactivate
-    if admin_user.role not in ("system_admin", "group_admin"):
-        raise PermissionError("Only System Admin or Group Admin may deactivate user accounts.")
+    # 1. Role gate: system_admin, group_admin, subsidiary_admin, bu_admin
+    if admin_user.role not in ("system_admin", "group_admin", "subsidiary_admin", "bu_admin"):
+        raise PermissionError("You are not authorized to deactivate user accounts.")
 
-    # 2. Verify the calling admin's own password
+    # 2. Verify calling admin's own password
     if not verify_admin_password_check(admin_user, admin_password):
         raise PermissionError("Incorrect administrator password. Deactivation denied.")
 
@@ -613,10 +714,22 @@ def deactivate_user_scoped(
     if str(target_user.id) == str(admin_user.id):
         raise ValueError("You cannot deactivate your own account.")
 
-    # 3. Scope check & hierarchy protection
+    # 3. Hierarchy 1-level down gate
     if admin_user.role == "group_admin":
-        if target_user.role in ("system_admin", "group_admin"):
-            raise PermissionError("Group Admin cannot deactivate System Admin or Group Admin accounts.")
+        if target_user.role != "subsidiary_admin":
+            raise PermissionError("Group Admin can only deactivate Subsidiary Admin accounts.")
+        if admin_user.org_node_id and target_user.org_node_id:
+            if not is_node_descendant(db, str(admin_user.org_node_id), str(target_user.org_node_id)):
+                raise PermissionError("You cannot deactivate a user outside your organizational scope.")
+    elif admin_user.role == "subsidiary_admin":
+        if target_user.role != "bu_admin":
+            raise PermissionError("Subsidiary Admin can only deactivate BU Admin accounts.")
+        if admin_user.org_node_id and target_user.org_node_id:
+            if not is_node_descendant(db, str(admin_user.org_node_id), str(target_user.org_node_id)):
+                raise PermissionError("You cannot deactivate a user outside your organizational scope.")
+    elif admin_user.role == "bu_admin":
+        if target_user.role != "project_admin":
+            raise PermissionError("BU Admin can only deactivate Project Admin accounts.")
         if admin_user.org_node_id and target_user.org_node_id:
             if not is_node_descendant(db, str(admin_user.org_node_id), str(target_user.org_node_id)):
                 raise PermissionError("You cannot deactivate a user outside your organizational scope.")
@@ -641,9 +754,9 @@ def activate_user_scoped(
     admin_password: Optional[str] = None,
     reason: str = "Re-activated by Administrator"
 ) -> User:
-    # 1. Role gate: only system_admin or group_admin may reactivate
-    if admin_user.role not in ("system_admin", "group_admin"):
-        raise PermissionError("Only System Admin or Group Admin may reactivate user accounts.")
+    # 1. Role gate: system_admin, group_admin, subsidiary_admin, bu_admin
+    if admin_user.role not in ("system_admin", "group_admin", "subsidiary_admin", "bu_admin"):
+        raise PermissionError("You are not authorized to reactivate user accounts.")
 
     if admin_password and not verify_admin_password_check(admin_user, admin_password):
         raise PermissionError("Incorrect administrator password.")
@@ -653,8 +766,20 @@ def activate_user_scoped(
         raise ValueError("User not found.")
 
     if admin_user.role == "group_admin":
-        if target_user.role in ("system_admin", "group_admin"):
-            raise PermissionError("Group Admin cannot manage System Admin or Group Admin accounts.")
+        if target_user.role != "subsidiary_admin":
+            raise PermissionError("Group Admin can only reactivate Subsidiary Admin accounts.")
+        if admin_user.org_node_id and target_user.org_node_id:
+            if not is_node_descendant(db, str(admin_user.org_node_id), str(target_user.org_node_id)):
+                raise PermissionError("You cannot reactivate a user outside your organizational scope.")
+    elif admin_user.role == "subsidiary_admin":
+        if target_user.role != "bu_admin":
+            raise PermissionError("Subsidiary Admin can only reactivate BU Admin accounts.")
+        if admin_user.org_node_id and target_user.org_node_id:
+            if not is_node_descendant(db, str(admin_user.org_node_id), str(target_user.org_node_id)):
+                raise PermissionError("You cannot reactivate a user outside your organizational scope.")
+    elif admin_user.role == "bu_admin":
+        if target_user.role != "project_admin":
+            raise PermissionError("BU Admin can only reactivate Project Admin accounts.")
         if admin_user.org_node_id and target_user.org_node_id:
             if not is_node_descendant(db, str(admin_user.org_node_id), str(target_user.org_node_id)):
                 raise PermissionError("You cannot reactivate a user outside your organizational scope.")
@@ -673,23 +798,32 @@ def activate_user_scoped(
 
 
 def list_users_for_admin_scoped(db: Session, admin_user: User) -> List[User]:
-    """Lists users visible within the calling admin's authorized hierarchy branch."""
+    """Lists users visible within the calling admin's authorized hierarchy branch (1-level down rule)."""
     if admin_user.role == "system_admin":
         return db.query(User).filter(User.is_deleted == False).order_by(User.created_at.desc()).all()
 
-    if not admin_user.org_node_id:
-        return db.query(User).filter(User.is_deleted == False).order_by(User.created_at.desc()).all()
+    if admin_user.role == "group_admin":
+        q = db.query(User).filter(User.is_deleted == False, User.role == "subsidiary_admin")
+        if admin_user.org_node_id:
+            all_u = q.order_by(User.created_at.desc()).all()
+            return [u for u in all_u if not u.org_node_id or is_node_descendant(db, str(admin_user.org_node_id), str(u.org_node_id))]
+        return q.order_by(User.created_at.desc()).all()
 
-    all_users = db.query(User).filter(User.is_deleted == False).order_by(User.created_at.desc()).all()
-    scoped_users = []
-    for u in all_users:
-        if not u.org_node_id:
-            # Group or system level — visible to group_admin
-            if admin_user.role == "group_admin":
-                scoped_users.append(u)
-        elif is_node_descendant(db, str(admin_user.org_node_id), str(u.org_node_id)):
-            scoped_users.append(u)
-    return scoped_users
+    if admin_user.role == "subsidiary_admin":
+        q = db.query(User).filter(User.is_deleted == False, User.role == "bu_admin")
+        if admin_user.org_node_id:
+            all_u = q.order_by(User.created_at.desc()).all()
+            return [u for u in all_u if not u.org_node_id or is_node_descendant(db, str(admin_user.org_node_id), str(u.org_node_id))]
+        return q.order_by(User.created_at.desc()).all()
+
+    if admin_user.role == "bu_admin":
+        q = db.query(User).filter(User.is_deleted == False, User.role == "project_admin")
+        if admin_user.org_node_id:
+            all_u = q.order_by(User.created_at.desc()).all()
+            return [u for u in all_u if not u.org_node_id or is_node_descendant(db, str(admin_user.org_node_id), str(u.org_node_id))]
+        return q.order_by(User.created_at.desc()).all()
+
+    return []
 
 
 def get_admin_audit_log(db: Session, admin_user: User, limit: int = 50):
@@ -888,6 +1022,23 @@ def submit_user_creation_request(
             f"A pending request for '{normalized_email}' already exists ({existing_pending.request_number})."
         )
 
+    clean_phone = (phone or "").strip() or None
+    if clean_phone:
+        existing_phone_user = db.query(User).filter(
+            User.phone == clean_phone, User.is_deleted == False
+        ).first()
+        if existing_phone_user:
+            raise ValueError(f"An active user with phone '{clean_phone}' already exists.")
+
+        existing_pending_phone = db.query(UserCreationRequest).filter(
+            UserCreationRequest.phone == clean_phone,
+            UserCreationRequest.status == "PENDING",
+        ).first()
+        if existing_pending_phone:
+            raise ValueError(
+                f"A pending request for phone '{clean_phone}' already exists ({existing_pending_phone.request_number})."
+            )
+
     request_number = _generate_request_number(db)
     org_hierarchy = _resolve_org_hierarchy(db, org_node_id)
 
@@ -990,12 +1141,20 @@ def approve_user_creation_request(
     if existing_user:
         raise ValueError(f"An active user with email '{ucr.email}' already exists.")
 
+    if ucr.phone:
+        existing_phone_user = db.query(User).filter(
+            User.phone == ucr.phone, User.is_deleted == False
+        ).first()
+        if existing_phone_user:
+            raise ValueError(f"An active user with phone '{ucr.phone}' already exists.")
+
     initial_password = generate_6char_password()
     hashed_pwd = get_password_hash(initial_password)
     now = datetime.now(timezone.utc)
 
     new_user = User(
         email=ucr.email,
+        phone=ucr.phone,
         hashed_password=hashed_pwd,
         full_name=ucr.full_name,
         role=ucr.requested_role,

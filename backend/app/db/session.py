@@ -105,7 +105,9 @@ def init_db() -> None:
                     ALTER TABLE metrics ADD COLUMN IF NOT EXISTS guidance_text TEXT;
                     ALTER TABLE metrics ADD COLUMN IF NOT EXISTS why_needed TEXT;
                     ALTER TABLE metrics ADD COLUMN IF NOT EXISTS document_hint TEXT;
-                    ALTER TABLE metrics ADD COLUMN IF NOT EXISTS calc_formula_code VARCHAR(100);
+                    ALTER TABLE users ADD COLUMN IF NOT EXISTS phone VARCHAR(50);
+                    CREATE UNIQUE INDEX IF NOT EXISTS ix_users_phone_unique ON users(phone) WHERE phone IS NOT NULL;
+                    ALTER TABLE user_invitations ADD COLUMN IF NOT EXISTS phone VARCHAR(50);
                     ALTER TABLE reports ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'READY';
 
                     UPDATE evidence_files
@@ -187,7 +189,9 @@ def init_db() -> None:
                 ALTER TABLE metrics ADD COLUMN IF NOT EXISTS guidance_text TEXT;
                 ALTER TABLE metrics ADD COLUMN IF NOT EXISTS why_needed TEXT;
                 ALTER TABLE metrics ADD COLUMN IF NOT EXISTS document_hint TEXT;
-                ALTER TABLE metrics ADD COLUMN IF NOT EXISTS calc_formula_code VARCHAR(100);
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS phone VARCHAR(50);
+                CREATE UNIQUE INDEX IF NOT EXISTS ix_users_phone_unique ON users(phone) WHERE phone IS NOT NULL;
+                ALTER TABLE user_invitations ADD COLUMN IF NOT EXISTS phone VARCHAR(50);
                 ALTER TABLE reports ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'READY';
 
                 UPDATE evidence_files

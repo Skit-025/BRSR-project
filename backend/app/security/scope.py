@@ -141,19 +141,31 @@ def assert_user_authorized_for_project(
 
 def assert_can_create_project(db: Session, user: User, parent_id: Optional[str]) -> OrgNode:
     """
-    Enforces the Strict Project-Creation Permission Matrix:
-    | Role | Create project | Authorized scope |
-    |---|---|---|
-    | system_admin | Yes | Any permitted location across the platform |
-    | group_admin | Yes | Its own Group and authorized descendants |
-    | subsidiary_admin | Yes | Its own Subsidiary and authorized descendants |
-    | bu_admin | Yes | Its own Business Unit |
-    | project_admin | NO | Cannot create projects (403 Forbidden) |
+    Enforces the Strict Project-Creation Permission Matrix (Phase 7.1 — Final Rule):
+    | Role             | Create project | Authorized scope           |
+    |------------------|----------------|----------------------------|
+    | system_admin     | Yes            | Any location on platform   |
+    | bu_admin         | Yes            | Their assigned BU only     |
+    | group_admin      | NO             | Forbidden — must use BU    |
+    | subsidiary_admin | NO             | Forbidden — must use BU    |
+    | project_admin    | NO             | Forbidden entirely         |
     """
     if user.role == Role.PROJECT_ADMIN.value:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Project Admins are not permitted to create projects or organizational entities."
+        )
+
+    if user.role == Role.GROUP_ADMIN.value:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Group Admins cannot create projects directly. Projects must be created by a BU Admin under the appropriate Business Unit."
+        )
+
+    if user.role == Role.SUBSIDIARY_ADMIN.value:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Subsidiary Admins cannot create projects directly. Projects must be created by a BU Admin under the appropriate Business Unit."
         )
 
     if user.role == Role.SYSTEM_ADMIN.value:
@@ -181,29 +193,20 @@ def assert_can_create_project(db: Session, user: User, parent_id: Optional[str])
         )
 
     if not user.org_node_id:
-        if user.role == Role.GROUP_ADMIN.value:
-            return parent_node  # Root group admin
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Missing organizational scope for your administrative role."
+            detail="Missing organizational scope for your BU Admin role."
         )
 
     from app.modules.auth.service import is_node_descendant
 
     if user.role == Role.BU_ADMIN.value:
-        # Parent must be their assigned Business Unit (or a sub-node under it)
+        # Parent must be their assigned Business Unit (or a direct descendant under it)
         is_own_bu = (str(parent_node.id) == str(user.org_node_id)) or is_node_descendant(db, str(user.org_node_id), str(parent_node.id))
         if not is_own_bu:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="BU Admins may only create projects within their assigned Business Unit."
-            )
-
-    elif user.role in (Role.SUBSIDIARY_ADMIN.value, Role.GROUP_ADMIN.value):
-        if not is_node_descendant(db, str(user.org_node_id), str(parent_node.id)):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Target parent node '{parent_node.name}' is outside your authorized organizational hierarchy."
             )
 
     return parent_node

@@ -24,10 +24,31 @@ class DashboardService:
         period = self.db.query(ReportingPeriod).filter(ReportingPeriod.id == period_id).first()
         period_label = period.code if period else "Current Period"
 
-        # 1. Submission Progress
+        from app.modules.auth.service import get_descendant_node_ids
+        target_node = self.db.query(OrgNode).filter(OrgNode.id == entity_id).first()
+        if not target_node:
+            target_node = self.db.query(OrgNode).filter(OrgNode.code == entity_id).first()
+
+        scoped_entity_ids = [entity_id]
+        total_reporting_entities = 1
+        if target_node:
+            desc_ids = get_descendant_node_ids(self.db, str(target_node.id))
+            scoped_entity_ids = list(set([str(target_node.id)] + [str(d) for d in desc_ids]))
+            reporting_nodes = self.db.query(OrgNode).filter(
+                OrgNode.id.in_(scoped_entity_ids),
+                OrgNode.type.in_(["project", "site", "bu", "business_unit"]),
+                OrgNode.is_deleted == False
+            ).all()
+            total_reporting_entities = max(len(reporting_nodes), 1)
+
+        # 1. Submission Progress scoped to this entity and its descendants
         submissions = (
             self.db.query(Submission)
-            .filter(Submission.period_id == period_id, Submission.is_deleted == False)
+            .filter(
+                Submission.entity_id.in_(scoped_entity_ids),
+                Submission.period_id == period_id,
+                Submission.is_deleted == False
+            )
             .all()
         )
         total_sub = len(submissions)
@@ -36,10 +57,10 @@ class DashboardService:
         draft = sum(1 for s in submissions if s.status == SubmissionStatus.DRAFT.value)
         rejected = sum(1 for s in submissions if s.status == SubmissionStatus.RETURNED.value)
 
-        progress_pct = (approved / total_sub * 100.0) if total_sub > 0 else 0.0
+        progress_pct = (approved / total_reporting_entities * 100.0) if total_reporting_entities > 0 else 0.0
 
         sub_progress = SubmissionProgressSummary(
-            total_entities=total_sub,
+            total_entities=total_reporting_entities,
             total_submissions=total_sub,
             approved=approved,
             in_review=in_rev,

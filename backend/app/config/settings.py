@@ -44,4 +44,24 @@ class Settings(BaseSettings):
     AI_MODEL_TEXT: str = "models/gemini-3.8-flash"
     AI_EMBEDDING_MODEL: str = "models/text-embedding-004"
 
+    # SMTP Email Configuration (Google Mail / Gmail Provider)
+    SMTP_HOST: str = "smtp.gmail.com"
+    SMTP_PORT: int = 587
+    SMTP_USER: Optional[str] = "placeholder@gmail.com"
+    SMTP_PASSWORD: Optional[str] = "placeholder_app_password"
+    SMTP_FROM_EMAIL: str = "placeholder@gmail.com"
+    SMTP_FROM_NAME: str = "MEIL AAROHAN Platform"
+    SMTP_USE_TLS: bool = True
+    SMTP_USE_SSL: bool = False
+
+    # Email Invitation & Platform URLs
+    EMAIL_SENDER_ADDRESS: str = "placeholder@gmail.com"
+    EMAIL_SENDER_NAME: str = "MEIL AAROHAN Platform"
+    FRONTEND_BASE_URL: str = "http://localhost:5173"
+    
+    # Optional Legacy/Fallback Providers
+    RESEND_API_KEY: Optional[str] = None
+    FIREBASE_CREDENTIALS_PATH: Optional[str] = None
+    FIREBASE_PROJECT_ID: Optional[str] = None
+
 settings = Settings()

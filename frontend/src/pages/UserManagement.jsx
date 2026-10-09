@@ -533,6 +533,11 @@ export default function UserManagement() {
 
   // Filter active users
   const filteredUsers = users.filter((u) => {
+    // 1-level down rule for scoped admins
+    if (currentRole === 'group_admin' && u.role !== 'subsidiary_admin') return false;
+    if (currentRole === 'subsidiary_admin' && u.role !== 'bu_admin') return false;
+    if (currentRole === 'bu_admin' && u.role !== 'project_admin') return false;
+
     const matchRole = filterRole === 'ALL' || u.role === filterRole;
     const term = searchTerm.toLowerCase();
     const matchTerm = !term ||
@@ -557,6 +562,18 @@ export default function UserManagement() {
   // Whether current user is a subsidiary_admin (request workflow) or approver
   const isSubsidiaryAdmin = currentRole === 'subsidiary_admin';
   const canApproveRequests = ['system_admin', 'group_admin'].includes(currentRole);
+
+  if (currentRole === 'project_admin') {
+    return (
+      <div style={{ padding: 60, textAlign: 'center' }}>
+        <Shield size={48} color="#ef4444" style={{ margin: '0 auto 16px' }} />
+        <h2 style={{ color: '#09090b', fontSize: 20 }}>Access Restricted</h2>
+        <p style={{ color: '#64748b', maxWidth: 440, margin: '8px auto' }}>
+          Project Admins are operational data contributors and cannot manage user accounts.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="page-content anim-fade-up" style={{ background: '#f8fafc' }}>
@@ -599,25 +616,19 @@ export default function UserManagement() {
             <span>Refresh</span>
           </button>
 
-          {isSubsidiaryAdmin && (
-            <button
-              className="btn btn-primary"
-              style={{ borderRadius: 6, background: '#0070F3', color: '#fff', border: 'none', fontWeight: 600 }}
-              onClick={handleOpenUserReqModal}
-            >
-              <FilePlus size={14} />
-              <span>+ Request User Access</span>
-            </button>
-          )}
-
-          {!isSubsidiaryAdmin && allowedRolesForInvite.length > 0 && (
+          {allowedRolesForInvite.length > 0 && (
             <button
               className="btn btn-primary"
               style={{ borderRadius: 6, background: '#0070F3', color: '#fff', border: 'none', fontWeight: 600 }}
               onClick={handleOpenInvite}
             >
               <UserPlus size={14} />
-              <span>+ Add Administrator</span>
+              <span>
+                {currentRole === 'group_admin' ? '+ Invite Subsidiary Admin' :
+                 currentRole === 'subsidiary_admin' ? '+ Invite BU Admin' :
+                 currentRole === 'bu_admin' ? '+ Invite Project Admin' :
+                 '+ Add Administrator'}
+              </span>
             </button>
           )}
         </div>
@@ -930,10 +941,11 @@ export default function UserManagement() {
                             <span style={{ fontSize: '11px', color: 'var(--brand-400)' }}>Current User</span>
                           ) : isRoot ? (
                             <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Root Protected</span>
-                          ) : (currentRole === 'group_admin' && u.role === 'system_admin') ? (
-                            <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>System Protected</span>
-                          ) : !['system_admin', 'group_admin'].includes(currentRole) ? (
-                            <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>No Permission</span>
+                          ) : !(currentRole === 'system_admin' ||
+                              (currentRole === 'group_admin' && u.role === 'subsidiary_admin') ||
+                              (currentRole === 'subsidiary_admin' && u.role === 'bu_admin') ||
+                              (currentRole === 'bu_admin' && u.role === 'project_admin')) ? (
+                            <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>View Only</span>
                           ) : (
                             <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, justifyContent: 'flex-end' }}>
                               {u.is_active !== false ? (
@@ -1371,26 +1383,31 @@ export default function UserManagement() {
               3. Organizational Scope (Bound to Subtree)
             </div>
             <div className="form-group">
-              <label className="form-label">Assigned Organizational Unit *</label>
+              <label className="form-label">
+                Assigned Organizational Unit * {inviteRole === 'subsidiary_admin' ? '(Select Subsidiary)' : inviteRole === 'bu_admin' ? '(Select Business Unit)' : inviteRole === 'project_admin' ? '(Select Project / Site)' : ''}
+              </label>
               <select
                 className="form-control"
                 value={inviteOrgNodeId}
                 onChange={(e) => setInviteOrgNodeId(e.target.value)}
                 required
               >
-                {eligibleNodesForInviteRole.length === 0 ? (
-                  <option value="">No compatible nodes within your authorized branch</option>
-                ) : (
-                  eligibleNodesForInviteRole.map(n => (
-                    <option key={n.id} value={n.id}>
-                      {n.name} ({n.type?.toUpperCase()})
-                    </option>
-                  ))
-                )}
+                <option value="">-- Choose Assigned {inviteRole === 'subsidiary_admin' ? 'Subsidiary' : inviteRole === 'bu_admin' ? 'Business Unit' : inviteRole === 'project_admin' ? 'Project / Site' : 'Unit'} --</option>
+                {eligibleNodesForInviteRole.map(n => (
+                  <option key={n.id} value={n.id}>
+                    {n.name} ({n.type?.toUpperCase()})
+                  </option>
+                ))}
               </select>
-              <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: 4 }}>
-                Administrators cannot delegate authority outside their own organizational branch.
-              </div>
+              {eligibleNodesForInviteRole.length === 0 ? (
+                <div style={{ fontSize: '12px', color: '#ef4444', marginTop: 6, fontWeight: 500 }}>
+                  ⚠️ No compatible {inviteRole === 'subsidiary_admin' ? 'subsidiary' : inviteRole === 'bu_admin' ? 'business unit' : 'project'} found! You must first create it under <strong>Org Hierarchy</strong> before assigning an admin.
+                </div>
+              ) : (
+                <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: 4 }}>
+                  The invited administrator will be permanently scoped and restricted to this selected unit.
+                </div>
+              )}
             </div>
           </div>
 

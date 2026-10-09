@@ -10,10 +10,10 @@ import { authApi } from '../api/client';
 // ─── Roles each admin level can create/manage (Five-Role Architecture) ──────────────
 export const MANAGEABLE_ROLES = {
   system_admin:     ['group_admin', 'subsidiary_admin', 'bu_admin', 'project_admin'],
-  group_admin:      ['group_admin', 'subsidiary_admin', 'bu_admin', 'project_admin'],
-  subsidiary_admin: ['subsidiary_admin', 'bu_admin', 'project_admin'],
-  bu_admin:         ['bu_admin', 'project_admin'],
-  project_admin:    ['project_admin'],
+  group_admin:      ['subsidiary_admin'],
+  subsidiary_admin: ['bu_admin'],
+  bu_admin:         ['project_admin'],
+  project_admin:    [],
 };
 
 // ─── Full permission matrix synced to backend RBAC (rbac.py) ─────────────────
@@ -32,12 +32,12 @@ const ROLE_PERMISSIONS = {
     'subsidiary_disclosure:write', 'subsidiary_disclosure:read',
     'group_disclosure:write', 'group_disclosure:read',
     'period:lock', 'audit:read', 'assurance:write',
-    'users:manage_scoped',
+    'users:manage_scoped', 'org:hierarchy_view',
     'ai:e1:use', 'ai:e2:use', 'ai:e3:use', 'ai:e4:use', 'ai:e5:use', 'ai:e6:use', 'ai:e7:use', 'ai:approve',
   ]),
 
   group_admin: new Set([
-    'org:read', 'org:write', 'metric:read', 'metric:write', 'form:master',
+    'org:read', 'org:write', 'org:hierarchy_view', 'metric:read', 'metric:write', 'form:master',
     'submission:read', 'evidence:read', 'consolidation:run', 'consolidation:read', 'calc:run',
     'bu_disclosure:read', 'subsidiary_disclosure:read',
     'group_disclosure:write', 'group_disclosure:read',
@@ -48,7 +48,7 @@ const ROLE_PERMISSIONS = {
   ]),
 
   subsidiary_admin: new Set([
-    'org:read', 'metric:read',
+    'org:read', 'org:hierarchy_view', 'metric:read',
     'submission:read', 'submission:review', 'submission:approve', 'evidence:read',
     'consolidation:read',
     'bu_disclosure:read',
@@ -72,7 +72,7 @@ const ROLE_PERMISSIONS = {
     'form:submit',
     'submission:create', 'submission:read', 'submission:submit',
     'evidence:upload', 'evidence:read', 'spreadsheet:upload',
-    'report:read', 'users:manage_scoped',
+    'report:read',
     'ai:e1:use', 'ai:e2:use', 'ai:e6:use',
   ]),
 };

@@ -10,12 +10,18 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { useOrgPeriods, useOrgNodes, useDashboardSummary } from '../hooks/useApi';
 import DataLineageDrawer from '../components/DataLineageDrawer';
+import ProjectSummary from './ProjectSummary';
 
 export default function Dashboard() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { data: periods = [] } = useOrgPeriods();
   const { data: nodes = [] } = useOrgNodes();
+
+  // Phase 11: Project Admin sees project BRSR disclosure as their Overview
+  if (user?.role === 'project_admin') {
+    return <ProjectSummary />;
+  }
 
   const [selectedPeriodId, setSelectedPeriodId] = useState('');
   const [selectedEntityId, setSelectedEntityId] = useState('');
@@ -51,29 +57,29 @@ export default function Dashboard() {
 
   const displayEnergy = envKpis.total_energy_gj != null && envKpis.total_energy_gj > 0
     ? `${Number(envKpis.total_energy_gj).toLocaleString()} GJ`
-    : '482.4 GWh';
+    : '—';
 
   const displayWater = envKpis.water_consumption_kl != null && envKpis.water_consumption_kl > 0
     ? `${Number(envKpis.water_consumption_kl).toLocaleString()} kL`
-    : '1.84M kL';
+    : '—';
 
   const displayGhg = envKpis.total_ghg_tco2e != null && envKpis.total_ghg_tco2e > 0
     ? Number(envKpis.total_ghg_tco2e).toLocaleString()
-    : '1,284.7';
+    : '—';
 
   const displayScope1 = envKpis.scope1_emissions_tco2e != null && envKpis.scope1_emissions_tco2e > 0
     ? `${Number(envKpis.scope1_emissions_tco2e).toLocaleString()} t`
-    : '520.0 t';
+    : '—';
 
   const displayScope2 = envKpis.scope2_emissions_tco2e != null && envKpis.scope2_emissions_tco2e > 0
     ? `${Number(envKpis.scope2_emissions_tco2e).toLocaleString()} t`
-    : '412.0 t';
+    : '—';
 
-  const displayLtifr = socKpis.ltifr != null ? Number(socKpis.ltifr).toFixed(2) : '0.08';
+  const displayLtifr = socKpis.ltifr != null ? Number(socKpis.ltifr).toFixed(2) : '—';
   const displayFatalities = socKpis.fatalities != null ? `${socKpis.fatalities} Fatalities` : '0 Fatalities';
   const displayWaste = envKpis.waste_generated_mt != null && envKpis.waste_generated_mt > 0
     ? `${Number(envKpis.waste_generated_mt).toLocaleString()} MT`
-    : '92.4%';
+    : '—';
 
   const operatingUnits = React.useMemo(() => {
     const subNodes = nodes.filter(n => ['subsidiary', 'business_unit', 'bu'].includes(n.type?.toLowerCase()));
@@ -84,62 +90,16 @@ export default function Dashboard() {
           icon: icons[idx % icons.length],
           name: node.name,
           type: node.type?.toUpperCase() === 'BU' ? 'Business Unit' : 'Subsidiary Entity',
-          coverage: `${summary?.submission_progress?.overall_progress_pct ? Math.min(100, Math.round(summary.submission_progress.overall_progress_pct + (idx * 2))) : 95}%`,
-          evidence: `${35 + idx}/${40}`,
-          status: summary?.submission_progress?.in_review > 0 ? 'In Review' : 'Ready',
-          statusType: summary?.submission_progress?.in_review > 0 ? 'neutral' : 'success',
+          coverage: `${summary?.submission_progress?.overall_progress_pct != null ? Math.round(summary.submission_progress.overall_progress_pct) : 0}%`,
+          evidence: summary?.submission_progress ? `${summary.submission_progress.approved}/${summary.submission_progress.total_entities || 1}` : '0/0',
+          status: summary?.submission_progress?.in_review > 0 ? 'In Review' : (summary?.submission_progress?.approved > 0 ? 'Ready' : 'Draft'),
+          statusType: summary?.submission_progress?.in_review > 0 ? 'neutral' : (summary?.submission_progress?.approved > 0 ? 'success' : 'neutral'),
           action: 'Inspect BU ›',
           route: `/disclosure/bu?nodeId=${node.id}`
         };
       });
     }
-    return [
-      {
-        icon: Building2,
-        name: 'Odisha Infrastructure',
-        type: 'Primary Infra',
-        coverage: '98%',
-        evidence: '41/42',
-        status: 'Ready',
-        statusType: 'success',
-        action: 'Inspect BU ›',
-        route: '/disclosure/bu'
-      },
-      {
-        icon: Factory,
-        name: 'Energy Systems',
-        type: 'Renewables',
-        coverage: '94%',
-        evidence: '28/30',
-        status: 'In Review',
-        statusType: 'neutral',
-        action: 'Inspect BU ›',
-        route: '/disclosure/bu'
-      },
-      {
-        icon: HardHat,
-        name: 'Manufacturing',
-        type: 'Heavy Industry',
-        coverage: '88%',
-        evidence: '19/24',
-        status: 'Attention',
-        statusType: 'danger',
-        action: 'Resolve Blockers ⚠',
-        route: '/data-quality',
-        isWarning: true
-      },
-      {
-        icon: Truck,
-        name: 'Services & Logistics',
-        type: 'Fleet & Warehousing',
-        coverage: '100%',
-        evidence: '16/16',
-        status: 'Ready',
-        statusType: 'success',
-        action: 'View Report ›',
-        route: '/reporting'
-      }
-    ];
+    return [];
   }, [nodes, summary]);
 
 
@@ -424,21 +384,23 @@ export default function Dashboard() {
 
             <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
               <span style={{ fontSize: 34, fontWeight: 800, color: '#09090B', letterSpacing: '-0.02em', lineHeight: 1 }}>
-                {summary?.data_quality_score != null ? summary.data_quality_score : 94.2}<span style={{ fontSize: 22, fontWeight: 600, color: '#64748B' }}>%</span>
+                {summary?.data_quality_score != null ? summary.data_quality_score : 0}<span style={{ fontSize: 22, fontWeight: 600, color: '#64748B' }}>%</span>
               </span>
               <span style={{ fontSize: 12.5, fontWeight: 600, color: '#64748B', fontFamily: 'ui-monospace, monospace' }}>
-                {summary?.submission_progress?.total_entities ? `${summary.submission_progress.total_submissions}/${summary.submission_progress.total_entities} entities` : '38/40 projects'}
+                {summary?.submission_progress?.total_entities ? `${summary.submission_progress.total_submissions}/${summary.submission_progress.total_entities} entities` : '0/0 entities'}
               </span>
             </div>
 
             {/* Progress bar */}
             <div>
               <div style={{ height: 4, width: '100%', background: '#F1F5F9', borderRadius: 99, overflow: 'hidden', marginBottom: 8 }}>
-                <div style={{ height: '100%', width: `${summary?.data_quality_score ?? 94.2}%`, background: '#0070F3', borderRadius: 99 }} />
+                <div style={{ height: '100%', width: `${summary?.data_quality_score ?? 0}%`, background: '#0070F3', borderRadius: 99 }} />
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#64748B' }}>
                 <span>Target baseline: 90.0%</span>
-                <span style={{ color: '#15803D', fontWeight: 600 }}>Over-indexed (+4.2%)</span>
+                <span style={{ color: (summary?.data_quality_score ?? 0) >= 90 ? '#15803D' : '#D97706', fontWeight: 600 }}>
+                  {(summary?.data_quality_score ?? 0) >= 90 ? 'Aligned with SEBI standard' : 'Improvement required'}
+                </span>
               </div>
             </div>
           </div>
@@ -460,43 +422,45 @@ export default function Dashboard() {
                 PENDING REVIEW
               </span>
               <span style={{
-                background: '#DCFCE7',
-                color: '#15803D',
+                background: (summary?.submission_progress?.in_review ?? 0) > 0 ? '#FEF3C7' : '#DCFCE7',
+                color: (summary?.submission_progress?.in_review ?? 0) > 0 ? '#92400E' : '#15803D',
                 fontSize: 11,
                 fontWeight: 700,
                 padding: '2px 8px',
                 borderRadius: 9999,
-                border: '1px solid #BBF7D0'
+                border: `1px solid ${(summary?.submission_progress?.in_review ?? 0) > 0 ? '#FDE68A' : '#BBF7D0'}`
               }}>
-                ↘ -12% backlog
+                {(summary?.submission_progress?.in_review ?? 0) > 0 ? `${summary.submission_progress.in_review} queued` : 'Queue cleared'}
               </span>
             </div>
 
             <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
                 <span style={{ fontSize: 34, fontWeight: 800, color: '#09090B', letterSpacing: '-0.02em', lineHeight: 1 }}>
-                  {summary?.submission_progress?.in_review != null ? summary.submission_progress.in_review : 17}
+                  {summary?.submission_progress?.in_review != null ? summary.submission_progress.in_review : 0}
                 </span>
                 <span style={{ fontSize: 13, fontWeight: 500, color: '#64748B' }}>
                   {summary?.submission_progress?.in_review === 1 ? 'pack in review' : 'packs in review'}
                 </span>
               </div>
-              <span style={{
-                background: '#FEE2E2',
-                color: '#B91C1C',
-                fontSize: 11,
-                fontWeight: 700,
-                padding: '2px 8px',
-                borderRadius: 9999,
-                border: '1px solid #FECACA'
-              }}>
-                4 urgent
-              </span>
+              {summary?.submission_progress?.draft > 0 && (
+                <span style={{
+                  background: '#F1F5F9',
+                  color: '#475569',
+                  fontSize: 11,
+                  fontWeight: 700,
+                  padding: '2px 8px',
+                  borderRadius: 9999,
+                  border: '1px solid #E2E8F0'
+                }}>
+                  {summary.submission_progress.draft} draft
+                </span>
+              )}
             </div>
 
             <div style={{ borderTop: '1px solid #F1F5F9', paddingTop: 8, display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#64748B' }}>
-              <span>Infra & Energy sectors</span>
-              <span style={{ fontFamily: 'ui-monospace, monospace' }}>avg 18h SLA</span>
+              <span>{summary?.submission_progress?.approved ?? 0} approved submissions</span>
+              <span style={{ fontFamily: 'ui-monospace, monospace' }}>{summary?.submission_progress?.overall_progress_pct ?? 0}% complete</span>
             </div>
           </div>
 
@@ -517,35 +481,35 @@ export default function Dashboard() {
                 BRSR CORE STATUS
               </span>
               <span style={{
-                background: '#DCFCE7',
-                color: '#15803D',
+                background: (summary?.submission_progress?.approved ?? 0) > 0 ? '#DCFCE7' : '#F1F5F9',
+                color: (summary?.submission_progress?.approved ?? 0) > 0 ? '#15803D' : '#64748B',
                 fontSize: 11,
                 fontWeight: 700,
                 padding: '2px 8px',
                 borderRadius: 9999,
-                border: '1px solid #BBF7D0'
+                border: `1px solid ${(summary?.submission_progress?.approved ?? 0) > 0 ? '#BBF7D0' : '#E2E8F0'}`
               }}>
-                ● SEBI Aligned
+                {(summary?.submission_progress?.approved ?? 0) > 0 ? '● SEBI Aligned' : '● Submissions Pending'}
               </span>
             </div>
 
             <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
                 <span style={{ fontSize: 34, fontWeight: 800, color: '#09090B', letterSpacing: '-0.02em', lineHeight: 1 }}>
-                  8
+                  {summary?.principles ? summary.principles.filter(p => p.reported_metrics > 0).length : 0}
                 </span>
                 <span style={{ fontSize: 18, fontWeight: 600, color: '#94A3B8' }}>
-                  / 8
+                  / {summary?.principles ? summary.principles.length : 9}
                 </span>
               </div>
-              <span style={{ fontSize: 12.5, fontWeight: 700, color: '#15803D' }}>
-                100% Attested
+              <span style={{ fontSize: 12.5, fontWeight: 700, color: (summary?.submission_progress?.overall_progress_pct ?? 0) > 0 ? '#15803D' : '#64748B' }}>
+                {summary?.submission_progress?.overall_progress_pct ?? 0}% Attested
               </span>
             </div>
 
             <div style={{ borderTop: '1px solid #F1F5F9', paddingTop: 8, display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#64748B' }}>
-              <span>Third-party assurance</span>
-              <span>Scheduled May 18</span>
+              <span>Assurance readiness</span>
+              <span>{summary?.data_quality_grade ? `Grade ${summary.data_quality_grade}` : 'In progress'}</span>
             </div>
           </div>
         </div>
@@ -986,7 +950,7 @@ export default function Dashboard() {
               borderRadius: 4,
               border: '1px solid #E2E8F0'
             }}>
-              4 Operating Units
+              {operatingUnits.length} Operating Unit{operatingUnits.length !== 1 ? 's' : ''}
             </span>
           </div>
 
@@ -1011,7 +975,13 @@ export default function Dashboard() {
                 </tr>
               </thead>
               <tbody>
-                {operatingUnits.map((row, idx) => {
+                {operatingUnits.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} style={{ padding: '32px 12px', textAlign: 'center', color: '#64748B' }}>
+                      No operating units found under this entity scope.
+                    </td>
+                  </tr>
+                ) : operatingUnits.map((row, idx) => {
                   const RowIcon = row.icon;
                   return (
                     <tr

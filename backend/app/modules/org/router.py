@@ -77,7 +77,7 @@ def create_node(
     from app.modules.org.service import OrgService
     from app.security.jwt import decode_access_token
     from app.security.rbac import Role
-    from app.security.scope import assert_can_create_project
+    from app.security.scope import assert_can_create_project, find_org_node_safe
     from app.modules.auth.service import is_node_descendant, log_admin_audit
     from app.modules.audit.service import AuditService
     from app.modules.audit.schemas import AuditLogCreate
@@ -101,7 +101,43 @@ def create_node(
     # 1. Strict Project-Creation Matrix
     node_type_val = node_in.type.value if hasattr(node_in.type, "value") else str(node_in.type)
     if node_type_val in ("project", "site"):
-        assert_can_create_project(db, current_user, node_in.parent_id)
+        parent_node = assert_can_create_project(db, current_user, node_in.parent_id)
+
+        # 2. BU-Type Compatibility Check: project_type must align with parent BU classification
+        if parent_node and node_in.parent_id:
+            # Fetch the actual parent BU node (assert_can_create_project may return None for system_admin w/ no parent)
+            resolved_parent = parent_node or find_org_node_safe(db, node_in.parent_id)
+            if resolved_parent and resolved_parent.type in ("business_unit", "bu"):
+                bu_type = (resolved_parent.project_type or "").lower()
+                req_type = (node_in.project_type.value if hasattr(node_in.project_type, "value") else str(node_in.project_type)).lower() if node_in.project_type else "corporate"
+
+                # BU-type family compatibility map
+                BU_TYPE_COMPAT = {
+                    "solar":      {"solar", "renewable_energy", "solar_generation", "solar_power", "corporate"},
+                    "solar_power": {"solar", "renewable_energy", "solar_generation", "solar_power", "corporate"},
+                    "solar_generation": {"solar", "renewable_energy", "solar_generation", "solar_power", "corporate"},
+                    "wind_power": {"solar", "wind_generation", "renewable_energy", "corporate"},
+                    "wind_generation": {"solar", "wind_generation", "renewable_energy", "corporate"},
+                    "road":       {"road", "tunnel", "corporate"},
+                    "highway":    {"road", "tunnel", "corporate"},
+                    "tunnel":     {"tunnel", "road", "corporate"},
+                    "irrigation": {"irrigation", "corporate"},
+                    "hydrocarbon": {"hydrocarbon", "corporate"},
+                    "ev_bus":     {"ev_bus", "corporate"},
+                    "corporate":  None,   # None = any project_type allowed
+                    "civil_infrastructure": {"road", "tunnel", "irrigation", "corporate"},
+                    "renewable_energy": {"solar", "wind_generation", "renewable_energy", "solar_generation", "wind_power", "corporate"},
+                }
+
+                allowed = BU_TYPE_COMPAT.get(bu_type)
+                if allowed is not None and req_type not in allowed:
+                    raise HTTPException(
+                        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                        detail=(
+                            f"Project type '{req_type}' is incompatible with Business Unit '{resolved_parent.name}' "
+                            f"(classified as '{bu_type}'). Allowed project types for this BU: {sorted(allowed)}."
+                        )
+                    )
     else:
         # Non-project organizational units (BU, Subsidiary, Group)
         role = current_user.role
@@ -116,8 +152,11 @@ def create_node(
                 if not is_node_descendant(db, str(current_user.org_node_id), str(node_in.parent_id)):
                     raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Parent node is outside your authorized subsidiary scope.")
         elif role == Role.GROUP_ADMIN.value:
-            if node_type_val in ("group", "company") and not node_in.parent_id:
-                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Group Admins cannot create root groups.")
+            if node_type_val not in ("subsidiary", "company"):
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Group Admins may only create Subsidiaries within their group.")
+            if current_user.org_node_id and node_in.parent_id:
+                if not is_node_descendant(db, str(current_user.org_node_id), str(node_in.parent_id)):
+                    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Parent node is outside your authorized group scope.")
 
     service = OrgService(db)
     try:
@@ -473,3 +512,89 @@ def override_applicability(node_id: str, override_req: ApplicabilityOverrideRequ
     db.commit()
     db.refresh(rec)
     return rec
+
+
+# --- ORG TRASH CAN & RESTORE ---
+
+@router.get("/trash", response_model=List[OrgNodeRead])
+def list_org_trash(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
+    db: Session = Depends(get_db)
+):
+    """Lists soft-deleted organization nodes within current user's authorized scope."""
+    from app.security.jwt import decode_access_token
+    from app.security.rbac import Role
+    from app.modules.auth.service import is_node_descendant
+
+    current_user = None
+    if credentials and credentials.credentials:
+        payload = decode_access_token(credentials.credentials)
+        if payload and payload.get("sub"):
+            current_user = db.query(User).filter(User.id == payload["sub"], User.is_deleted == False).first()
+
+    q = db.query(OrgNode).filter(OrgNode.is_deleted == True)
+    if not current_user:
+        return q.all()
+    if current_user.role == Role.SYSTEM_ADMIN.value:
+        return q.all()
+    if current_user.role == Role.PROJECT_ADMIN.value:
+        return []
+    if current_user.role == Role.GROUP_ADMIN.value and not current_user.org_node_id:
+        return q.all()
+
+    all_deleted = q.all()
+    filtered = []
+    for node in all_deleted:
+        if current_user.org_node_id and is_node_descendant(db, str(current_user.org_node_id), str(node.id)):
+            filtered.append(node)
+    return filtered
+
+
+@router.post("/trash/{node_id}/restore", response_model=OrgNodeRead)
+def restore_org_node(
+    node_id: str,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    """Restores a soft-deleted organization unit."""
+    from app.security.rbac import Role
+    from app.modules.auth.service import is_node_descendant, log_admin_audit
+    from app.modules.audit.service import AuditService
+    from app.modules.audit.schemas import AuditLogCreate
+
+    node = db.query(OrgNode).filter(OrgNode.id == node_id, OrgNode.is_deleted == True).first()
+    if not node:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Deleted organizational unit not found.")
+
+    if current_user.role == Role.PROJECT_ADMIN.value:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Project Admins cannot restore organizational units.")
+
+    if current_user.role != Role.SYSTEM_ADMIN.value:
+        if current_user.org_node_id and not is_node_descendant(db, str(current_user.org_node_id), str(node.id)):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Unit is outside your authorized organizational scope.")
+
+    node.is_deleted = False
+    node.is_active = True
+    db.commit()
+    db.refresh(node)
+
+    AuditService(db).log_event(
+        AuditLogCreate(
+            action="RESTORE",
+            target_type="ORG_NODE",
+            target_id=str(node.id),
+            actor_id=str(current_user.id),
+            actor_email=current_user.email,
+            actor_role=current_user.role,
+            changes={"is_deleted": False, "is_active": True},
+            details={"code": node.code, "name": node.name},
+            ip_address="0.0.0.0"
+        )
+    )
+    log_admin_audit(
+        db, actor=current_user, action="ORG_NODE_RESTORED",
+        target_name=node.name, target_role=current_user.role,
+        target_scope_id=str(node.id),
+        details={"code": node.code}
+    )
+    return node

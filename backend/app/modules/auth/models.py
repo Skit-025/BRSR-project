@@ -29,6 +29,7 @@ class User(Base, UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin):
     __tablename__ = "users"
 
     email = Column(String(255), unique=True, index=True, nullable=False)
+    phone = Column(String(50), unique=True, index=True, nullable=True)
     hashed_password = Column(String(255), nullable=False)
     full_name = Column(String(255), nullable=False)
     
@@ -47,6 +48,9 @@ class User(Base, UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin):
     # MFA
     mfa_enabled = Column(Boolean, default=False, nullable=False)
     mfa_secret = Column(String(100), nullable=True)
+
+    # Firebase UID reconciliation (Phase 9)
+    firebase_uid = Column(String(128), unique=True, index=True, nullable=True)
 
     # Relationships
     role_assignments = relationship("UserRoleAssignment", back_populates="user", cascade="all, delete-orphan", foreign_keys="UserRoleAssignment.user_id")
@@ -91,16 +95,22 @@ class IdempotencyKey(Base, UUIDPrimaryKeyMixin, TimestampMixin):
 class UserInvitation(Base, UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin):
     """
     Invitation model for secure email-based admin/user onboarding (Spec §8, §9).
+    Tracks complete lifecycle: PENDING, SENT, ACCEPTED, FAILED, REVOKED, EXPIRED.
     """
     __tablename__ = "user_invitations"
 
     email = Column(String(255), index=True, nullable=False)
+    phone = Column(String(50), index=True, nullable=True)
     full_name = Column(String(255), nullable=False)
     role = Column(String(50), nullable=False, index=True)
     org_node_id = Column(PG_UUID(as_uuid=False), ForeignKey("org_nodes.id", ondelete="SET NULL"), nullable=True, index=True)
     invited_by_id = Column(PG_UUID(as_uuid=False), ForeignKey("users.id", ondelete="SET NULL"), nullable=False)
-    status = Column(String(30), default="PENDING", nullable=False, index=True)  # PENDING | ACCEPTED | REVOKED | EXPIRED
+    status = Column(String(30), default="PENDING", nullable=False, index=True)  # PENDING | SENT | ACCEPTED | FAILED | REVOKED | EXPIRED
     invitation_token = Column(String(255), unique=True, index=True, nullable=False)
+    firebase_uid = Column(String(128), nullable=True, index=True)
+    setup_link = Column(Text, nullable=True)
+    delivery_status = Column(String(50), default="PENDING", nullable=False)  # PENDING | SENT | FAILED
+    delivery_error = Column(Text, nullable=True)
     expires_at = Column(DateTime(timezone=True), nullable=False)
     accepted_at = Column(DateTime(timezone=True), nullable=True)
 

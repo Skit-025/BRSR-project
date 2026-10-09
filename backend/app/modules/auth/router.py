@@ -144,8 +144,15 @@ def register(req: dict, db: Session = Depends(get_db)):
             detail="Cannot self-register as central administrative authority. Contact System Admin."
         )
 
+    phone = (req.get("phone") or "").strip() or None
+    if phone:
+        existing_phone = db.query(User).filter(User.phone == phone, User.is_deleted == False).first()
+        if existing_phone:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Phone number '{phone}' is already registered.")
+
     user = User(
         email=email,
+        phone=phone,
         hashed_password=get_password_hash(password),
         full_name=req.get("full_name", email.split("@")[0]),
         role=requested_role,
@@ -277,6 +284,7 @@ def admin_provision_user(
             role=user.role,
             org_node_id=str(user.org_node_id) if user.org_node_id else None,
             initial_password=initial_password,
+            phone=user.phone,
             message="User created with permanent role. Share these credentials with the employee."
         )
     except (ValueError, PermissionError) as e:
@@ -382,6 +390,7 @@ def admin_update_user(
             user_id=user_id,
             full_name=payload.full_name,
             email=payload.email,
+            phone=payload.phone,
             role=payload.role.value if payload.role else None,
             org_node_id=payload.org_node_id,
             is_active=payload.is_active,
