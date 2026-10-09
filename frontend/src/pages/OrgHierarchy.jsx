@@ -31,7 +31,9 @@ const PROJECT_TYPES = [
 export default function OrgHierarchy() {
   const { data: nodes = [], isLoading: loadN, refetch: refetchNodes } = useOrgNodes();
   const { data: periods = [], isLoading: loadP, refetch: refetchPeriods } = useOrgPeriods();
-  const { user, isAdmin } = useAuth();
+  const { user, isAdmin, isProjectAdmin, canWriteOrg } = useAuth();
+  const canCreateUnits = user?.role !== 'project_admin' && (isAdmin || ['group_admin', 'subsidiary_admin', 'bu_admin'].includes(user?.role));
+  const canManagePeriods = ['system_admin', 'group_admin'].includes(user?.role);
   const createNode = useCreateNode();
   const updateNode = useUpdateNode();
   const createPeriod = useCreatePeriod();
@@ -326,14 +328,18 @@ export default function OrgHierarchy() {
             <RefreshCw size={14} className={isRefreshing || loadN || loadP ? 'spin' : ''} />
             <span>Refresh</span>
           </button>
-          <button className="btn btn-secondary" onClick={() => { setShowPeriodModal(true); setErrorMsg(''); }}>
-            <Calendar size={14} />
-            <span>+ New Period</span>
-          </button>
-          <button className="btn btn-primary" onClick={() => { setShowNodeModal(true); setErrorMsg(''); }}>
-            <Plus size={15} />
-            <span>+ Add Entity Unit</span>
-          </button>
+          {canManagePeriods && (
+            <button className="btn btn-secondary" onClick={() => { setShowPeriodModal(true); setErrorMsg(''); }}>
+              <Calendar size={14} />
+              <span>+ New Period</span>
+            </button>
+          )}
+          {canCreateUnits && (
+            <button className="btn btn-primary" onClick={() => { setShowNodeModal(true); setErrorMsg(''); }}>
+              <Plus size={15} />
+              <span>+ Add Entity Unit</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -539,12 +545,14 @@ export default function OrgHierarchy() {
               ))}
             </select>
 
-            <button 
-              className="btn btn-primary btn-sm"
-              onClick={() => { setShowNodeModal(true); setErrorMsg(''); }}
-            >
-              <Plus size={13} /> Add Unit
-            </button>
+            {canCreateUnits && (
+              <button 
+                className="btn btn-primary btn-sm"
+                onClick={() => { setShowNodeModal(true); setErrorMsg(''); }}
+              >
+                <Plus size={13} /> Add Unit
+              </button>
+            )}
           </div>
         </div>
 
@@ -583,7 +591,7 @@ export default function OrgHierarchy() {
                           ? 'Start by creating your Root Group Entity (e.g. AAROHAN-GROUP) or subsidiary units to establish statutory audit boundaries.'
                           : 'Try changing your search term or filtering options.'}
                       </p>
-                      {nodeList.length === 0 && (
+                      {nodeList.length === 0 && canCreateUnits && (
                         <button 
                           type="button" 
                           className="btn btn-primary btn-sm"

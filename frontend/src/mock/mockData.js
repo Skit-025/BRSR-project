@@ -688,14 +688,14 @@ export const MOCK_PERIODS = [
 export const MOCK_USERS = [
   { id: 'demo-system-admin-uuid', email: 'demo.admin@meil.in', full_name: 'Demo System Administrator', role: 'system_admin', is_active: true, org_node_id: 'mock-node-meil', created_at: '2024-01-01T00:00:00Z' },
   { id: 'mock-user-002', email: 'pvr.reddy@meil.in', full_name: 'P. Venkat Reddy', role: 'group_admin', is_active: true, org_node_id: 'mock-node-meil', created_at: '2024-01-05T00:00:00Z' },
-  { id: 'mock-user-003', email: 'esg.head@meil.in', full_name: 'Dr. Radhika Sen', role: 'esg_manager', is_active: true, org_node_id: 'mock-node-meil', created_at: '2024-01-06T00:00:00Z' },
+  { id: 'mock-user-003', email: 'esg.head@meil.in', full_name: 'Dr. Radhika Sen', role: 'group_admin', is_active: true, org_node_id: 'mock-node-meil', created_at: '2024-01-06T00:00:00Z' },
   { id: 'mock-user-004', email: 'admin.olectra@olectra.com', full_name: 'K. Rajesh', role: 'subsidiary_admin', is_active: true, org_node_id: 'mock-node-olectra', created_at: '2024-01-10T00:00:00Z' },
   { id: 'mock-user-005', email: 'admin.meghagas@meghagas.com', full_name: 'M. Subba Rao', role: 'subsidiary_admin', is_active: true, org_node_id: 'mock-node-meghagas', created_at: '2024-01-12T00:00:00Z' },
-  { id: 'mock-user-006', email: 'maker.kaleshwaram@meil.in', full_name: 'S. Ramesh Babu', role: 'maker', is_active: true, org_node_id: 'mock-node-site-medigadda', created_at: '2024-02-01T00:00:00Z' },
-  { id: 'mock-user-007', email: 'checker.irrigation@meil.in', full_name: 'V. Lakshmi Narayana', role: 'checker', is_active: true, org_node_id: 'mock-node-bu-irrigation', created_at: '2024-02-05T00:00:00Z' },
-  { id: 'mock-user-008', email: 'maker.zojila@meil.in', full_name: 'T. Suresh Kumar', role: 'maker', is_active: true, org_node_id: 'mock-node-site-baltal', created_at: '2024-02-10T00:00:00Z' },
-  { id: 'mock-user-009', email: 'auditor.brsr@external-assurance.in', full_name: 'Dr. Deepa Nair', role: 'auditor', is_active: true, org_node_id: null, created_at: '2024-02-15T00:00:00Z' },
-  { id: 'mock-user-010', email: 'viewer.board@meil.in', full_name: 'K. V. Rao', role: 'viewer', is_active: true, org_node_id: null, created_at: '2024-02-20T00:00:00Z' },
+  { id: 'mock-user-006', email: 'maker.kaleshwaram@meil.in', full_name: 'S. Ramesh Babu', role: 'project_admin', is_active: true, org_node_id: 'mock-node-site-medigadda', created_at: '2024-02-01T00:00:00Z' },
+  { id: 'mock-user-007', email: 'checker.irrigation@meil.in', full_name: 'V. Lakshmi Narayana', role: 'bu_admin', is_active: true, org_node_id: 'mock-node-bu-irrigation', created_at: '2024-02-05T00:00:00Z' },
+  { id: 'mock-user-008', email: 'maker.zojila@meil.in', full_name: 'T. Suresh Kumar', role: 'project_admin', is_active: true, org_node_id: 'mock-node-site-baltal', created_at: '2024-02-10T00:00:00Z' },
+  { id: 'mock-user-009', email: 'auditor.brsr@external-assurance.in', full_name: 'Dr. Deepa Nair', role: 'system_admin', is_active: true, org_node_id: null, created_at: '2024-02-15T00:00:00Z' },
+  { id: 'mock-user-010', email: 'viewer.board@meil.in', full_name: 'K. V. Rao', role: 'group_admin', is_active: true, org_node_id: null, created_at: '2024-02-20T00:00:00Z' },
 ];
 
 // ── Dashboard Summary ──────────────────────────────────────────────────────────

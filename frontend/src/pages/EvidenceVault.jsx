@@ -270,7 +270,7 @@ export default function EvidenceVault() {
   const qc = useQueryClient();
   const { user } = useAuth();
   const userRole = user?.role || '';
-  const canDelete = ['system_admin', 'group_admin', 'esg_manager'].includes(userRole);
+  const canDelete = ['system_admin', 'group_admin', 'subsidiary_admin', 'bu_admin', 'project_admin'].includes(userRole);
 
   const { data: evidenceList = [], isLoading, refetch, isRefetching } = useQuery({
     queryKey: ['evidence-list'],
@@ -319,7 +319,7 @@ export default function EvidenceVault() {
 
   const handleDeleteClick = (ev) => {
     if (!canDelete) {
-      setNotice({ type: 'error', text: 'Access Denied: Only System Admin or Group Admin can delete evidence files.' });
+      setNotice({ type: 'error', text: 'Access Denied: You do not have permission to delete evidence files.' });
       return;
     }
     setFileToDelete(ev);
@@ -331,13 +331,13 @@ export default function EvidenceVault() {
 
   const handleConfirmDelete = async (e) => {
     e.preventDefault();
-    if (!adminPassword.trim()) { setDeleteError('Please enter your admin password to authorize deletion.'); return; }
+    if (!adminPassword.trim()) { setDeleteError('Please enter your password to authorize deletion.'); return; }
     if (!deleteReason.trim()) { setDeleteError('A mandatory reason must be provided.'); return; }
     if (!fileToDelete) return;
     setDeleting(true); setDeleteError(null);
     try {
       await evidenceApi.delete(fileToDelete.id, adminPassword.trim(), deleteReason.trim());
-      setNotice({ type: 'success', text: `🗑️ Evidence document "${fileToDelete.original_name || fileToDelete.filename}" safely deleted.` });
+      setNotice({ type: 'success', text: `🗑️ Evidence document "${fileToDelete.original_name || fileToDelete.filename}" safely deleted and moved to Trash.` });
       setDeleteModalOpen(false); setFileToDelete(null); setAdminPassword(''); setDeleteReason(''); setDeleting(false);
       refetch();
     } catch (err) {
@@ -509,10 +509,16 @@ export default function EvidenceVault() {
             Immutable SHA-256 evidence repository. Upload a bill → save to vault → optionally run E1 OCR for instant BRSR field extraction.
           </p>
         </div>
-        <button onClick={() => refetch()} disabled={isRefetching} className="btn btn-secondary"
-          style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 6, fontSize: 13, border: '1px solid #e2e8f0', background: '#fff', color: '#09090b', fontWeight: 600 }}>
-          <RefreshCw size={13} className={isRefetching ? 'spin' : ''} /> Refresh Vault
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={() => navigate('/trash')} className="btn btn-secondary"
+            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 6, fontSize: 13, border: '1px solid #e2e8f0', background: '#fff', color: '#09090b', fontWeight: 600 }}>
+            <Trash2 size={13} color="#ef4444" /> Trash Can
+          </button>
+          <button onClick={() => refetch()} disabled={isRefetching} className="btn btn-secondary"
+            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 6, fontSize: 13, border: '1px solid #e2e8f0', background: '#fff', color: '#09090b', fontWeight: 600 }}>
+            <RefreshCw size={13} className={isRefetching ? 'spin' : ''} /> Refresh Vault
+          </button>
+        </div>
       </div>
 
       {/* ── UPLOAD PANEL ── */}
@@ -1169,7 +1175,7 @@ export default function EvidenceVault() {
               </div>
               <div>
                 <h3 style={{ fontSize: 17, fontWeight: 800, margin: 0 }}>Authorize Evidence Deletion</h3>
-                <p style={{ fontSize: 12, color: 'var(--text-secondary)', margin: '2px 0 0 0' }}>Requires administrator cryptographic authentication</p>
+                <p style={{ fontSize: 12, color: 'var(--text-secondary)', margin: '2px 0 0 0' }}>Requires cryptographic user re-authentication</p>
               </div>
             </div>
 
@@ -1177,26 +1183,38 @@ export default function EvidenceVault() {
               <div style={{ fontWeight: 700, marginBottom: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
                 <AlertTriangle size={13} /> Controlled Soft Deletion
               </div>
-              You are about to soft-delete <strong>{fileToDelete.original_name || fileToDelete.filename}</strong>. This removes it from active views but preserves the cryptographic hash and audit trail.
+              You are about to soft-delete <strong>{fileToDelete.original_name || fileToDelete.filename}</strong>. This moves it to the Trash Can while preserving the cryptographic SHA-256 hash and audit trail.
             </div>
 
             <div style={{ background: 'var(--bg-elevated)', borderRadius: 8, padding: '10px 14px', border: '1px solid var(--border-default)', fontSize: 12 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
+                <span style={{ color: 'var(--text-secondary)' }}>Evidence ID:</span>
+                <span style={{ fontFamily: 'monospace', fontWeight: 700, color: 'var(--brand-400, #38bdf8)' }}>
+                  {fileToDelete.evidence_display_id || ('EVD-' + (fileToDelete.id || '').slice(0, 8).toUpperCase())}
+                </span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
                 <span style={{ color: 'var(--text-secondary)' }}>SHA-256:</span>
                 <ShortHash hash={fileToDelete.sha256} />
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: fileToDelete.file_metadata?.project_name ? 5 : 0 }}>
                 <span style={{ color: 'var(--text-secondary)' }}>Size:</span>
                 <span>{fmtBytes(fileToDelete.size_bytes || fileToDelete.file_size)}</span>
               </div>
+              {fileToDelete.file_metadata?.project_name && (
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: 'var(--text-secondary)' }}>Project Scope:</span>
+                  <span style={{ fontWeight: 600 }}>{fileToDelete.file_metadata.project_name}</span>
+                </div>
+              )}
             </div>
 
             <div>
               <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6 }}>
-                <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><KeyRound size={12} /> Admin Password</span>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><KeyRound size={12} /> Confirm Your Password <span style={{ color: '#ef4444' }}>*</span></span>
               </label>
               <input type="password" value={adminPassword} onChange={(e) => { setAdminPassword(e.target.value); setDeleteError(null); }}
-                placeholder="Enter your administrative password" className="form-input"
+                placeholder="Enter your account password" className="form-input"
                 style={{ width: '100%', fontSize: 13, marginBottom: 12 }} autoFocus disabled={deleting} />
 
               <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6 }}>

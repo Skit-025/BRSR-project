@@ -71,6 +71,14 @@ class EvidenceFile(Base, UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin):
     attached_by_role = Column(String(50), nullable=True)
     project_id = Column(String(100), nullable=True, index=True)
     esg_indicator = Column(String(100), nullable=True, index=True)
+    # ── Deletion & Hierarchical Trash Can metadata ────────────────────────────
+    deleted_at = Column(DateTime(timezone=True), nullable=True)
+    deleted_by_id = Column(PG_UUID(as_uuid=False), ForeignKey("users.id"), nullable=True)
+    deleted_by_role = Column(String(50), nullable=True)
+    deletion_reason = Column(Text, nullable=True)
+
+    uploader = relationship("User", foreign_keys=[uploader_id], lazy="joined")
+    deleted_by = relationship("User", foreign_keys=[deleted_by_id], lazy="joined")
 
     links = relationship("EvidenceLink", back_populates="evidence_file", cascade="all, delete-orphan")
 

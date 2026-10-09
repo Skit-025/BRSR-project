@@ -96,6 +96,7 @@ class TokenPayload(BaseModel):
 
 class AdminDeleteUserRequest(BaseModel):
     admin_password: str
+    reason: Optional[str] = "Deleted by Administrator"
 
 
 class AdminVerifyPasswordRequest(BaseModel):
@@ -137,6 +138,7 @@ class UserInvitationRead(BaseModel):
 
 class AdminDeactivateUserRequest(BaseModel):
     reason: Optional[str] = "Administrative deactivation"
+    admin_password: str  # Requirer: admin must supply their own password to confirm
     preserve_records: bool = True
 
 
@@ -152,6 +154,7 @@ class AdminAuditEntryRead(BaseModel):
     target_name: Optional[str] = None
     target_role: Optional[str] = None
     target_scope_id: Optional[str] = None
+    details: Optional[dict] = None
     created_at: Optional[datetime] = None
 
 

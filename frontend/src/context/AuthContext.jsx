@@ -7,21 +7,13 @@ import { authApi } from '../api/client';
 // Reporting rules determine what appears in their REPORT.
 // These three concerns are strictly separate.
 
-// ─── Roles each admin level can create/manage (spec §2) ──────────────────────
+// ─── Roles each admin level can create/manage (Five-Role Architecture) ──────────────
 export const MANAGEABLE_ROLES = {
-  system_admin:     ['group_admin', 'group_esg_manager', 'subsidiary_admin', 'subsidiary_esg_manager', 'bu_admin', 'bu_esg_manager', 'bu_reviewer', 'project_admin', 'project_data_entry_user', 'auditor', 'read_only_viewer', 'viewer', 'maker', 'checker', 'esg_manager'],
-  super_admin:      ['group_admin', 'group_esg_manager', 'subsidiary_admin', 'subsidiary_esg_manager', 'bu_admin', 'bu_esg_manager', 'bu_reviewer', 'project_admin', 'project_data_entry_user', 'auditor', 'read_only_viewer'],
-  group_admin:      ['group_admin', 'group_esg_manager', 'subsidiary_admin', 'subsidiary_esg_manager'],
-  group_esg_manager: ['group_esg_manager', 'subsidiary_esg_manager'],
-  subsidiary_admin:  ['subsidiary_admin', 'subsidiary_esg_manager', 'bu_admin', 'bu_esg_manager', 'bu_reviewer'],
-  subsidiary_esg_manager: ['subsidiary_esg_manager', 'bu_esg_manager', 'bu_reviewer'],
-  bu_admin:         ['bu_admin', 'bu_esg_manager', 'bu_reviewer', 'project_admin', 'project_data_entry_user', 'maker'],
-  bu_esg_manager:   ['bu_esg_manager', 'bu_reviewer', 'project_admin', 'project_data_entry_user', 'maker'],
-  project_admin:    ['project_admin', 'project_data_entry_user', 'maker', 'checker'],
-  // Legacy
-  esg_manager:      ['maker', 'checker', 'viewer'],
-  maker:            [],
-  checker:          ['maker'],
+  system_admin:     ['group_admin', 'subsidiary_admin', 'bu_admin', 'project_admin'],
+  group_admin:      ['group_admin', 'subsidiary_admin', 'bu_admin', 'project_admin'],
+  subsidiary_admin: ['subsidiary_admin', 'bu_admin', 'project_admin'],
+  bu_admin:         ['bu_admin', 'project_admin'],
+  project_admin:    ['project_admin'],
 };
 
 // ─── Full permission matrix synced to backend RBAC (rbac.py) ─────────────────
@@ -44,25 +36,9 @@ const ROLE_PERMISSIONS = {
     'ai:e1:use', 'ai:e2:use', 'ai:e3:use', 'ai:e4:use', 'ai:e5:use', 'ai:e6:use', 'ai:e7:use', 'ai:approve',
   ]),
 
-  super_admin: new Set([
-    'user:manage', 'user:create', 'user:delete',
-    'form:master', 'form:submit', 'form:review',
-    'org:read', 'org:write', 'metric:read', 'metric:write',
-    'submission:create', 'submission:read', 'submission:submit', 'submission:review', 'submission:approve',
-    'evidence:upload', 'evidence:read', 'spreadsheet:upload',
-    'consolidation:run', 'consolidation:read', 'calc:run',
-    'report:compile', 'report:read', 'report:lineage',
-    'bu_disclosure:write', 'bu_disclosure:read',
-    'subsidiary_disclosure:write', 'subsidiary_disclosure:read',
-    'group_disclosure:write', 'group_disclosure:read',
-    'period:lock', 'audit:read', 'assurance:write', 'users:manage_scoped',
-    'ai:e1:use', 'ai:e2:use', 'ai:e3:use', 'ai:e4:use', 'ai:e5:use', 'ai:e6:use', 'ai:e7:use', 'ai:approve',
-  ]),
-
-  // ── Group level ─────────────────────────────────────────────────────────────
   group_admin: new Set([
-    'org:read', 'org:write', 'metric:read', 'form:master',
-    'submission:read', 'evidence:read', 'consolidation:read',
+    'org:read', 'org:write', 'metric:read', 'metric:write', 'form:master',
+    'submission:read', 'evidence:read', 'consolidation:run', 'consolidation:read', 'calc:run',
     'bu_disclosure:read', 'subsidiary_disclosure:read',
     'group_disclosure:write', 'group_disclosure:read',
     'report:read', 'report:lineage', 'report:compile',
@@ -71,21 +47,9 @@ const ROLE_PERMISSIONS = {
     'ai:e1:use', 'ai:e2:use', 'ai:e3:use', 'ai:e4:use', 'ai:e5:use', 'ai:e6:use', 'ai:e7:use', 'ai:approve',
   ]),
 
-  group_esg_manager: new Set([
-    'org:read', 'metric:read',
-    'submission:read', 'submission:review', 'evidence:read',
-    'consolidation:run', 'consolidation:read', 'calc:run',
-    'bu_disclosure:read', 'subsidiary_disclosure:read',
-    'group_disclosure:write', 'group_disclosure:read',
-    'report:compile', 'report:read', 'report:lineage',
-    'audit:read',
-    'ai:e3:use', 'ai:e4:use', 'ai:e5:use', 'ai:e6:use',
-  ]),
-
-  // ── Subsidiary level ─────────────────────────────────────────────────────────
   subsidiary_admin: new Set([
     'org:read', 'metric:read',
-    'submission:read', 'submission:review', 'evidence:read',
+    'submission:read', 'submission:review', 'submission:approve', 'evidence:read',
     'consolidation:read',
     'bu_disclosure:read',
     'subsidiary_disclosure:write', 'subsidiary_disclosure:read',
@@ -94,130 +58,32 @@ const ROLE_PERMISSIONS = {
     'ai:e1:use', 'ai:e2:use', 'ai:e3:use', 'ai:e4:use', 'ai:e5:use', 'ai:e6:use', 'ai:e7:use', 'ai:approve',
   ]),
 
-  subsidiary_esg_manager: new Set([
-    'org:read', 'metric:read',
-    'submission:read', 'submission:review', 'submission:approve', 'evidence:read',
-    'consolidation:read',
-    'bu_disclosure:read',
-    'subsidiary_disclosure:write', 'subsidiary_disclosure:read',
-    'report:read', 'report:lineage',
-    'audit:read',
-    'ai:e3:use', 'ai:e4:use', 'ai:e5:use', 'ai:e6:use',
-  ]),
-
-  // ── BU level ──────────────────────────────────────────────────────────────────
   bu_admin: new Set([
     'org:read', 'metric:read',
-    'submission:read', 'submission:review', 'form:review', 'evidence:read',
-    'consolidation:read',
+    'form:review', 'submission:read', 'submission:review', 'submission:approve', 'evidence:read',
+    'consolidation:read', 'calc:run',
     'bu_disclosure:write', 'bu_disclosure:read',
-    'report:read', 'audit:read', 'users:manage_scoped',
+    'report:read', 'report:lineage', 'audit:read', 'users:manage_scoped',
     'ai:e1:use', 'ai:e2:use', 'ai:e3:use', 'ai:e6:use', 'ai:e7:use', 'ai:approve',
   ]),
 
-  bu_esg_manager: new Set([
-    'org:read', 'metric:read',
-    'submission:read', 'submission:review', 'submission:approve', 'form:review', 'evidence:read',
-    'consolidation:read', 'calc:run',
-    'bu_disclosure:write', 'bu_disclosure:read',
-    'report:read', 'report:lineage', 'audit:read',
-    'ai:e2:use', 'ai:e7:use', 'ai:approve',
-  ]),
-
-  bu_reviewer: new Set([
-    'org:read', 'metric:read',
-    'form:review',
-    'submission:read', 'submission:review', 'submission:approve', 'evidence:read',
-    'consolidation:read',
-    'bu_disclosure:read',
-    'report:read', 'audit:read',
-    'ai:e2:use', 'ai:e7:use', 'ai:approve',
-  ]),
-
-  // ── Project level ──────────────────────────────────────────────────────────────
   project_admin: new Set([
     'org:read', 'metric:read',
     'form:submit',
     'submission:create', 'submission:read', 'submission:submit',
     'evidence:upload', 'evidence:read', 'spreadsheet:upload',
     'report:read', 'users:manage_scoped',
-  ]),
-
-  project_data_entry_user: new Set([
-    'org:read', 'metric:read',
-    'form:submit',
-    'submission:create', 'submission:read', 'submission:submit',
-    'evidence:upload', 'evidence:read', 'spreadsheet:upload',
-    'report:read',
     'ai:e1:use', 'ai:e2:use', 'ai:e6:use',
-  ]),
-
-  // ── Legacy roles (backwards compatibility) ─────────────────────────────────
-  esg_manager: new Set([
-    'org:read', 'org:write', 'metric:read', 'metric:write', 'form:master',
-    'submission:create', 'submission:read', 'submission:submit', 'submission:review', 'submission:approve',
-    'evidence:upload', 'evidence:read', 'spreadsheet:upload',
-    'consolidation:run', 'consolidation:read', 'calc:run',
-    'bu_disclosure:read', 'subsidiary_disclosure:read',
-    'group_disclosure:write', 'group_disclosure:read',
-    'report:compile', 'report:read', 'report:lineage',
-    'period:lock', 'audit:read',
-  ]),
-
-  maker: new Set([
-    'org:read', 'metric:read', 'form:submit',
-    'submission:create', 'submission:read', 'submission:submit',
-    'evidence:upload', 'evidence:read', 'spreadsheet:upload', 'report:read',
-  ]),
-
-  checker: new Set([
-    'org:read', 'metric:read', 'form:review',
-    'submission:read', 'submission:review', 'submission:approve', 'evidence:read',
-    'consolidation:read', 'bu_disclosure:read',
-    'report:read', 'audit:read',
-  ]),
-
-  auditor: new Set([
-    'org:read', 'metric:read', 'submission:read', 'evidence:read',
-    'consolidation:read',
-    'bu_disclosure:read', 'subsidiary_disclosure:read', 'group_disclosure:read',
-    'report:read', 'report:lineage', 'audit:read', 'assurance:write',
-  ]),
-
-  read_only_viewer: new Set([
-    'org:read', 'metric:read', 'submission:read', 'report:read',
-  ]),
-
-  viewer: new Set([
-    'org:read', 'metric:read', 'submission:read', 'report:read',
   ]),
 };
 
-// ─── Role display metadata ─────────────────────────────────────────────────────
+// ─── Role display metadata (Five-Role Architecture) ──────────────────────────
 export const ROLE_META = {
-  system_admin:     { label: 'System Admin',              color: '#f43f5e', icon: '🛡️',  tier: 'system',     scopeLabel: 'All' },
-  super_admin:      { label: 'Super Admin',               color: '#f43f5e', icon: '🛡️',  tier: 'system',     scopeLabel: 'All' },
-
-  group_admin:      { label: 'Group Admin',               color: '#8b5cf6', icon: '🏛️',  tier: 'group',      scopeLabel: 'Group' },
-  group_esg_manager: { label: 'Group ESG Manager',        color: '#7c3aed', icon: '🌍',  tier: 'group',      scopeLabel: 'Group' },
-
-  subsidiary_admin:       { label: 'Subsidiary Admin',      color: '#6366f1', icon: '🏢', tier: 'subsidiary', scopeLabel: 'Subsidiary' },
-  subsidiary_esg_manager: { label: 'Subsidiary ESG Manager', color: '#4f46e5', icon: '📊', tier: 'subsidiary', scopeLabel: 'Subsidiary' },
-
-  bu_admin:         { label: 'BU Admin',                  color: '#0ea5e9', icon: '🏗️',  tier: 'bu',         scopeLabel: 'Business Unit' },
-  bu_esg_manager:   { label: 'BU ESG Manager',            color: '#0284c7', icon: '📋',  tier: 'bu',         scopeLabel: 'Business Unit' },
-  bu_reviewer:      { label: 'BU Reviewer',               color: '#0369a1', icon: '✅',  tier: 'bu',         scopeLabel: 'Business Unit' },
-
-  project_admin:           { label: 'Project Admin',           color: '#f59e0b', icon: '📁',  tier: 'project', scopeLabel: 'Project' },
-  project_data_entry_user: { label: 'Data Entry',              color: '#d97706', icon: '✏️',  tier: 'project', scopeLabel: 'Project' },
-
-  // Legacy
-  esg_manager: { label: 'ESG Manager',         color: '#10b981', icon: '🌱', tier: 'group',   scopeLabel: 'Group' },
-  maker:        { label: 'Data Entry (Maker)',  color: '#f59e0b', icon: '✏️', tier: 'project', scopeLabel: 'Project' },
-  checker:      { label: 'Checker',            color: '#0ea5e9', icon: '✅', tier: 'bu',      scopeLabel: 'BU' },
-  auditor:      { label: 'Auditor',            color: '#14b8a6', icon: '🔍', tier: 'group',   scopeLabel: 'All (Read)' },
-  read_only_viewer: { label: 'Viewer',         color: '#94a3b8', icon: '👁️', tier: 'group',   scopeLabel: 'All (Read)' },
-  viewer:       { label: 'Viewer',             color: '#94a3b8', icon: '👁️', tier: 'group',   scopeLabel: 'All (Read)' },
+  system_admin:     { label: 'System Admin',     color: '#f43f5e', icon: '🛡️',  tier: 'system',     scopeLabel: 'All' },
+  group_admin:      { label: 'Group Admin',      color: '#8b5cf6', icon: '🏛️',  tier: 'group',      scopeLabel: 'Group' },
+  subsidiary_admin: { label: 'Subsidiary Admin', color: '#6366f1', icon: '🏢', tier: 'subsidiary', scopeLabel: 'Subsidiary' },
+  bu_admin:         { label: 'BU Admin',         color: '#0ea5e9', icon: '🏗️',  tier: 'bu',         scopeLabel: 'Business Unit' },
+  project_admin:    { label: 'Project Admin',    color: '#059669', icon: '📁',  tier: 'project',    scopeLabel: 'Project' },
 };
 
 const AuthContext = createContext(null);
@@ -322,40 +188,40 @@ export function AuthProvider({ children }) {
 
   const hasPermission = useMemo(() => (permission) => {
     if (!role) return false;
-    if (role === 'system_admin' || role === 'super_admin') return true;
+    if (role === 'system_admin') return true;
     const perms = ROLE_PERMISSIONS[role];
     return perms ? perms.has(permission) : false;
   }, [role]);
 
   const manageableRoles = MANAGEABLE_ROLES[role] || [];
 
-  // ── Role boolean flags ────────────────────────────────────────────────────
+  // ── Role boolean flags (Five-Role Architecture) ───────────────────────────
   // System
-  const isAdmin        = role === 'system_admin' || role === 'super_admin';
+  const isAdmin = role === 'system_admin';
 
   // Group
-  const isGroupAdmin      = role === 'group_admin';
-  const isGroupEsgManager = role === 'group_esg_manager';
-  const isEsgManager      = role === 'esg_manager' || isGroupEsgManager; // legacy compat
+  const isGroupAdmin = role === 'group_admin';
+  const isGroupEsgManager = role === 'group_admin';
+  const isEsgManager = role === 'group_admin' || role === 'system_admin';
 
   // Subsidiary
-  const isSubAdmin        = role === 'subsidiary_admin';
-  const isSubEsgManager   = role === 'subsidiary_esg_manager';
+  const isSubAdmin = role === 'subsidiary_admin';
+  const isSubEsgManager = role === 'subsidiary_admin';
 
   // BU
-  const isBuAdmin         = role === 'bu_admin';
-  const isBuEsgManager    = role === 'bu_esg_manager';
-  const isBuReviewer      = role === 'bu_reviewer' || role === 'checker'; // checker is legacy alias
+  const isBuAdmin = role === 'bu_admin';
+  const isBuEsgManager = role === 'bu_admin';
+  const isBuReviewer = role === 'bu_admin';
 
   // Project
-  const isProjectAdmin          = role === 'project_admin';
-  const isProjectDataEntryUser  = role === 'project_data_entry_user' || role === 'maker'; // maker is legacy
-  const isMaker                 = role === 'maker';  // legacy name kept
-  const isChecker               = role === 'checker'; // legacy name kept
+  const isProjectAdmin = role === 'project_admin';
+  const isProjectDataEntryUser = role === 'project_admin';
+  const isMaker = role === 'project_admin' || role === 'system_admin';
+  const isChecker = role === 'bu_admin' || role === 'subsidiary_admin' || role === 'group_admin' || role === 'system_admin';
 
-  // Cross-cutting
-  const isAuditor      = role === 'auditor';
-  const isViewer       = role === 'viewer' || role === 'read_only_viewer';
+  // Cross-cutting (auditor capabilities folded into system_admin)
+  const isAuditor = role === 'system_admin';
+  const isViewer = false;
 
   // ── Derived scope tier ────────────────────────────────────────────────────
   const scopeTier = ROLE_META[role]?.tier || 'group';

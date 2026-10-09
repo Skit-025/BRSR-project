@@ -11,39 +11,22 @@ import { authApi, orgApi } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import Modal from '../components/Modal';
 
-// All standard roles with display metadata
+// All standard roles with display metadata (Five-Role Architecture)
 export const ROLE_DEFINITIONS = {
   system_admin: { label: 'System Admin', tier: 'System', level: 0, badge: 'badge-purple', desc: 'Central infrastructure & platform root authority' },
-  super_admin: { label: 'Super Admin', tier: 'System', level: 0, badge: 'badge-purple', desc: 'Enterprise super administrator' },
   group_admin: { label: 'Group Admin', tier: 'Group', level: 1, badge: 'badge-purple', desc: 'Enterprise group ESG governance & consolidation' },
-  group_esg_manager: { label: 'Group ESG Manager', tier: 'Group', level: 1, badge: 'badge-purple', desc: 'Group methodology & disclosure compilation' },
   subsidiary_admin: { label: 'Subsidiary Admin', tier: 'Subsidiary', level: 2, badge: 'badge-indigo', desc: 'Subsidiary administrator (BRSR sections A, B, C)' },
-  subsidiary_esg_manager: { label: 'Subsidiary ESG Manager', tier: 'Subsidiary', level: 2, badge: 'badge-indigo', desc: 'Subsidiary review & aggregation lead' },
-  bu_admin: { label: 'BU Admin', tier: 'BU', level: 3, badge: 'badge-sky', desc: 'Business Unit Admin (reviews project data)' },
-  bu_esg_manager: { label: 'BU ESG Manager', tier: 'BU', level: 3, badge: 'badge-sky', desc: 'BU multi-year targets & target tracking' },
-  bu_reviewer: { label: 'BU Reviewer', tier: 'BU', level: 3, badge: 'badge-sky', desc: 'Four-Eyes BU data reviewer' },
-  project_admin: { label: 'Project Admin', tier: 'Project', level: 4, badge: 'badge-amber', desc: 'Project site administrator' },
-  project_data_entry_user: { label: 'Project Data Entry', tier: 'Project', level: 4, badge: 'badge-amber', desc: 'Operational raw fact entry & evidence upload' },
-  maker: { label: 'Maker (Data Entry)', tier: 'Project', level: 4, badge: 'badge-amber', desc: 'Operational ESG data entry' },
-  checker: { label: 'Checker (Reviewer)', tier: 'Project', level: 4, badge: 'badge-sky', desc: 'Operational data reviewer' },
-  auditor: { label: 'Independent Auditor', tier: 'External', level: 5, badge: 'badge-teal', desc: 'Third-party assurance & verification' },
-  read_only_viewer: { label: 'Read-Only Viewer', tier: 'All', level: 5, badge: 'badge-gray', desc: 'Read-only analytics and reports' },
-  viewer: { label: 'Viewer', tier: 'All', level: 5, badge: 'badge-gray', desc: 'General read-only viewer' },
+  bu_admin: { label: 'BU Admin', tier: 'BU', level: 3, badge: 'badge-sky', desc: 'Business Unit Admin (reviews & approves project data)' },
+  project_admin: { label: 'Project Admin', tier: 'Project', level: 4, badge: 'badge-amber', desc: 'Project site administrator & operational data entry' },
 };
 
 // Default delegable permissions per role
 const ROLE_PERMISSIONS_PREVIEW = {
+  system_admin: ['Platform Administration', 'Full System Access', 'Security & Audit Oversight'],
   group_admin: ['Group ESG Consolidation', 'Subsidiary Admin Delegation', 'BRSR Report Approval', 'Audit Trail Oversight'],
-  group_esg_manager: ['Group Net-Zero Targets', 'Consolidation Pipeline', 'Report Compilation'],
   subsidiary_admin: ['Subsidiary ESG Governance', 'BU Admin Delegation', 'BRSR Sections A & B', 'Consolidated Review'],
-  subsidiary_esg_manager: ['Subsidiary Metrics Aggregation', 'BU Review Oversight', 'Evidence Validation'],
-  bu_admin: ['BU Data Review', 'Project Admin Delegation', 'Variance Analysis', 'BU Target Management'],
-  bu_esg_manager: ['BU Target Entry', 'Initiatives Tracking', 'Monthly Pack Review'],
-  bu_reviewer: ['BU Reviewer 4-Eyes Check', 'Sign-Off / Return with Comments'],
-  project_admin: ['Project Site Governance', 'Data Entry User Delegation', 'Readiness Checklist Sign-Off'],
-  project_data_entry_user: ['Monthly Operational Data Entry', 'Evidence Document Upload', 'Pre-Submission Checklist'],
-  maker: ['Operational Metric Entry', 'Evidence File Upload', 'Pre-Submission Checklist'],
-  checker: ['Project Verification', 'Approve / Reject Data Rows'],
+  bu_admin: ['BU Data Review & Approval', 'Project Admin Delegation', 'Variance Analysis', 'BU Target Management'],
+  project_admin: ['Project Site Governance', 'Monthly Operational Data Entry', 'Evidence Document Upload', 'Pre-Submission Checklist'],
 };
 
 export default function UserManagement() {
@@ -70,7 +53,15 @@ export default function UserManagement() {
   // Deactivate Modal state
   const [deactivateTarget, setDeactivateTarget] = useState(null);
   const [deactivateReason, setDeactivateReason] = useState('Administrative transition');
+  const [deactivatePassword, setDeactivatePassword] = useState('');
   const [deactivateError, setDeactivateError] = useState('');
+
+  // Delete User Modal state
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleteReason, setDeleteReason] = useState('Administrative personnel offboarding');
+  const [deletePassword, setDeletePassword] = useState('');
+  const [deleteError, setDeleteError] = useState('');
+
 
   // User Creation Request state
   const [isUserReqOpen, setIsUserReqOpen] = useState(false);
@@ -109,7 +100,7 @@ export default function UserManagement() {
 
   // Calculate descendant node IDs for the current user to enforce scope isolation
   const authorizedNodeIds = useMemo(() => {
-    if (!currentUser?.org_node_id || ['system_admin', 'super_admin'].includes(currentUser.role)) {
+    if (!currentUser?.org_node_id || currentUser.role === 'system_admin') {
       return null; // All nodes authorized
     }
 
@@ -410,18 +401,53 @@ export default function UserManagement() {
 
   // Deactivate User Mutation
   const deactivateMutation = useMutation({
-    mutationFn: async ({ id, reason }) => authApi.deactivateUser(id, reason),
+    mutationFn: async ({ id, reason, admin_password }) => authApi.deactivateUser(id, reason, admin_password),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['admin-scoped-users'] });
       qc.invalidateQueries({ queryKey: ['admin-audit-log'] });
+      const name = deactivateTarget?.full_name || deactivateTarget?.email;
       setNotice({
         type: 'success',
-        text: `Account for ${deactivateTarget?.full_name || deactivateTarget?.email} has been deactivated. Historical ESG records remain preserved.`
+        text: `Account for ${name} has been deactivated. Historical ESG records remain preserved.`
       });
       setDeactivateTarget(null);
+      setDeactivatePassword('');
     },
     onError: (err) => {
       setDeactivateError(err.response?.data?.detail || 'Failed to deactivate user.');
+    }
+  });
+
+  // Activate User Mutation
+  const activateMutation = useMutation({
+    mutationFn: async (id) => authApi.activateUser(id),
+    onSuccess: (res, id) => {
+      qc.invalidateQueries({ queryKey: ['admin-scoped-users'] });
+      qc.invalidateQueries({ queryKey: ['admin-audit-log'] });
+      setNotice({ type: 'success', text: 'User account reactivated successfully.' });
+    },
+    onError: (err) => {
+      setNotice({ type: 'error', text: err.response?.data?.detail || 'Failed to reactivate user.' });
+    }
+  });
+
+  // Delete User Mutation (requires password and reason)
+  const deleteMutation = useMutation({
+    mutationFn: async ({ id, admin_password, reason }) => authApi.deleteUser(id, admin_password, reason),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['admin-scoped-users'] });
+      qc.invalidateQueries({ queryKey: ['admin-audit-log'] });
+      const name = deleteTarget?.full_name || deleteTarget?.email;
+      setNotice({
+        type: 'success',
+        text: `User ${name} has been safely deleted. Historical audit trail preserved.`
+      });
+      setDeleteTarget(null);
+      setDeletePassword('');
+      setDeleteReason('Administrative personnel offboarding');
+    },
+    onError: (err) => {
+      setDeleteError(err.response?.data?.detail || 'Failed to delete user.');
     }
   });
 
@@ -530,7 +556,7 @@ export default function UserManagement() {
 
   // Whether current user is a subsidiary_admin (request workflow) or approver
   const isSubsidiaryAdmin = currentRole === 'subsidiary_admin';
-  const canApproveRequests = ['system_admin', 'super_admin', 'group_admin'].includes(currentRole);
+  const canApproveRequests = ['system_admin', 'group_admin'].includes(currentRole);
 
   return (
     <div className="page-content anim-fade-up" style={{ background: '#f8fafc' }}>
@@ -904,19 +930,54 @@ export default function UserManagement() {
                             <span style={{ fontSize: '11px', color: 'var(--brand-400)' }}>Current User</span>
                           ) : isRoot ? (
                             <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Root Protected</span>
+                          ) : (currentRole === 'group_admin' && u.role === 'system_admin') ? (
+                            <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>System Protected</span>
+                          ) : !['system_admin', 'group_admin'].includes(currentRole) ? (
+                            <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>No Permission</span>
                           ) : (
-                            <button
-                              className="btn btn-secondary btn-sm"
-                              style={{ color: 'var(--rose-400)', borderColor: 'rgba(239, 68, 68, 0.2)' }}
-                              onClick={() => {
-                                setDeactivateError('');
-                                setDeactivateReason('Administrative delegation transition');
-                                setDeactivateTarget(u);
-                              }}
-                            >
-                              <Ban size={12} style={{ marginRight: 4 }} />
-                              Deactivate
-                            </button>
+                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, justifyContent: 'flex-end' }}>
+                              {u.is_active !== false ? (
+                                <button
+                                  className="btn btn-secondary btn-sm"
+                                  style={{ color: '#f59e0b', borderColor: 'rgba(245, 158, 11, 0.3)', padding: '3px 8px', fontSize: 11 }}
+                                  title="Deactivate Account"
+                                  onClick={() => {
+                                    setDeactivateError('');
+                                    setDeactivateReason('Administrative delegation transition');
+                                    setDeactivatePassword('');
+                                    setDeactivateTarget(u);
+                                  }}
+                                >
+                                  <Ban size={12} style={{ marginRight: 4 }} />
+                                  Deactivate
+                                </button>
+                              ) : (
+                                <button
+                                  className="btn btn-secondary btn-sm"
+                                  style={{ color: '#10b981', borderColor: 'rgba(16, 185, 129, 0.3)', padding: '3px 8px', fontSize: 11 }}
+                                  title="Reactivate Account"
+                                  disabled={activateMutation.isPending}
+                                  onClick={() => activateMutation.mutate(u.id)}
+                                >
+                                  <CheckCircle size={12} style={{ marginRight: 4 }} />
+                                  Activate
+                                </button>
+                              )}
+                              <button
+                                className="btn btn-secondary btn-sm"
+                                style={{ color: '#ef4444', borderColor: 'rgba(239, 68, 68, 0.3)', padding: '3px 8px', fontSize: 11 }}
+                                title="Delete User (Soft-delete with password & reason)"
+                                onClick={() => {
+                                  setDeleteError('');
+                                  setDeleteReason('Administrative personnel offboarding');
+                                  setDeletePassword('');
+                                  setDeleteTarget(u);
+                                }}
+                              >
+                                <Trash2 size={12} style={{ marginRight: 4 }} />
+                                Delete
+                              </button>
+                            </div>
                           )}
                         </td>
                       </tr>
@@ -1360,10 +1421,10 @@ export default function UserManagement() {
         </form>
       </Modal>
 
-      {/* MODAL: Deactivate User (Preserves ESG History) */}
+      {/* MODAL: Deactivate User (system_admin / group_admin only — requires admin password) */}
       <Modal
         isOpen={!!deactivateTarget}
-        onClose={() => setDeactivateTarget(null)}
+        onClose={() => { setDeactivateTarget(null); setDeactivatePassword(''); }}
         maxWidth="500px"
       >
         <div className="modal-header">
@@ -1374,11 +1435,11 @@ export default function UserManagement() {
             <div>
               <h3 style={{ fontSize: '16px', color: '#fff' }}>Deactivate User Account</h3>
               <p style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-                Preserves historical ESG submissions & audit trail
+                Preserves historical ESG submissions &amp; audit trail
               </p>
             </div>
           </div>
-          <button className="icon-btn" onClick={() => setDeactivateTarget(null)}>
+          <button className="icon-btn" onClick={() => { setDeactivateTarget(null); setDeactivatePassword(''); }}>
             <X size={18} />
           </button>
         </div>
@@ -1390,7 +1451,7 @@ export default function UserManagement() {
           </div>
         )}
 
-        <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 14, overflowY: 'auto', maxHeight: '70vh' }}>
           <p style={{ fontSize: '13px', lineHeight: 1.5 }}>
             Are you sure you want to deactivate{' '}
             <strong style={{ color: '#fff' }}>{deactivateTarget?.full_name || deactivateTarget?.email}</strong>?
@@ -1414,18 +1475,142 @@ export default function UserManagement() {
             />
           </div>
 
-          <div className="modal-actions" style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 12 }}>
-            <button type="button" className="btn btn-secondary" onClick={() => setDeactivateTarget(null)}>
+          {/* Password Confirmation — security gate */}
+          <div className="form-group">
+            <label className="form-label" style={{ color: 'var(--rose-400)', fontWeight: 600 }}>
+              Your Administrator Password *
+            </label>
+            <input
+              type="password"
+              className="form-control"
+              value={deactivatePassword}
+              onChange={(e) => setDeactivatePassword(e.target.value)}
+              placeholder="Enter your own login password to confirm"
+              autoComplete="current-password"
+              style={{ border: '1px solid rgba(239,68,68,0.4)' }}
+            />
+            <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: 4 }}>
+              Only System Admin or Group Admin can deactivate accounts. Password verification is mandatory.
+            </div>
+          </div>
+
+          <div className="modal-actions" style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 4, paddingBottom: 4 }}>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => { setDeactivateTarget(null); setDeactivatePassword(''); }}
+            >
               Cancel
             </button>
             <button
               type="button"
               className="btn btn-primary"
-              style={{ background: 'var(--rose-600)', borderColor: 'var(--rose-600)' }}
-              disabled={deactivateMutation.isPending}
-              onClick={() => deactivateMutation.mutate({ id: deactivateTarget.id, reason: deactivateReason })}
+              style={{ background: '#dc2626', borderColor: '#dc2626' }}
+              disabled={deactivateMutation.isPending || !deactivatePassword.trim() || !deactivateReason.trim()}
+              onClick={() => deactivateMutation.mutate({
+                id: deactivateTarget.id,
+                reason: deactivateReason,
+                admin_password: deactivatePassword,
+              })}
             >
-              {deactivateMutation.isPending ? 'Deactivating...' : 'Confirm Deactivation'}
+              {deactivateMutation.isPending ? 'Deactivating...' : '⚠ Confirm Deactivation'}
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* MODAL: Delete User (system_admin / group_admin only — requires admin password & mandatory reason) */}
+      <Modal
+        isOpen={!!deleteTarget}
+        onClose={() => { setDeleteTarget(null); setDeletePassword(''); setDeleteReason(''); }}
+        maxWidth="500px"
+      >
+        <div className="modal-header">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div className="modal-header-icon" style={{ background: 'rgba(239, 68, 68, 0.2)' }}>
+              <Trash2 size={18} color="#ef4444" />
+            </div>
+            <div>
+              <h3 style={{ fontSize: '16px', color: '#fff' }}>Delete User Account</h3>
+              <p style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                Audit-controlled soft deletion with credential revocation
+              </p>
+            </div>
+          </div>
+          <button className="icon-btn" onClick={() => { setDeleteTarget(null); setDeletePassword(''); setDeleteReason(''); }}>
+            <X size={18} />
+          </button>
+        </div>
+
+        {deleteError && (
+          <div className="login-error-banner" style={{ margin: '16px 20px 0' }}>
+            <AlertCircle size={16} />
+            <span>{deleteError}</span>
+          </div>
+        )}
+
+        <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 14, overflowY: 'auto', maxHeight: '70vh' }}>
+          <p style={{ fontSize: '13px', lineHeight: 1.5 }}>
+            Are you sure you want to permanently delete the account for{' '}
+            <strong style={{ color: '#fff' }}>{deleteTarget?.full_name || deleteTarget?.email}</strong>?
+          </p>
+
+          <div style={{ padding: '12px 14px', borderRadius: 6, background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)', fontSize: '12px', color: 'var(--text-secondary)' }}>
+            <div style={{ fontWeight: 600, color: '#ef4444', marginBottom: 4 }}>Audit &amp; Data Preservation Notice:</div>
+            Account credentials and role assignments will be immediately revoked for{' '}
+            <strong>{getNodeDisplay(deleteTarget?.org_node_id)}</strong>.
+            All historical business submissions, reviews, and audit logs will remain intact and auditable.
+          </div>
+
+          <div className="form-group">
+            <label className="form-label" style={{ fontWeight: 600 }}>Deletion Reason *</label>
+            <input
+              type="text"
+              className="form-control"
+              value={deleteReason}
+              onChange={(e) => setDeleteReason(e.target.value)}
+              placeholder="e.g. Personnel offboarding, contract termination"
+            />
+          </div>
+
+          <div className="form-group">
+            <label className="form-label" style={{ color: '#ef4444', fontWeight: 600 }}>
+              Your Administrator Password *
+            </label>
+            <input
+              type="password"
+              className="form-control"
+              value={deletePassword}
+              onChange={(e) => setDeletePassword(e.target.value)}
+              placeholder="Enter your login password to authorize deletion"
+              autoComplete="current-password"
+              style={{ border: '1px solid rgba(239,68,68,0.5)' }}
+            />
+            <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: 4 }}>
+              System Admin or Group Admin password verification is mandatory for user deletion.
+            </div>
+          </div>
+
+          <div className="modal-actions" style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 4, paddingBottom: 4 }}>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => { setDeleteTarget(null); setDeletePassword(''); setDeleteReason(''); }}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary"
+              style={{ background: '#b91c1c', borderColor: '#b91c1c' }}
+              disabled={deleteMutation.isPending || !deletePassword.trim() || !deleteReason.trim()}
+              onClick={() => deleteMutation.mutate({
+                id: deleteTarget.id,
+                reason: deleteReason,
+                admin_password: deletePassword,
+              })}
+            >
+              {deleteMutation.isPending ? 'Deleting...' : '🗑 Confirm Deletion'}
             </button>
           </div>
         </div>

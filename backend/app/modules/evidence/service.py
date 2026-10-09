@@ -97,8 +97,8 @@ def process_and_store_evidence(
         doc_category=clean_category,
         bill_type=clean_bill_type,
         attached_by_role=attached_by_role or "project_admin",
-        project_id=project_id or "__",
-        esg_indicator=esg_indicator or "__",
+        project_id=project_id or None,
+        esg_indicator=esg_indicator or None,
     )
     db.add(evidence)
     db.commit()

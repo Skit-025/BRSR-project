@@ -180,9 +180,19 @@ def submit_submission_pack(
 
     if not submission:
         # Fallback: check if submission_id references an entity ID or code
-        entity = db.query(OrgNode).filter(
-            (OrgNode.code == submission_id) | (OrgNode.id == submission_id)
-        ).first()
+        import uuid
+        is_sub_uuid = False
+        try:
+            uuid.UUID(str(submission_id))
+            is_sub_uuid = True
+        except (ValueError, AttributeError, TypeError):
+            is_sub_uuid = False
+        if is_sub_uuid:
+            entity = db.query(OrgNode).filter(
+                (OrgNode.code == str(submission_id)) | (OrgNode.id == str(submission_id))
+            ).first()
+        else:
+            entity = db.query(OrgNode).filter(OrgNode.code == str(submission_id)).first()
         if entity:
             submission = db.query(Submission).filter(
                 Submission.entity_id == entity.id,

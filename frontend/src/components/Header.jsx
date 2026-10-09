@@ -15,14 +15,23 @@ const PLATFORM_JOURNEY_STEPS = [
   { step: '01', title: 'Organization', desc: 'Enterprise structure & entity roll-up', route: '/dashboard', icon: Building2, role: 'Group Admin' },
   { step: '02', title: 'Subsidiary', desc: 'Aarohan Renewable Energy Pvt. Ltd.', route: '/disclosure/subsidiary', icon: Building2, role: 'Subsidiary Admin' },
   { step: '03', title: 'Business Unit', desc: 'Solar EPC & Operations BU oversight', route: '/disclosure/bu', icon: Layers, role: 'BU Admin' },
-  { step: '04', title: 'Project Hub', desc: '250 MW Odisha Solar Park hero site', route: '/projects', icon: HardHat, role: 'Project User' },
-  { step: '05', title: 'Data Entry', desc: 'Operational parameters & statutory vouchers', route: '/collection', icon: PenLine, role: 'Project User' },
-  { step: '06', title: 'Review & Gate', desc: 'Four-eyes Segregation of Duties & audit check', route: '/workflow', icon: GitMerge, role: 'BU Reviewer' },
-  { step: '07', title: 'Calculation', desc: 'Bottom-up boundary consolidation engine', route: '/consolidation', icon: Layers, role: 'ESG Manager' },
+  { step: '04', title: 'Project Hub', desc: '250 MW Odisha Solar Park hero site', route: '/projects', icon: HardHat, role: 'Project Admin' },
+  { step: '05', title: 'Data Entry', desc: 'Operational parameters & statutory vouchers', route: '/collection', icon: PenLine, role: 'Project Admin' },
+  { step: '06', title: 'Review & Gate', desc: 'Four-eyes Segregation of Duties & audit check', route: '/workflow', icon: GitMerge, role: 'BU Admin' },
+  { step: '07', title: 'Calculation', desc: 'Bottom-up boundary consolidation engine', route: '/consolidation', icon: Layers, role: 'Group Admin' },
   { step: '08', title: 'BRSR Report', desc: 'SEBI BRSR disclosures with full lineage drilldown', route: '/reporting', icon: FileSpreadsheet, role: 'Group Admin' },
 ];
 
 const ACTIVE_PERSONAS = [
+  {
+    roleKey: 'system_admin',
+    name: 'Dr. Deepa Nair',
+    label: 'System Admin',
+    email: 'admin@aarohan.in',
+    org: 'Platform Administration',
+    color: '#F43F5E',
+    route: '/admin/users'
+  },
   {
     roleKey: 'group_admin',
     name: 'Aditya Sharma',
@@ -51,12 +60,12 @@ const ACTIVE_PERSONAS = [
     route: '/workflow'
   },
   {
-    roleKey: 'project_data_entry_user',
+    roleKey: 'project_admin',
     name: 'Ravi Kumar',
-    label: 'Project User',
+    label: 'Project Admin',
     email: 'project.user@aarohan.in',
     org: '250 MW Odisha Solar Park',
-    color: '#F59E0B',
+    color: '#059669',
     route: '/collection'
   }
 ];

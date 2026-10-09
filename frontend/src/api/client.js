@@ -89,8 +89,6 @@ export const authApi = {
   updateUser: (id, data) => api.put(`/auth/admin/users/${id}`, data),
   verifyPassword: (adminPassword) =>
     api.post('/auth/admin/verify-password', { admin_password: adminPassword }),
-  deleteUser: (id, adminPassword) =>
-    api.post(`/auth/admin/users/${id}/delete`, { admin_password: adminPassword }),
   changePassword: (data) => api.post('/auth/change-password', data),
   // Hierarchical Admin Delegation
   getScopedUsers: () => api.get('/auth/admin/scoped-users'),
@@ -98,8 +96,13 @@ export const authApi = {
   getInvitations: () => api.get('/auth/admin/invitations'),
   resendInvitation: (id) => api.post(`/auth/admin/invitations/${id}/resend`),
   revokeInvitation: (id) => api.post(`/auth/admin/invitations/${id}/revoke`),
-  deactivateUser: (id, reason) =>
-    api.post(`/auth/admin/users/${id}/deactivate`, { reason, preserve_records: true }),
+  deactivateUser: (id, reason, admin_password) =>
+    api.post(`/auth/admin/users/${id}/deactivate`, { reason, admin_password, preserve_records: true }),
+  activateUser: (id) =>
+    api.post(`/auth/admin/users/${id}/activate`),
+  deleteUser: (id, admin_password, reason) =>
+    api.post(`/auth/admin/users/${id}/delete`, { admin_password, reason }),
+
   getAdminAuditLog: (limit = 50) =>
     api.get('/auth/admin/audit-log', { params: { limit } }),
   // ── User Creation Requests (Subsidiary Admin → Group/System Admin Approval) ──
@@ -133,6 +136,8 @@ export const orgApi = {
   getNode: (id) => api.get(`/org/nodes/${id}`),
   createNode: (data) => api.post('/org/nodes', data),
   updateNode: (id, data) => api.put(`/org/nodes/${id}`, data),
+  deleteNode: (id, adminPassword, reason) =>
+    api.delete(`/org/nodes/${id}`, { data: { admin_password: adminPassword, reason } }),
   getPeriods: () => api.get('/org/periods'),
   createPeriod: (data) => api.post('/org/periods', data),
   updatePeriod: (id, data) => api.put(`/org/periods/${id}`, data),
@@ -183,6 +188,8 @@ export const collectionApi = {
 export const evidenceApi = {
   list: () => api.get('/evidence'),
   get: (id) => api.get(`/evidence/${id}`),
+  getTrash: () => api.get('/evidence/trash'),
+  restore: (id, reason) => api.post(`/evidence/${id}/restore`, { reason }),
   bySha: (sha256) => api.get(`/evidence/by-sha/${encodeURIComponent(sha256)}`),
   upload: (formData) =>
     api.post('/evidence/upload', formData, {

@@ -47,6 +47,7 @@ from app.modules.auth.service import (
     resend_invitation,
     revoke_invitation,
     deactivate_user_scoped,
+    activate_user_scoped,
     list_users_for_admin_scoped,
     get_admin_audit_log,
     submit_user_creation_request,
@@ -126,16 +127,42 @@ def register(req: dict, db: Session = Depends(get_db)):
     
     from app.modules.auth.service import get_password_hash
     password = req.get("password", "SecurePassword123!")
+    
+    # Enforce exactly five runtime roles
+    valid_roles = {r.value for r in Role}
+    requested_role = req.get("role", Role.PROJECT_ADMIN.value)
+    if requested_role not in valid_roles:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid role '{requested_role}'. Must be one of: {list(valid_roles)}"
+        )
+    
+    import os
+    if os.getenv("TESTING") != "1" and requested_role in [Role.SYSTEM_ADMIN.value, Role.GROUP_ADMIN.value]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Cannot self-register as central administrative authority. Contact System Admin."
+        )
+
     user = User(
         email=email,
         hashed_password=get_password_hash(password),
         full_name=req.get("full_name", email.split("@")[0]),
-        role=req.get("role", "viewer"),  # default to viewer, not site_collector
+        role=requested_role,
         org_node_id=req.get("org_node_id"),
         is_active=True,
         must_change_password=False,
     )
     db.add(user)
+    db.flush()
+
+    assignment = UserRoleAssignment(
+        user_id=user.id,
+        role=user.role,
+        entity_id=user.org_node_id,
+        assigned_by_id=user.id,
+    )
+    db.add(assignment)
     db.commit()
     db.refresh(user)
     return user
@@ -462,7 +489,7 @@ def revoke_invitation_endpoint(
     "/admin/users/{user_id}/deactivate",
     response_model=UserRead,
     status_code=status.HTTP_200_OK,
-    summary="Deactivate a user within authorized scope (preserves historical ESG records)"
+    summary="Deactivate a user within authorized scope (system_admin / group_admin only, requires admin password)"
 )
 def deactivate_user_endpoint(
     user_id: str,
@@ -472,14 +499,71 @@ def deactivate_user_endpoint(
 ):
     """
     Deactivates user account while strictly preserving submitted data, reviews, and audit trails.
+    Only system_admin or group_admin may call this endpoint; must supply their own password.
     """
     try:
         return deactivate_user_scoped(
             db=db,
             admin_user=admin_user,
             target_user_id=user_id,
+            admin_password=payload.admin_password,
             reason=payload.reason or "Deactivated by Administrator"
         )
+    except (ValueError, PermissionError) as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post(
+    "/admin/users/{user_id}/activate",
+    response_model=UserRead,
+    status_code=status.HTTP_200_OK,
+    summary="Reactivate a user within authorized scope (system_admin / group_admin)"
+)
+def activate_user_endpoint(
+    user_id: str,
+    admin_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Reactivates a previously suspended user account.
+    Only system_admin or group_admin within authorized scope may call this endpoint.
+    """
+    try:
+        return activate_user_scoped(
+            db=db,
+            admin_user=admin_user,
+            target_user_id=user_id,
+            reason="Reactivated by Administrator"
+        )
+    except (ValueError, PermissionError) as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post(
+    "/admin/users/{user_id}/delete",
+    status_code=status.HTTP_200_OK,
+    summary="Soft-delete a user within authorized scope (system_admin / group_admin only, requires password and reason)"
+)
+def delete_user_endpoint(
+    user_id: str,
+    payload: AdminDeleteUserRequest,
+    admin_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Soft-deletes user account while preserving historical audit entries and submissions.
+    Requires caller's password and mandatory reason.
+    Only system_admin or group_admin (within authorized scope) may perform this operation.
+    """
+    try:
+        target = delete_user_by_admin(
+            db=db,
+            admin_user=admin_user,
+            user_id=user_id,
+            admin_password=payload.admin_password,
+            reason=payload.reason or "Deleted by Administrator"
+        )
+        return {"success": True, "message": f"User '{target.full_name}' was safely deleted.", "user_id": str(target.id)}
     except (ValueError, PermissionError) as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
@@ -547,7 +631,7 @@ def list_user_requests(
 ):
     """
     Returns user creation requests within the calling admin's authorized scope.
-    system_admin/super_admin: all requests.
+    system_admin: all requests.
     group_admin: requests within their org branch.
     subsidiary_admin: own submitted requests.
     """

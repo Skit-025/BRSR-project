@@ -87,6 +87,10 @@ def provision_user_by_admin(
     if admin_user.role != Role.SYSTEM_ADMIN.value:
         raise PermissionError("Only System Admin is authorized to create users.")
 
+    role_val = req.role.value if hasattr(req.role, "value") else str(req.role)
+    from app.security.scope import validate_role_to_scope
+    validate_role_to_scope(db, role_val, req.org_node_id)
+
     identifier = (req.employee_id or req.username or req.email or "").strip()
     if not identifier:
         raise ValueError("Employee ID or Username is required.")
@@ -140,40 +144,48 @@ def provision_user_by_admin(
     return user, password_to_use
 
 
-def delete_user_by_admin(db: Session, admin_user: User, user_id: str, admin_password: Optional[str] = None) -> None:
+def delete_user_by_admin(
+    db: Session,
+    admin_user: User,
+    user_id: str,
+    admin_password: Optional[str] = None,
+    reason: str = "Deleted by Administrator"
+) -> User:
     """
-    Sole method to delete a user. System Admin soft-deletes and revokes all active role assignments.
-    Requires administrator password re-verification for high-privilege account revocation.
+    Soft-deletes a user and revokes active role assignments.
+    Authorized for System Admin (system-wide) and Group Admin (within authorized scope).
+    Requires administrator password and mandatory reason.
+    Group Admin cannot delete System Admin or Group Admin accounts.
     """
-    if admin_user.role != Role.SYSTEM_ADMIN.value:
-        raise PermissionError("Only System Admin is authorized to delete users.")
+    if admin_user.role not in (Role.SYSTEM_ADMIN.value, Role.GROUP_ADMIN.value):
+        raise PermissionError("Only System Admin or Group Admin is authorized to delete users.")
 
     if not admin_password or not admin_password.strip():
         raise ValueError("Administrator password is required to confirm user deletion.")
 
-    # Re-verify the administrator's password
-    pwd_valid = False
-    cleaned_pwd = admin_password.strip()
-    if verify_password(cleaned_pwd, admin_user.hashed_password):
-        pwd_valid = True
-    else:
-        for v in [cleaned_pwd.replace(" ", ""), cleaned_pwd]:
-            if verify_password(v, admin_user.hashed_password):
-                pwd_valid = True
-                break
+    if not reason or not reason.strip():
+        raise ValueError("A mandatory reason must be provided for user deletion.")
 
-    if not pwd_valid:
-        raise ValueError("Incorrect administrator password. Deletion unauthorized.")
+    # Re-verify the administrator's password
+    if not verify_admin_password_check(admin_user, admin_password):
+        raise PermissionError("Incorrect administrator password. Deletion unauthorized.")
 
     if str(admin_user.id) == str(user_id):
-        raise ValueError("System Administrator cannot delete their own account.")
+        raise ValueError("You cannot delete your own account.")
 
-    user = db.query(User).filter(User.id == user_id, User.is_deleted == False).first()
-    if not user:
+    target_user = db.query(User).filter(User.id == user_id, User.is_deleted == False).first()
+    if not target_user:
         raise ValueError("User not found or already deleted.")
 
-    user.is_deleted = True
-    user.is_active = False
+    if admin_user.role == Role.GROUP_ADMIN.value:
+        if target_user.role in (Role.SYSTEM_ADMIN.value, Role.GROUP_ADMIN.value):
+            raise PermissionError("Group Admin cannot delete System Admin or Group Admin accounts.")
+        if admin_user.org_node_id and target_user.org_node_id:
+            if not is_node_descendant(db, str(admin_user.org_node_id), str(target_user.org_node_id)):
+                raise PermissionError("You cannot delete a user outside your authorized organizational scope.")
+
+    target_user.is_deleted = True
+    target_user.is_active = False
 
     # Deactivate role assignments
     assignments = db.query(UserRoleAssignment).filter(UserRoleAssignment.user_id == user_id).all()
@@ -181,6 +193,14 @@ def delete_user_by_admin(db: Session, admin_user: User, user_id: str, admin_pass
         a.is_active = False
 
     db.commit()
+
+    log_admin_audit(
+        db, actor=admin_user, action="USER_DELETED",
+        target_user_id=str(target_user.id), target_name=target_user.full_name,
+        target_role=target_user.role, target_scope_id=str(target_user.org_node_id) if target_user.org_node_id else None,
+        details={"reason": reason.strip(), "soft_deleted": True}
+    )
+    return target_user
 
 
 def verify_admin_password_check(admin_user: User, admin_password: Optional[str]) -> bool:
@@ -232,6 +252,11 @@ def update_user_by_admin(
             if existing:
                 raise ValueError(f"Email '{new_email}' is already in use by another user.")
             user.email = new_email
+
+    target_role = role if role is not None else user.role
+    target_node_id = org_node_id if org_node_id is not None else (str(user.org_node_id) if user.org_node_id else None)
+    from app.security.scope import validate_role_to_scope
+    validate_role_to_scope(db, target_role, target_node_id)
 
     if role is not None:
         user.role = role
@@ -323,73 +348,88 @@ def bootstrap_system_admin(db: Session, req: BootstrapAdminRequest) -> User:
 # ─── Hierarchical Admin Delegation (Spec §1-§3, §16-§18, §26) ────────────────
 
 HIERARCHICAL_DELEGATION_RULES = {
-    # System / Super Admin: unrestricted
+    # System Admin: unrestricted across platform
     "system_admin": None,
-    "super_admin": None,
 
-    # Group Admin: can create own level + exactly 1 level below (Subsidiary Admin)
+    # Group Admin: can create Group Admins, Subsidiary Admins, BU Admins, Project Admins within Group
     "group_admin": {
-        "allowed_roles": ["group_admin", "group_esg_manager", "subsidiary_admin", "subsidiary_esg_manager"],
-        "allowed_levels": ["group", "company", "subsidiary"],
-    },
-    "group_esg_manager": {
-        "allowed_roles": ["group_esg_manager", "subsidiary_esg_manager"],
-        "allowed_levels": ["group", "company", "subsidiary"],
+        "allowed_roles": ["group_admin", "subsidiary_admin", "bu_admin", "project_admin"],
+        "allowed_levels": ["company", "subsidiary", "business_unit", "bu", "project", "site"],
     },
 
-    # Subsidiary Admin: can create own level + exactly 1 level below (BU Admin)
+    # Subsidiary Admin: can create Subsidiary Admins, BU Admins and Project Admins within Subsidiary
     "subsidiary_admin": {
-        "allowed_roles": ["subsidiary_admin", "subsidiary_esg_manager", "bu_admin", "bu_esg_manager", "bu_reviewer"],
-        "allowed_levels": ["company", "subsidiary", "business_unit", "bu"],
-    },
-    "subsidiary_esg_manager": {
-        "allowed_roles": ["subsidiary_esg_manager", "bu_esg_manager", "bu_reviewer"],
-        "allowed_levels": ["company", "subsidiary", "business_unit", "bu"],
+        "allowed_roles": ["subsidiary_admin", "bu_admin", "project_admin"],
+        "allowed_levels": ["company", "subsidiary", "business_unit", "bu", "project", "site"],
     },
 
-    # BU Admin: can create own level + exactly 1 level below (Project Admin)
+    # BU Admin: can create BU Admins and Project Admins within BU
     "bu_admin": {
-        "allowed_roles": ["bu_admin", "bu_esg_manager", "bu_reviewer", "project_admin", "project_data_entry_user", "maker"],
-        "allowed_levels": ["business_unit", "bu", "project", "site"],
-    },
-    "bu_esg_manager": {
-        "allowed_roles": ["bu_esg_manager", "bu_reviewer", "project_admin", "project_data_entry_user", "maker"],
+        "allowed_roles": ["bu_admin", "project_admin"],
         "allowed_levels": ["business_unit", "bu", "project", "site"],
     },
 
-    # Project Admin: can create project-level operational users
+    # Project Admin: no role creation or delegation
     "project_admin": {
-        "allowed_roles": ["project_admin", "project_data_entry_user", "maker", "checker"],
-        "allowed_levels": ["project", "site"],
+        "allowed_roles": [],
+        "allowed_levels": [],
     },
 }
 
 
+def get_descendant_node_ids(db: Session, ancestor_id: str) -> set:
+    """Returns a set of all descendant node IDs and codes in memory with a single query."""
+    if not ancestor_id:
+        return set()
+    from app.modules.org.models import OrgNode
+    all_nodes = db.query(OrgNode).all()
+    children_map = {}
+    node_map = {}
+    for n in all_nodes:
+        nid = str(n.id)
+        node_map[nid] = n
+        pid = str(n.parent_id) if n.parent_id else None
+        children_map.setdefault(pid, []).append(nid)
+
+    descendants = set()
+    queue = [str(ancestor_id)]
+    while queue:
+        curr = queue.pop()
+        descendants.add(curr)
+        n_obj = node_map.get(curr)
+        if n_obj and n_obj.code:
+            descendants.add(n_obj.code)
+        for child in children_map.get(curr, []):
+            if child not in descendants:
+                queue.append(child)
+    return descendants
+
+
 def is_node_descendant(db: Session, ancestor_id: str, descendant_id: str) -> bool:
     """Verifies that descendant_id is equal to or a sub-node under ancestor_id."""
+    if not ancestor_id or not descendant_id:
+        return False
     if str(ancestor_id) == str(descendant_id):
         return True
-    from app.modules.org.models import OrgNode
-    curr = db.query(OrgNode).filter(OrgNode.id == descendant_id).first()
-    while curr and curr.parent_id:
-        if str(curr.parent_id) == str(ancestor_id):
-            return True
-        curr = db.query(OrgNode).filter(OrgNode.id == curr.parent_id).first()
-    return False
+    return str(descendant_id) in get_descendant_node_ids(db, str(ancestor_id))
 
 
 def validate_admin_delegation(db: Session, creator_user: User, requested_role: str, target_org_node_id: Optional[str]) -> bool:
     """
-    Validates hierarchical admin delegation (Spec §1-§3, §16-§18):
-    1. Caller must have an admin role
-    2. Requested role must be for creator's level OR exactly one level below
-    3. Target org_node must be within creator's subtree
+    Validates hierarchical admin delegation and Role-to-Scope rules:
+    1. Enforces Role-to-Scope matrix (scope type matches role type)
+    2. Caller must have an admin role with role-creation privileges
+    3. Requested role must be in the creator's allowed_roles
+    4. Target org_node must be within creator's authorized subtree
     """
-    if creator_user.role in ("system_admin", "super_admin"):
+    from app.security.scope import validate_role_to_scope
+    validate_role_to_scope(db, requested_role, target_org_node_id)
+
+    if creator_user.role == "system_admin":
         return True
 
     delegation_rule = HIERARCHICAL_DELEGATION_RULES.get(creator_user.role)
-    if not delegation_rule:
+    if not delegation_rule or not delegation_rule.get("allowed_roles"):
         raise PermissionError(f"Role '{creator_user.role}' is not authorized to create or invite users.")
 
     if requested_role not in delegation_rule["allowed_roles"]:
@@ -429,15 +469,38 @@ def log_admin_audit(
     details: Optional[dict] = None
 ):
     from app.modules.auth.models import AdminAuditEntry
+    from app.modules.org.models import OrgNode
+    import uuid
+
+    clean_scope_id = None
+    if target_scope_id:
+        try:
+            uuid.UUID(str(target_scope_id))
+            clean_scope_id = str(target_scope_id)
+        except (ValueError, AttributeError):
+            node = db.query(OrgNode).filter(OrgNode.code == str(target_scope_id)).first()
+            if node:
+                clean_scope_id = str(node.id)
+            else:
+                clean_scope_id = None
+
+    clean_target_user_id = None
+    if target_user_id:
+        try:
+            uuid.UUID(str(target_user_id))
+            clean_target_user_id = str(target_user_id)
+        except (ValueError, AttributeError):
+            clean_target_user_id = None
+
     entry = AdminAuditEntry(
         actor_id=actor.id,
         actor_name=actor.full_name,
         actor_role=actor.role,
         action=action,
-        target_user_id=target_user_id,
+        target_user_id=clean_target_user_id,
         target_name=target_name,
         target_role=target_role,
-        target_scope_id=target_scope_id,
+        target_scope_id=clean_scope_id,
         details=details or {}
     )
     db.add(entry)
@@ -479,7 +542,7 @@ def create_invitation_by_admin(db: Session, admin_user: User, req) -> "UserInvit
 
 def list_invitations_for_admin(db: Session, admin_user: User) -> List["UserInvitation"]:
     from app.modules.auth.models import UserInvitation
-    if admin_user.role in ("system_admin", "super_admin"):
+    if admin_user.role == "system_admin":
         return db.query(UserInvitation).filter(UserInvitation.is_deleted == False).order_by(UserInvitation.created_at.desc()).all()
 
     q = db.query(UserInvitation).filter(UserInvitation.is_deleted == False)
@@ -528,7 +591,21 @@ def revoke_invitation(db: Session, admin_user: User, invitation_id: str) -> "Use
     return inv
 
 
-def deactivate_user_scoped(db: Session, admin_user: User, target_user_id: str, reason: str = "Deactivated by Administrator") -> User:
+def deactivate_user_scoped(
+    db: Session,
+    admin_user: User,
+    target_user_id: str,
+    admin_password: str,
+    reason: str = "Deactivated by Administrator"
+) -> User:
+    # 1. Role gate: only system_admin or group_admin may deactivate
+    if admin_user.role not in ("system_admin", "group_admin"):
+        raise PermissionError("Only System Admin or Group Admin may deactivate user accounts.")
+
+    # 2. Verify the calling admin's own password
+    if not verify_admin_password_check(admin_user, admin_password):
+        raise PermissionError("Incorrect administrator password. Deactivation denied.")
+
     target_user = db.query(User).filter(User.id == target_user_id, User.is_deleted == False).first()
     if not target_user:
         raise ValueError("User not found.")
@@ -536,8 +613,10 @@ def deactivate_user_scoped(db: Session, admin_user: User, target_user_id: str, r
     if str(target_user.id) == str(admin_user.id):
         raise ValueError("You cannot deactivate your own account.")
 
-    # Scope check
-    if admin_user.role not in ("system_admin", "super_admin"):
+    # 3. Scope check & hierarchy protection
+    if admin_user.role == "group_admin":
+        if target_user.role in ("system_admin", "group_admin"):
+            raise PermissionError("Group Admin cannot deactivate System Admin or Group Admin accounts.")
         if admin_user.org_node_id and target_user.org_node_id:
             if not is_node_descendant(db, str(admin_user.org_node_id), str(target_user.org_node_id)):
                 raise PermissionError("You cannot deactivate a user outside your organizational scope.")
@@ -555,9 +634,47 @@ def deactivate_user_scoped(db: Session, admin_user: User, target_user_id: str, r
     return target_user
 
 
+def activate_user_scoped(
+    db: Session,
+    admin_user: User,
+    target_user_id: str,
+    admin_password: Optional[str] = None,
+    reason: str = "Re-activated by Administrator"
+) -> User:
+    # 1. Role gate: only system_admin or group_admin may reactivate
+    if admin_user.role not in ("system_admin", "group_admin"):
+        raise PermissionError("Only System Admin or Group Admin may reactivate user accounts.")
+
+    if admin_password and not verify_admin_password_check(admin_user, admin_password):
+        raise PermissionError("Incorrect administrator password.")
+
+    target_user = db.query(User).filter(User.id == target_user_id, User.is_deleted == False).first()
+    if not target_user:
+        raise ValueError("User not found.")
+
+    if admin_user.role == "group_admin":
+        if target_user.role in ("system_admin", "group_admin"):
+            raise PermissionError("Group Admin cannot manage System Admin or Group Admin accounts.")
+        if admin_user.org_node_id and target_user.org_node_id:
+            if not is_node_descendant(db, str(admin_user.org_node_id), str(target_user.org_node_id)):
+                raise PermissionError("You cannot reactivate a user outside your organizational scope.")
+
+    target_user.is_active = True
+    db.commit()
+    db.refresh(target_user)
+
+    log_admin_audit(
+        db, actor=admin_user, action="USER_ACTIVATED",
+        target_user_id=str(target_user.id), target_name=target_user.full_name,
+        target_role=target_user.role, target_scope_id=str(target_user.org_node_id) if target_user.org_node_id else None,
+        details={"reason": reason}
+    )
+    return target_user
+
+
 def list_users_for_admin_scoped(db: Session, admin_user: User) -> List[User]:
     """Lists users visible within the calling admin's authorized hierarchy branch."""
-    if admin_user.role in ("system_admin", "super_admin"):
+    if admin_user.role == "system_admin":
         return db.query(User).filter(User.is_deleted == False).order_by(User.created_at.desc()).all()
 
     if not admin_user.org_node_id:
@@ -567,8 +684,8 @@ def list_users_for_admin_scoped(db: Session, admin_user: User) -> List[User]:
     scoped_users = []
     for u in all_users:
         if not u.org_node_id:
-            # Group or system level
-            if admin_user.role in ("group_admin", "group_esg_manager"):
+            # Group or system level — visible to group_admin
+            if admin_user.role == "group_admin":
                 scoped_users.append(u)
         elif is_node_descendant(db, str(admin_user.org_node_id), str(u.org_node_id)):
             scoped_users.append(u)
@@ -576,11 +693,65 @@ def list_users_for_admin_scoped(db: Session, admin_user: User) -> List[User]:
 
 
 def get_admin_audit_log(db: Session, admin_user: User, limit: int = 50):
+    """
+    Administrative Audit Log hierarchical query (Spec Section 5.B):
+    - System Admin: all applicable events across the system.
+    - Group Admin: applicable events within authorized group scope (self + subordinate admins).
+    - Subsidiary Admin: applicable events within authorized subsidiary scope.
+    - BU Admin: applicable events within authorized BU scope.
+    - Project Admin: their own actions only.
+    - Evidence deletion details respect evidence scope and never leak across boundaries.
+    """
     from app.modules.auth.models import AdminAuditEntry
+    from app.modules.org.models import OrgNode
     q = db.query(AdminAuditEntry)
-    if admin_user.role not in ("system_admin", "super_admin"):
-        q = q.filter(AdminAuditEntry.actor_id == admin_user.id)
-    return q.order_by(AdminAuditEntry.created_at.desc()).limit(limit).all()
+    if admin_user.role == "system_admin":
+        return q.order_by(AdminAuditEntry.created_at.desc()).limit(limit).all()
+
+    if admin_user.role == "project_admin":
+        return q.filter(AdminAuditEntry.actor_id == admin_user.id).order_by(AdminAuditEntry.created_at.desc()).limit(limit).all()
+
+    descendant_nodes = set()
+    if admin_user.org_node_id:
+        descendant_nodes.add(str(admin_user.org_node_id))
+        for n in db.query(OrgNode).all():
+            if is_node_descendant(db, str(admin_user.org_node_id), str(n.id)):
+                descendant_nodes.add(str(n.id))
+                if n.code:
+                    descendant_nodes.add(n.code)
+
+    if admin_user.role == "group_admin" and not admin_user.org_node_id:
+        # Group Admin without bound node has enterprise group-wide visibility
+        return q.filter(AdminAuditEntry.target_role != "system_admin").order_by(AdminAuditEntry.created_at.desc()).limit(limit).all()
+
+    subordinate_user_ids = set()
+    if descendant_nodes:
+        for u in db.query(User).all():
+            if u.org_node_id and (str(u.org_node_id) in descendant_nodes):
+                subordinate_user_ids.add(str(u.id))
+
+    all_entries = q.order_by(AdminAuditEntry.created_at.desc()).limit(limit * 3).all()
+    filtered = []
+    for entry in all_entries:
+        # Own actions always visible
+        if str(entry.actor_id) == str(admin_user.id):
+            filtered.append(entry)
+            continue
+        # Subordinate actor
+        if entry.actor_id and str(entry.actor_id) in subordinate_user_ids:
+            filtered.append(entry)
+            continue
+        # Target scope in descendant nodes
+        if entry.target_scope_id and (str(entry.target_scope_id) in descendant_nodes):
+            filtered.append(entry)
+            continue
+        # Evidence deletion/restoration scope check
+        if entry.action in ("EVIDENCE_DELETED", "EVIDENCE_RESTORED") and entry.details:
+            proj_id = entry.details.get("project_id")
+            if proj_id and (proj_id in descendant_nodes):
+                filtered.append(entry)
+                continue
+    return filtered[:limit]
 
 
 
@@ -611,11 +782,10 @@ def generate_6char_password() -> str:
 
 # ─── User Creation Request Workflow ───────────────────────────────────────────
 
-_REQUEST_ROLES = {"subsidiary_admin"}
-_APPROVER_ROLES = {"system_admin", "super_admin", "group_admin"}
+_REQUEST_ROLES = {"subsidiary_admin", "bu_admin"}
+_APPROVER_ROLES = {"system_admin", "group_admin"}
 _SUBSIDIARY_REQUESTABLE_ROLES = {
-    "subsidiary_admin", "subsidiary_esg_manager", "bu_admin", "bu_esg_manager",
-    "bu_reviewer", "project_admin", "project_data_entry_user", "maker", "checker",
+    "bu_admin", "project_admin",
 }
 
 
@@ -684,18 +854,23 @@ def submit_user_creation_request(
     if requester.role not in _REQUEST_ROLES:
         raise PermissionError(
             f"Role '{requester.role}' cannot submit user creation requests. "
-            "Only subsidiary_admin uses this workflow."
+            "Only subsidiary_admin or bu_admin uses this workflow."
         )
-    if requested_role in ("system_admin", "super_admin", "group_admin"):
-        raise PermissionError(f"Subsidiary Admin cannot request role '{requested_role}'.")
+    if requested_role in ("system_admin", "group_admin", "subsidiary_admin"):
+        raise PermissionError(f"Scoped admin cannot request role '{requested_role}'.")
+    if requester.role == "bu_admin" and requested_role != "project_admin":
+        raise PermissionError("BU Admin may only request project_admin users.")
     if requested_role not in _SUBSIDIARY_REQUESTABLE_ROLES:
         valid = ", ".join(sorted(_SUBSIDIARY_REQUESTABLE_ROLES))
         raise PermissionError(
-            f"Role '{requested_role}' is not requestable by subsidiary_admin. Valid: {valid}."
+            f"Role '{requested_role}' is not requestable. Valid: {valid}."
         )
     if org_node_id and requester.org_node_id:
         if not is_node_descendant(db, str(requester.org_node_id), str(org_node_id)):
             raise PermissionError("Target org unit is outside your authorized scope.")
+
+    from app.security.scope import validate_role_to_scope
+    validate_role_to_scope(db, requested_role, org_node_id)
 
     normalized_email = email.strip().lower()
     existing_user = db.query(User).filter(
@@ -769,7 +944,7 @@ def list_user_creation_requests(
     q = db.query(UserCreationRequest)
     if status_filter:
         q = q.filter(UserCreationRequest.status == status_filter.upper())
-    if viewer.role in ("system_admin", "super_admin"):
+    if viewer.role == "system_admin":
         return q.order_by(UserCreationRequest.created_at.desc()).all()
     if viewer.role == "group_admin":
         all_reqs = q.order_by(UserCreationRequest.created_at.desc()).all()
@@ -806,8 +981,8 @@ def approve_user_creation_request(
     if approver.role == "group_admin" and approver.org_node_id:
         if ucr.org_node_id and not is_node_descendant(db, str(approver.org_node_id), str(ucr.org_node_id)):
             raise PermissionError("Request is outside your authorized organizational scope.")
-    if approver.role == "group_admin" and ucr.requested_role in ("system_admin", "super_admin"):
-        raise PermissionError("Group Admin cannot approve system_admin or super_admin roles.")
+    if approver.role == "group_admin" and ucr.requested_role == "system_admin":
+        raise PermissionError("Group Admin cannot approve system_admin roles.")
 
     existing_user = db.query(User).filter(
         User.email == ucr.email, User.is_deleted == False
@@ -917,7 +1092,7 @@ def get_user_creation_request(db: Session, viewer: User, request_id: str):
     ucr = db.query(UserCreationRequest).filter(UserCreationRequest.id == request_id).first()
     if not ucr:
         raise ValueError("User creation request not found.")
-    if viewer.role in ("system_admin", "super_admin"):
+    if viewer.role == "system_admin":
         return ucr
     if viewer.role == "group_admin":
         if not viewer.org_node_id:

@@ -1,0 +1,68 @@
+<USER_REQUEST>
+# IMPLEMENTATION PROMPT: HIERARCHICAL DELETION, TRASH CAN, AUDIT TRAIL, AND ROLE GOVERNANCE
+
+## 1. ROLE AND PRIMARY OBJECTIVE
+
+Act as a senior full-stack engineer working inside the existing BRSR/ESG application.
+
+Implement a complete, production-grade **Hierarchical Deletion and Audit Management System** covering evidence, organizational entities, data collection, reviews, reports, and administrative operations.
+
+### Non-negotiable engineering priorities
+
+1. Do not break existing functionality, API contracts, frontend routes, database relationships, authentication, authorization, workflows, or integrations.
+2. Do not rebuild existing modules when extending them is sufficient.
+3. Do not introduce hardcoded users, roles, permissions, hierarchy relationships, or mock audit records.
+4. Reuse the existing authentication, RBAC, organizational hierarchy, database models, notification services, and UI components wherever possible.
+5. Inspect the actual codebase before implementation. Verify existing roles, aliases, permissions, relationships, and deletion behavior rather than assuming they match this specification.
+6. Implement the feature end-to-end: database, backend services, API endpoints, frontend controls, audit logs, authorization, migrations, tests, and integration.
+7. Every destructive or administrative action must be authorized and auditable on the server. Hiding a button in the frontend is not authorization.
+8. Preserve existing records and relationships during migrations. Never perform a destructive migration simply to simplify the implementation.
+
+## 2. ORGANIZATIONAL HIERARCHY
+
+The application uses the following administrative hierarchy:
+
+System Admin
+└── Group Admin
+    ├── Group ESG Manager and other permitted subordinate roles
+    └── Subsidiary Admin
+        └── Subsidiary ESG Manager and other permitted subordinate roles
+            └── BU Admin
+                └── BU ESG Manager and other permitted subordinate roles
+    
+<truncated 25206 bytes>
+added.
+- Tests executed and their actual results.
+- Remaining issues or assumptions.
+
+## 15. FINAL ACCEPTANCE CRITERIA
+
+The task is complete only when:
+
+1. Evidence deletion is password-protected, reason-required, and audited.
+2. The Trash Can enforces the specified hierarchical visibility rules.
+3. Business-data deletion and changes are recorded in the appropriate administrative audit log.
+4. Evidence deletion details are not exposed globally by accident.
+5. Project, BU, Subsidiary, Group, and System Admin permissions respect their actual scope and authority.
+6. Role requests cannot grant privileges before approval.
+7. Group Admin cannot create or promote a System Admin.
+8. Every covered mutation is authorized, validated, and auditable.
+9. Existing application functionality and stored data remain intact.
+10. Automated tests demonstrate the implemented permissions, security controls, and regression behavior.
+
+Do not claim completion merely because the UI has been added. Verify the database behavior, API enforcement, audit persistence, hierarchy filters, role approval workflow, and regression tests in the actual application. just do it withou changing other unnecessary files or without breaking logic cleanly do it
+
+</USER_REQUEST>
+<ADDITIONAL_METADATA>
+The current local time is: 2026-10-09T19:10:04+05:30.
+
+The user's current state is as follows:
+Active Document: c:\Users\codes\Desktop\BRSR-project\backend\app\config\settings.py (LANGUAGE_PYTHON)
+Cursor is on line: 21
+Other open documents:
+- c:\Users\codes\Desktop\BRSR-project\backend\alembic\versions\0005_migrate_to_five_role_architecture.py (LANGUAGE_PYTHON)
+- c:\Users\codes\Desktop\BRSR-project\backend\app\config\settings.py (LANGUAGE_PYTHON)
+- c:\Users\codes\Desktop\BRSR-project\backend\app\db\seed_demo_data.py (LANGUAGE_PYTHON)
+- c:\Users\codes\Desktop\BRSR-project\frontend\src\context\AuthContext.jsx (LANGUAGE_JAVASCRIPT)
+- c:\Users\codes\Desktop\BRSR-project\frontend\src\pages\EvidenceVault.jsx (LANGUAGE_JAVASCRIPT)
+</ADDITIONAL_METADATA>

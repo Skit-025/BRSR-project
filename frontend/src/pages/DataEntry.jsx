@@ -10,6 +10,7 @@ import {
 import { useOrgNodes, useOrgPeriods, useScopedForm, useSavePack, useSubmitPack, useFuelCatalog } from "../hooks/useApi";
 import { useAuth } from "../context/AuthContext";
 import { collectionApi, evidenceApi, calcApi, validationApi, aiApi } from "../api/client";
+import Modal from "../components/Modal";
 
 
 // ── Domain colour map ─────────────────────────────────────────────────────────
@@ -240,6 +241,50 @@ function EvidenceAttachPanel({
     }
     setAiRejection(null);
     setExtractedField(null);
+  };
+
+  // Evidence deletion state
+  const [fileToDelete, setFileToDelete] = useState(null);
+  const [deletePassword, setDeletePassword] = useState("");
+  const [deleteReason, setDeleteReason] = useState("");
+  const [deleteError, setDeleteError] = useState("");
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const handlePromptDelete = (fileItem) => {
+    setFileToDelete(fileItem);
+    setDeletePassword("");
+    setDeleteReason("");
+    setDeleteError("");
+  };
+
+  const handleConfirmDelete = async (e) => {
+    e.preventDefault();
+    if (!deletePassword.trim()) {
+      setDeleteError("Account password is required to authorize deletion.");
+      return;
+    }
+    if (!deleteReason.trim()) {
+      setDeleteError("A descriptive deletion reason is mandatory.");
+      return;
+    }
+    if (!fileToDelete?.id) return;
+
+    setIsDeleting(true);
+    setDeleteError("");
+    try {
+      await evidenceApi.delete(fileToDelete.id, deletePassword.trim(), deleteReason.trim());
+      setAttachedFiles(prev => prev.filter(f => f.id !== fileToDelete.id));
+      if (pendingEvidence?.id === fileToDelete.id) {
+        setPendingEvidence(null);
+        setExtractedField(null);
+      }
+      setConfirmedSuccess(`🗑 Document ${fileToDelete.displayId || fileToDelete.name} moved to Trash Can.`);
+      setFileToDelete(null);
+    } catch (err) {
+      setDeleteError(err.response?.data?.detail || err.message || "Failed to delete evidence.");
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   const currentCategory = stickyDocType || "Bill";
@@ -556,6 +601,28 @@ function EvidenceAttachPanel({
                     <ExternalLink size={11} /> View
                   </a>
                 )}
+                {f.id && (
+                  <button
+                    type="button"
+                    onClick={() => handlePromptDelete(f)}
+                    title="Delete evidence document"
+                    style={{
+                      background: "rgba(239,68,68,0.08)",
+                      border: "1px solid rgba(239,68,68,0.25)",
+                      borderRadius: 4,
+                      color: "#dc2626",
+                      cursor: "pointer",
+                      padding: "2px 6px",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 3,
+                      fontSize: 10.5,
+                      fontWeight: 600
+                    }}
+                  >
+                    <Trash2 size={11} /> Delete
+                  </button>
+                )}
                 <CheckCircle2 size={12} color="#16a34a" />
               </div>
             </div>
@@ -567,6 +634,105 @@ function EvidenceAttachPanel({
         <div style={{ marginTop: 6, fontSize: 11, color: "#f59e0b", fontWeight: 600 }}>
           * Supporting evidence is mandatory for this disclosure parameter
         </div>
+      )}
+
+      {/* ── Delete Confirmation Modal ── */}
+      {fileToDelete && (
+        <Modal
+          isOpen={!!fileToDelete}
+          onClose={() => { if (!isDeleting) setFileToDelete(null); }}
+          maxWidth="480px"
+        >
+          <form onSubmit={handleConfirmDelete} style={{ padding: 20, display: "flex", flexDirection: "column", gap: 14 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <div style={{ width: 38, height: 38, borderRadius: 8, background: "#fee2e2", display: "flex", alignItems: "center", justifyContent: "center", color: "#dc2626" }}>
+                <Trash2 size={18} />
+              </div>
+              <div>
+                <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: "#0f172a" }}>Delete Evidence Document</h3>
+                <p style={{ margin: "2px 0 0", fontSize: 12, color: "#64748b" }}>Moves document to Hierarchical Trash Can</p>
+              </div>
+            </div>
+
+            <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 6, padding: "10px 12px", fontSize: 12, color: "#991b1b" }}>
+              Are you sure you want to soft-delete <strong>{fileToDelete.name}</strong>?
+              Audit history and metric lineage will be preserved.
+            </div>
+
+            <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 6, padding: "10px 12px", fontSize: 12 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                <span style={{ color: "#64748b" }}>Evidence ID:</span>
+                <span style={{ fontFamily: "monospace", fontWeight: 700, color: "#0284c7" }}>{fileToDelete.displayId}</span>
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                <span style={{ color: "#64748b" }}>Parameter:</span>
+                <span style={{ fontWeight: 600 }}>{metricCode}</span>
+              </div>
+              {projectId && (
+                <div style={{ display: "flex", justifyContent: "space-between" }}>
+                  <span style={{ color: "#64748b" }}>Project Scope:</span>
+                  <span style={{ fontWeight: 600 }}>{projectId}</span>
+                </div>
+              )}
+            </div>
+
+            <div>
+              <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "#334155", marginBottom: 4 }}>
+                Confirm Your Password <span style={{ color: "#ef4444" }}>*</span>
+              </label>
+              <input
+                type="password"
+                className="form-control"
+                value={deletePassword}
+                onChange={(e) => { setDeletePassword(e.target.value); setDeleteError(""); }}
+                placeholder="Enter your login password"
+                autoComplete="current-password"
+                disabled={isDeleting}
+                style={{ width: "100%", padding: "7px 10px", fontSize: 12, border: "1px solid #cbd5e1", borderRadius: 6 }}
+                autoFocus
+              />
+            </div>
+
+            <div>
+              <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "#334155", marginBottom: 4 }}>
+                Reason for Deletion <span style={{ color: "#ef4444" }}>*</span>
+              </label>
+              <textarea
+                value={deleteReason}
+                onChange={(e) => { setDeleteReason(e.target.value); setDeleteError(""); }}
+                placeholder="Enter a mandatory reason for deletion..."
+                disabled={isDeleting}
+                style={{ width: "100%", padding: "7px 10px", fontSize: 12, border: "1px solid #cbd5e1", borderRadius: 6, minHeight: 60, boxSizing: "border-box" }}
+              />
+            </div>
+
+            {deleteError && (
+              <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 6, padding: "8px 10px", fontSize: 12, color: "#dc2626", display: "flex", alignItems: "center", gap: 6 }}>
+                <AlertCircle size={14} />
+                <span>{deleteError}</span>
+              </div>
+            )}
+
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 4 }}>
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={() => setFileToDelete(null)}
+                disabled={isDeleting}
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="btn btn-primary btn-sm"
+                style={{ background: "#dc2626", borderColor: "#dc2626" }}
+                disabled={isDeleting || !deletePassword.trim() || !deleteReason.trim()}
+              >
+                {isDeleting ? "Deleting..." : "🗑 Confirm Delete"}
+              </button>
+            </div>
+          </form>
+        </Modal>
       )}
     </div>
   );
@@ -1227,9 +1393,7 @@ export default function DataEntry() {
 
     const isAdmin =
       role === "system_admin" ||
-      role === "super_admin" ||
-      role === "group_admin" ||
-      role === "group_esg_manager";
+      role === "group_admin";
 
     if (isAdmin) {
       // Admins can select any project/site node; fallback to all nodes if no project types

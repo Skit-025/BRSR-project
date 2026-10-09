@@ -21,7 +21,7 @@ MVP_METRICS = [
         "aggregation_type": AggregationType.SUM.value,
         "evidence_rule": EvidenceRule.MANDATORY.value,
         "frequency": "monthly",
-        "owner_role": "site_collector",
+        "owner_role": "project_admin",
         "entry_level": EntryLevel.PROJECT.value,
         "guidance_text": "Enter total electricity consumed at this site from the grid (DISCOM supply) during the month.",
         "why_needed": "Mandated under SEBI BRSR Principle 6 (Scope 2 GHG Disclosure). Drives the grid emission calculation using CEA state factor.",
@@ -43,7 +43,7 @@ MVP_METRICS = [
         "aggregation_type": AggregationType.SUM.value,
         "evidence_rule": EvidenceRule.MANDATORY.value,
         "frequency": "monthly",
-        "owner_role": "site_collector",
+        "owner_role": "project_admin",
         "entry_level": EntryLevel.PROJECT.value,
         "guidance_text": "Enter total fuel consumed (diesel, petrol, LPG, natural gas) in physical units. Do not convert — the system calculates GJ automatically.",
         "why_needed": "Required for Scope 1 GHG calculation under SEBI BRSR Principle 6 and BEE PAT scheme reporting.",
@@ -65,7 +65,7 @@ MVP_METRICS = [
         "aggregation_type": AggregationType.SUM.value,
         "evidence_rule": EvidenceRule.MANDATORY.value,
         "frequency": "monthly",
-        "owner_role": "site_collector"
+        "owner_role": "project_admin"
     },
     {
         "code": "ENV-GHG-002",
@@ -83,7 +83,7 @@ MVP_METRICS = [
         "aggregation_type": AggregationType.SUM.value,
         "evidence_rule": EvidenceRule.MANDATORY.value,
         "frequency": "monthly",
-        "owner_role": "site_collector"
+        "owner_role": "project_admin"
     },
     {
         "code": "ENV-WATER-001",
@@ -101,7 +101,7 @@ MVP_METRICS = [
         "aggregation_type": AggregationType.SUM.value,
         "evidence_rule": EvidenceRule.MANDATORY.value,
         "frequency": "monthly",
-        "owner_role": "site_collector"
+        "owner_role": "project_admin"
     },
     {
         "code": "ENV-WASTE-001",
@@ -119,7 +119,7 @@ MVP_METRICS = [
         "aggregation_type": AggregationType.SUM.value,
         "evidence_rule": EvidenceRule.MANDATORY.value,
         "frequency": "monthly",
-        "owner_role": "site_collector"
+        "owner_role": "project_admin"
     },
     {
         "code": "SOC-SAFE-001",
@@ -137,7 +137,7 @@ MVP_METRICS = [
         "aggregation_type": AggregationType.RATIO.value,
         "evidence_rule": EvidenceRule.MANDATORY.value,
         "frequency": "monthly",
-        "owner_role": "site_collector"
+        "owner_role": "project_admin"
     },
     {
         "code": "SOC-SAFE-002",
@@ -155,7 +155,7 @@ MVP_METRICS = [
         "aggregation_type": AggregationType.SUM.value,
         "evidence_rule": EvidenceRule.MANDATORY.value,
         "frequency": "monthly",
-        "owner_role": "site_collector"
+        "owner_role": "project_admin"
     },
     {
         "code": "SOC-EMP-001",
@@ -173,7 +173,7 @@ MVP_METRICS = [
         "aggregation_type": AggregationType.SUM.value,
         "evidence_rule": EvidenceRule.MANDATORY.value,
         "frequency": "monthly",
-        "owner_role": "site_collector"
+        "owner_role": "project_admin"
     },
     {
         "code": "SOC-WELF-001",
@@ -191,7 +191,7 @@ MVP_METRICS = [
         "aggregation_type": AggregationType.RATIO.value,
         "evidence_rule": EvidenceRule.MANDATORY.value,
         "frequency": "monthly",
-        "owner_role": "site_collector"
+        "owner_role": "project_admin"
     },
     {
         "code": "GOV-ETH-001",
@@ -209,7 +209,7 @@ MVP_METRICS = [
         "aggregation_type": AggregationType.WEIGHTED_PCT.value,
         "evidence_rule": EvidenceRule.MANDATORY.value,
         "frequency": "monthly",
-        "owner_role": "site_collector"
+        "owner_role": "project_admin"
     },
     {
 
@@ -228,7 +228,7 @@ MVP_METRICS = [
         "aggregation_type": AggregationType.SUM.value,
         "evidence_rule": EvidenceRule.MANDATORY.value,
         "frequency": "monthly",
-        "owner_role": "site_collector"
+        "owner_role": "project_admin"
     },
 
     # =========================================================================
@@ -256,7 +256,7 @@ MVP_METRICS = [
         "aggregation_type": AggregationType.SUM.value,
         "evidence_rule": EvidenceRule.MANDATORY.value,
         "frequency": "monthly",
-        "owner_role": "site_collector",
+        "owner_role": "project_admin",
         "entry_level": EntryLevel.PROJECT.value,
         "guidance_text": "Enter total diesel/fuel consumed in DG sets, boilers, and fixed combustion equipment at this site.",
         "why_needed": "Scope 1 direct emission under GHG Protocol and SEBI BRSR Core. Calculated using BEE PAT Manual 2023 factors.",
@@ -283,7 +283,7 @@ MVP_METRICS = [
         "aggregation_type": AggregationType.SUM.value,
         "evidence_rule": EvidenceRule.MANDATORY.value,
         "frequency": "monthly",
-        "owner_role": "site_collector",
+        "owner_role": "project_admin",
         "entry_level": EntryLevel.PROJECT.value,
         "guidance_text": "Enter total fuel consumed in excavators, cranes, compactors, trucks, and other mobile equipment at this site.",
         "why_needed": "Scope 1 mobile combustion under GHG Protocol and SEBI BRSR. One of the highest emission sources in construction projects.",
@@ -311,7 +311,7 @@ MVP_METRICS = [
         "aggregation_type": AggregationType.SUM.value,
         "evidence_rule": EvidenceRule.MANDATORY.value,
         "frequency": "monthly",
-        "owner_role": "site_collector",
+        "owner_role": "project_admin",
         "calc_formula_code": "CALC-GHG-SCOPE1-PROCESS",
     },
     {
@@ -335,7 +335,7 @@ MVP_METRICS = [
         "aggregation_type": AggregationType.SUM.value,
         "evidence_rule": EvidenceRule.MANDATORY.value,
         "frequency": "monthly",
-        "owner_role": "site_collector",
+        "owner_role": "project_admin",
         "calc_formula_code": "CALC-GHG-SCOPE1-FUGITIVE",
     },
     {
@@ -358,7 +358,7 @@ MVP_METRICS = [
         "aggregation_type": AggregationType.SUM.value,
         "evidence_rule": EvidenceRule.MANDATORY.value,
         "frequency": "monthly",
-        "owner_role": "site_collector",
+        "owner_role": "project_admin",
         "entry_level": EntryLevel.PROJECT.value,
         "guidance_text": "Enter diesel/HSD fuel consumed in mobile construction equipment and transport vehicles.",
         "why_needed": "Scope 1 mobile diesel combustion under SEBI BRSR Principle 6 Indicator E1.",
@@ -384,7 +384,7 @@ MVP_METRICS = [
         "aggregation_type": AggregationType.SUM.value,
         "evidence_rule": EvidenceRule.MANDATORY.value,
         "frequency": "monthly",
-        "owner_role": "site_collector",
+        "owner_role": "project_admin",
         "entry_level": EntryLevel.PROJECT.value,
         "guidance_text": "Enter petrol consumed in company-owned/leased cars and utility vehicles.",
         "why_needed": "Scope 1 mobile petrol combustion under SEBI BRSR Principle 6 Indicator E1.",
@@ -410,7 +410,7 @@ MVP_METRICS = [
         "aggregation_type": AggregationType.SUM.value,
         "evidence_rule": EvidenceRule.MANDATORY.value,
         "frequency": "monthly",
-        "owner_role": "site_collector",
+        "owner_role": "project_admin",
         "entry_level": EntryLevel.PROJECT.value,
         "guidance_text": "Enter CNG quantity consumed in company fleet vehicles in kg.",
         "why_needed": "Scope 1 mobile CNG combustion under SEBI BRSR Principle 6 Indicator E1.",
@@ -436,7 +436,7 @@ MVP_METRICS = [
         "aggregation_type": AggregationType.SUM.value,
         "evidence_rule": EvidenceRule.MANDATORY.value,
         "frequency": "monthly",
-        "owner_role": "site_collector",
+        "owner_role": "project_admin",
         "entry_level": EntryLevel.PROJECT.value,
         "guidance_text": "Enter refrigerant gas quantity refilled in HVAC and cooling systems in kg.",
         "why_needed": "Scope 1 fugitive refrigerant emissions under SEBI BRSR Principle 6.",
@@ -462,7 +462,7 @@ MVP_METRICS = [
         "aggregation_type": AggregationType.SUM.value,
         "evidence_rule": EvidenceRule.MANDATORY.value,
         "frequency": "monthly",
-        "owner_role": "site_collector",
+        "owner_role": "project_admin",
         "entry_level": EntryLevel.PROJECT.value,
         "guidance_text": "Enter SF6 gas top-up quantity for gas-insulated switchgear (GIS) in kg.",
         "why_needed": "Scope 1 fugitive SF6 emissions under SEBI BRSR Principle 6.",
@@ -485,7 +485,7 @@ MVP_METRICS = [
         "aggregation_type": AggregationType.SUM.value,
         "evidence_rule": EvidenceRule.MANDATORY.value,
         "frequency": "monthly",
-        "owner_role": "site_collector",
+        "owner_role": "project_admin",
         "entry_level": EntryLevel.PROJECT.value,
         "guidance_text": "Enter total High-Speed Diesel (HSD) consumed in litres.",
         "why_needed": "Primary fuel tracking for Scope 1 emissions under SEBI BRSR Principle 6.",
@@ -507,7 +507,7 @@ MVP_METRICS = [
         "aggregation_type": AggregationType.SUM.value,
         "evidence_rule": EvidenceRule.MANDATORY.value,
         "frequency": "monthly",
-        "owner_role": "site_collector",
+        "owner_role": "project_admin",
         "entry_level": EntryLevel.PROJECT.value,
         "guidance_text": "Enter total Light Diesel Oil (LDO) consumed in litres.",
         "why_needed": "Industrial fuel tracking under SEBI BRSR Principle 6.",
@@ -529,7 +529,7 @@ MVP_METRICS = [
         "aggregation_type": AggregationType.SUM.value,
         "evidence_rule": EvidenceRule.MANDATORY.value,
         "frequency": "monthly",
-        "owner_role": "site_collector",
+        "owner_role": "project_admin",
         "entry_level": EntryLevel.PROJECT.value,
         "guidance_text": "Enter quantity of Anthracite coal consumed in metric tonnes.",
         "why_needed": "Coal fuel tracking under SEBI BRSR Principle 6.",
@@ -551,7 +551,7 @@ MVP_METRICS = [
         "aggregation_type": AggregationType.SUM.value,
         "evidence_rule": EvidenceRule.MANDATORY.value,
         "frequency": "monthly",
-        "owner_role": "site_collector",
+        "owner_role": "project_admin",
         "entry_level": EntryLevel.PROJECT.value,
         "guidance_text": "Enter quantity of thermal non-coking coal consumed in metric tonnes.",
         "why_needed": "Thermal coal tracking under SEBI BRSR Principle 6.",
@@ -573,7 +573,7 @@ MVP_METRICS = [
         "aggregation_type": AggregationType.SUM.value,
         "evidence_rule": EvidenceRule.MANDATORY.value,
         "frequency": "monthly",
-        "owner_role": "site_collector",
+        "owner_role": "project_admin",
         "entry_level": EntryLevel.PROJECT.value,
         "guidance_text": "Enter total Compressed Natural Gas (CNG) consumed in kg.",
         "why_needed": "Gaseous fuel tracking under SEBI BRSR Principle 6.",
@@ -595,7 +595,7 @@ MVP_METRICS = [
         "aggregation_type": AggregationType.SUM.value,
         "evidence_rule": EvidenceRule.MANDATORY.value,
         "frequency": "monthly",
-        "owner_role": "site_collector",
+        "owner_role": "project_admin",
         "entry_level": EntryLevel.PROJECT.value,
         "guidance_text": "Enter total Piped Natural Gas (PNG) consumed in SCM (Standard Cubic Metres).",
         "why_needed": "Piped gas tracking under SEBI BRSR Principle 6.",
@@ -626,7 +626,7 @@ MVP_METRICS = [
         "aggregation_type": AggregationType.SUM.value,
         "evidence_rule": EvidenceRule.MANDATORY.value,
         "frequency": "monthly",
-        "owner_role": "site_collector",
+        "owner_role": "project_admin",
         "calc_formula_code": "CALC-GHG-SCOPE2-GRID",
     },
     {
@@ -650,7 +650,7 @@ MVP_METRICS = [
         "aggregation_type": AggregationType.SUM.value,
         "evidence_rule": EvidenceRule.MANDATORY.value,
         "frequency": "monthly",
-        "owner_role": "site_collector",
+        "owner_role": "project_admin",
         "calc_formula_code": "CALC-GHG-SCOPE2-RENEWABLE",
     },
 
@@ -681,7 +681,7 @@ MVP_METRICS = [
         "aggregation_type": AggregationType.SUM.value,
         "evidence_rule": EvidenceRule.MANDATORY.value,
         "frequency": "monthly",
-        "owner_role": "site_collector",
+        "owner_role": "project_admin",
         "entry_level": EntryLevel.BU.value,
         "guidance_text": "Enter total business travel by air, rail, and road for all employees of this BU during the month. Enter passenger-kilometres per travel mode.",
         "why_needed": "GHG Protocol Category 6 (Business Travel). Mandated under SEBI BRSR Core for Scope 3 disclosure. HR/Finance is the source of truth for travel data.",
@@ -709,7 +709,7 @@ MVP_METRICS = [
         "aggregation_type": AggregationType.SUM.value,
         "evidence_rule": EvidenceRule.CONDITIONAL.value,
         "frequency": "monthly",
-        "owner_role": "site_collector",
+        "owner_role": "project_admin",
         "entry_level": EntryLevel.BU.value,
         "guidance_text": "Enter total employee commuting distance per mode (private car, hired bus, public transport) for all BU staff during the month.",
         "why_needed": "GHG Protocol Category 7 (Employee Commuting). Captured at BU level using HR headcount and average commute distance surveys.",
@@ -737,7 +737,7 @@ MVP_METRICS = [
         "aggregation_type": AggregationType.SUM.value,
         "evidence_rule": EvidenceRule.CONDITIONAL.value,
         "frequency": "monthly",
-        "owner_role": "site_collector",
+        "owner_role": "project_admin",
         "entry_level": EntryLevel.SUBSIDIARY.value,
         "guidance_text": "Enter total quantity of key materials procured (steel in MT, cement in MT, aggregates in MT, aluminium in MT) by the subsidiary during the month.",
         "why_needed": "GHG Protocol Category 1 (Purchased Goods). Procurement department holds PO/invoice data. Mandatory for SEBI BRSR Core upstream emission disclosure.",
@@ -765,7 +765,7 @@ MVP_METRICS = [
         "aggregation_type": AggregationType.SUM.value,
         "evidence_rule": EvidenceRule.CONDITIONAL.value,
         "frequency": "monthly",
-        "owner_role": "site_collector",
+        "owner_role": "project_admin",
         "entry_level": EntryLevel.PROJECT.value,
         "guidance_text": "Enter total tonne-kilometres of material transported to this site by third-party logistics (road trucks, rail freight) during the month.",
         "why_needed": "GHG Protocol Category 4 (Upstream Transport). Logistics is coordinated at project level where goods receipt happens.",
@@ -803,7 +803,7 @@ MVP_METRICS = [
         "aggregation_type": AggregationType.SUM.value,
         "evidence_rule": EvidenceRule.CONDITIONAL.value,
         "frequency": "annual",               # Capital goods purchased annually
-        "owner_role": "maker",
+        "owner_role": "project_admin",
         "entry_level": EntryLevel.SUBSIDIARY.value,
         "guidance_text": "Enter total capital equipment procured by the subsidiary this year (excavators, cranes, compactors, DG sets, HV transformers) — weight in MT or spend in INR Lakh.",
         "why_needed": "GHG Protocol Category 2 (Capital Goods). Finance/Asset register is the source. Reported annually at subsidiary level in SEBI BRSR.",
@@ -841,7 +841,7 @@ MVP_METRICS = [
         "aggregation_type": AggregationType.SUM.value,
         "evidence_rule": EvidenceRule.MANDATORY.value,
         "frequency": "monthly",
-        "owner_role": "maker",
+        "owner_role": "project_admin",
         "entry_level": EntryLevel.PROJECT.value,
         "guidance_text": "Enter total waste generated at site by category: C&D debris (MT), MSW from camp (MT), hazardous waste (MT), and disposal route (landfill/recycled/treated).",
         "why_needed": "GHG Protocol Category 5 (Waste in Operations). Mandated under SEBI BRSR Principle 6 E7 and C&D Waste Management Rules 2016.",

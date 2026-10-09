@@ -75,7 +75,7 @@ class Metric(Base, UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin):
     # Evidence & governance rules
     evidence_rule = Column(String(50), default=EvidenceRule.MANDATORY.value, nullable=False)
     frequency = Column(String(50), default="monthly", nullable=False)
-    owner_role = Column(String(50), default="maker", nullable=False)
+    owner_role = Column(String(50), default="project_admin", nullable=False)
 
     # Entry level routing — which org level is responsible for entering this metric's raw data
     entry_level = Column(String(50), default=EntryLevel.PROJECT.value, nullable=False, index=True)

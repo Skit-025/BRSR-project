@@ -29,10 +29,10 @@ def get_master_form(
 ):
     """
     Returns the comprehensive Master Digital Form containing all metrics across
-    all 5 MEIL subsidiaries and principles.
-    Restricted to system_admin, group_admin, and esg_manager.
+    all subsidiaries and principles.
+    Restricted to system_admin and group_admin.
     """
-    allowed = [Role.SYSTEM_ADMIN.value, Role.GROUP_ADMIN.value, Role.ESG_MANAGER.value]
+    allowed = [Role.SYSTEM_ADMIN.value, Role.GROUP_ADMIN.value]
     if current_user.role not in allowed:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -58,7 +58,16 @@ def get_scoped_form(
     - Otherwise defaults to user's assigned org node.
     """
     target_entity_id = entity_id if entity_id else (str(current_user.org_node_id) if current_user.org_node_id else None)
-    
+    if not target_entity_id:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Entity ID is required or user must have an assigned organizational node."
+        )
+
+    # Enforce strict project isolation:
+    from app.security.scope import assert_user_authorized_for_project
+    assert_user_authorized_for_project(db, current_user, target_entity_id, "access digital form for this project")
+
     return build_scoped_digital_form(
         db=db,
         period_id=period_id,
@@ -81,6 +90,9 @@ def download_form_template(
     Generates a pre-formatted CSV template containing all applicable metric codes and units
     for offline completion and bulk upload.
     """
+    from app.security.scope import assert_user_authorized_for_project
+    assert_user_authorized_for_project(db, current_user, entity_id, "download form template for this project")
+
     scoped = build_scoped_digital_form(
         db=db,
         period_id=period_id,

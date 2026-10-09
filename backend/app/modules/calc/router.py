@@ -1,12 +1,19 @@
 """
 app/modules/calc/router.py
 FastAPI router for calculation formulas, emission factors, and unit conversion endpoints.
+
+Note: Reference lookup endpoints (formulas, factors, fuel-catalog, scope3-catalog, convert-unit)
+are intentionally public — they expose only statutory emission factors, not organisational data.
+Computation POST endpoints (scope1, scope2, scope3, energy-intensity, safety-ltifr) require
+authentication and the calc:run permission.
 """
 from typing import List, Dict, Any
 from decimal import Decimal
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from app.db.session import get_db
+from app.modules.auth.models import User
+from app.modules.auth.router import get_current_active_user
 from app.modules.calc.schemas import (
     Scope1CalcRequest,
     Scope2CalcRequest,
@@ -21,8 +28,18 @@ from app.modules.calc.service import CalculationService
 from app.modules.calc.registry import FORMULA_METADATA, get_formula_info
 from app.modules.calc.units import convert_unit
 from app.modules.calc.factors import FUEL_EMISSION_FACTORS, GRID_EMISSION_FACTOR_CEA_WEIGHTED_AVG
+from app.security.rbac import Permission, has_permission
 
 router = APIRouter(prefix="/calc", tags=["Calculation Engine & Deterministic Formulas"])
+
+
+def _require_calc_permission(current_user: User) -> None:
+    """Raise 403 if the user lacks calc:run permission."""
+    if not has_permission(current_user.role, Permission.CALC_RUN):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to run ESG calculations.",
+        )
 
 
 @router.get("/formulas", response_model=List[FormulaInfo])
@@ -70,8 +87,13 @@ def get_fuel_catalog(db: Session = Depends(get_db)):
 
 
 @router.post("/scope1", response_model=CalculationResult)
-def calculate_scope1(req: Scope1CalcRequest, db: Session = Depends(get_db)):
+def calculate_scope1(
+    req: Scope1CalcRequest,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+):
     """Calculate Scope 1 direct emissions from fuel combustion."""
+    _require_calc_permission(current_user)
     service = CalculationService(db)
     try:
         return service.run_scope1(
@@ -86,8 +108,13 @@ def calculate_scope1(req: Scope1CalcRequest, db: Session = Depends(get_db)):
 
 
 @router.post("/scope2", response_model=CalculationResult)
-def calculate_scope2(req: Scope2CalcRequest, db: Session = Depends(get_db)):
+def calculate_scope2(
+    req: Scope2CalcRequest,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+):
     """Calculate Scope 2 emissions from grid electricity."""
+    _require_calc_permission(current_user)
     service = CalculationService(db)
     try:
         return service.run_scope2(
@@ -102,13 +129,18 @@ def calculate_scope2(req: Scope2CalcRequest, db: Session = Depends(get_db)):
 
 
 @router.post("/scope3", response_model=Scope3CalcResult)
-def calculate_scope3(req: Scope3CalcRequest, db: Session = Depends(get_db)):
+def calculate_scope3(
+    req: Scope3CalcRequest,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+):
     """
     Calculate Scope 3 indirect GHG emissions across all 6 sub-categories:
     A. Business Travel, B. Employee Commuting, C. Purchased Goods & Materials,
     D. Upstream Logistics, E. Capital Goods, F. Waste in Operations.
     Returns per-category breakdown + total tCO2e. All sub-categories optional.
     """
+    _require_calc_permission(current_user)
     service = CalculationService(db)
     try:
         result = service.run_scope3(
@@ -161,8 +193,13 @@ def get_scope3_catalog():
 
 
 @router.post("/energy-intensity", response_model=CalculationResult)
-def calculate_intensity(req: EnergyIntensityRequest, db: Session = Depends(get_db)):
+def calculate_intensity(
+    req: EnergyIntensityRequest,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+):
     """Calculate Energy Intensity (GJ / Crore INR)."""
+    _require_calc_permission(current_user)
     service = CalculationService(db)
     try:
         return service.run_energy_intensity(
@@ -176,8 +213,13 @@ def calculate_intensity(req: EnergyIntensityRequest, db: Session = Depends(get_d
 
 
 @router.post("/safety-ltifr", response_model=CalculationResult)
-def calculate_safety(req: SafetyCalcRequest, db: Session = Depends(get_db)):
+def calculate_safety(
+    req: SafetyCalcRequest,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+):
     """Calculate Lost Time Injury Frequency Rate (LTIFR)."""
+    _require_calc_permission(current_user)
     service = CalculationService(db)
     try:
         return service.run_safety_ltifr(

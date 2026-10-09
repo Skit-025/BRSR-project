@@ -38,9 +38,20 @@ def get_metric(code: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Metric '{code}' not found.")
     return metric
 
+from app.modules.auth.models import User
+from app.modules.auth.router import get_current_active_user
+from app.security.rbac import Permission, has_permission
+from app.security.scope import assert_user_authorized_for_project
+
 @router.post("/metrics", response_model=MetricRead, status_code=status.HTTP_201_CREATED)
-def create_metric(metric_in: MetricCreate, db: Session = Depends(get_db)):
+def create_metric(
+    metric_in: MetricCreate,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
     """Creates or updates a KPI definition in the Metric Catalogue."""
+    if not has_permission(current_user.role, Permission.METRIC_WRITE):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to create metrics.")
     existing = db.query(Metric).filter(Metric.code == metric_in.code).first()
     if existing:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Metric '{metric_in.code}' already exists.")
@@ -72,11 +83,17 @@ def create_metric(metric_in: MetricCreate, db: Session = Depends(get_db)):
     return metric
 
 @router.get("/forms/{entity_id}/{period_id}", response_model=DynamicFormResponse)
-def get_dynamic_monthly_form(entity_id: str, period_id: str, db: Session = Depends(get_db)):
+def get_dynamic_monthly_form(
+    entity_id: str,
+    period_id: str,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
     """
     F06 Form Engine: Returns dynamically generated monthly data entry form for a specific entity.
     Joins catalogue metadata with derived applicability rules and project-type profiles.
     """
+    assert_user_authorized_for_project(db, current_user, entity_id, "access dynamic form for this project")
     if db.query(Metric).count() == 0:
         seed_metrics(db)
 

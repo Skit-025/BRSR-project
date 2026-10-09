@@ -20,7 +20,7 @@ class MetricCreate(BaseModel):
     denominator_metric_id: Optional[str] = None
     evidence_rule: EvidenceRule = EvidenceRule.MANDATORY
     frequency: str = "monthly"
-    owner_role: str = "maker"
+    owner_role: str = "project_admin"
     calc_formula_code: Optional[str] = None
 
 class MetricRead(BaseModel):

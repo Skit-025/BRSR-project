@@ -2,6 +2,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.orm import Session
 from typing import List, Optional, Dict, Any
 from app.db.session import get_db
+from app.modules.auth.models import User
+from app.modules.auth.router import get_current_active_user
+from app.security.sod import assert_can_compile_report
+from app.security.scope import assert_user_authorized_for_project
 from app.modules.reporting.schemas import BRSRFullReportResponse
 from app.modules.reporting.models import ReportType
 from app.modules.reporting.disclosure_mapper import compile_brsr_report
@@ -12,6 +16,7 @@ router = APIRouter(prefix="/reports", tags=["SEBI BRSR Reports & Disclosures"])
 def list_reports(
     entity_id: Optional[str] = Query(None),
     period_id: Optional[str] = Query(None),
+    current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db)
 ):
     """
@@ -22,6 +27,7 @@ def list_reports(
         from app.modules.reporting.models import Report as ReportModel
         q = db.query(ReportModel)
         if entity_id:
+            assert_user_authorized_for_project(db, current_user, entity_id, "view reports for this entity")
             q = q.filter(ReportModel.entity_id == entity_id)
         if period_id:
             q = q.filter(ReportModel.period_id == period_id)
@@ -45,16 +51,20 @@ def list_reports(
 @router.post("/compile", response_model=Dict[str, Any])
 def compile_report_endpoint(
     data: Dict[str, Any],
+    current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db)
 ):
     """
     Triggers BRSR report compilation for an entity + period.
     Calls the same disclosure_mapper used by the GET endpoint, then persists result.
     """
+    assert_can_compile_report(current_user.role)
     entity_id = data.get("entity_id")
     period_id = data.get("period_id")
     if not entity_id or not period_id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="entity_id and period_id are required")
+    
+    assert_user_authorized_for_project(db, current_user, entity_id, "compile report for this entity")
     try:
         report = compile_brsr_report(db, entity_id, period_id, ReportType.BRSR_FULL.value)
         return {
@@ -72,35 +82,41 @@ def compile_report_endpoint(
 def get_sebi_brsr_report(
     entity_id: str,
     period_id: str,
+    current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db)
 ):
     """
     F26-F29 SEBI BRSR Report (Full):
     Returns compiled Section A, Section B, and Section C tables with SHA-256 snapshot seal.
     """
+    assert_user_authorized_for_project(db, current_user, entity_id, "view BRSR report for this entity")
     return compile_brsr_report(db, entity_id, period_id, ReportType.BRSR_FULL.value)
 
 @router.get("/brsr-core/{entity_id}/{period_id}", response_model=BRSRFullReportResponse)
 def get_sebi_brsr_core_report(
     entity_id: str,
     period_id: str,
+    current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db)
 ):
     """
     F29 SEBI BRSR Core Subset:
     Filtered report containing only indicators requiring external reasonable assurance.
     """
+    assert_user_authorized_for_project(db, current_user, entity_id, "view BRSR Core report for this entity")
     return compile_brsr_report(db, entity_id, period_id, ReportType.BRSR_CORE.value)
 
 @router.get("/export/html/{entity_id}/{period_id}", response_class=Response)
 def export_html_report(
     entity_id: str,
     period_id: str,
+    current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db)
 ):
     """
     Renders official SEBI BRSR report in printable HTML/CSS format with assurance seal footer.
     """
+    assert_user_authorized_for_project(db, current_user, entity_id, "export HTML report for this entity")
     report = compile_brsr_report(db, entity_id, period_id, ReportType.BRSR_FULL.value)
 
     rows_html = ""

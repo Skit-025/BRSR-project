@@ -33,6 +33,9 @@ def get_submission_pack(
     db: Session = Depends(get_db)
 ):
     """Retrieves the monthly submission pack and all recorded data points for an entity and period."""
+    from app.security.scope import assert_user_authorized_for_project
+    assert_user_authorized_for_project(db, current_user, entity_id, "access this project's submission pack")
+
     submission = get_or_create_submission(db, entity_id, period_id, maker_id=str(current_user.id))
     return submission
 
@@ -47,6 +50,14 @@ def save_pack(
     Autosaves draft numbers into the monthly pack (F08).
     Enforces optimistic concurrency (409 Conflict on stale version) and normalizes units.
     """
+    from app.security.scope import assert_user_authorized_for_project
+    if save_req.entity_id:
+        assert_user_authorized_for_project(db, current_user, save_req.entity_id, "save data for this project")
+    elif save_req.submission_id:
+        sub = db.query(Submission).filter(Submission.id == save_req.submission_id).first()
+        if sub:
+            assert_user_authorized_for_project(db, current_user, str(sub.entity_id), "save data for this project")
+
     submission = save_draft_submission(db, save_req, user_id=str(current_user.id))
     return submission
 
@@ -58,6 +69,11 @@ def submit_pack(
     db: Session = Depends(get_db)
 ):
     """Freezes submission pack and moves it to SUBMITTED state for reviewer queue."""
+    from app.security.scope import assert_user_authorized_for_project
+    sub = db.query(Submission).filter(Submission.id == submission_id).first()
+    if sub:
+        assert_user_authorized_for_project(db, current_user, str(sub.entity_id), "submit data for this project")
+
     submission = submit_submission_pack(db, submission_id, user_id=str(current_user.id))
     return SubmitPackResponse(
         submission_id=submission.id,
@@ -91,6 +107,9 @@ async def upload_spreadsheet(
     Automatically parses metric codes, normalizes units, validates numeric values,
     and updates the entity's monthly submission pack.
     """
+    from app.security.scope import assert_user_authorized_for_project
+    assert_user_authorized_for_project(db, current_user, entity_id, "upload bulk spreadsheet for this project")
+
     file_bytes = await file.read()
     result = process_spreadsheet_upload(
         db=db,

@@ -92,12 +92,12 @@ export default function Sidebar() {
           { to: '/aarohan', label: 'Ask AAROHAN AI', icon: Command },
         ]
       },
-      (hasPermission('user:manage') || hasPermission('consolidation:read')) && {
+      (hasPermission('user:manage') || hasPermission('consolidation:read') || hasPermission('evidence:read')) && {
         section: 'ADMINISTRATION',
         items: [
           hasPermission('user:manage') && { to: '/admin/users', label: 'User Governance', icon: Settings },
           hasPermission('consolidation:read') && { to: '/admin/jobs', label: 'Pipeline Tasks', icon: RefreshCw },
-          { to: '/trash', label: 'Trash', icon: Trash2 },
+          { to: '/trash', label: 'Trash Can', icon: Trash2 },
         ].filter(Boolean)
       },
     ].filter(Boolean);

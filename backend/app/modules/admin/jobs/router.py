@@ -23,11 +23,15 @@ class JobRead(BaseModel):
     error_message: Optional[str] = None
 
 
+from app.modules.auth.router import require_system_admin
+
+
 @router.get("/", response_model=List[JobRead])
 def list_jobs(
     job_type: Optional[str] = Query(None),
     status: Optional[str] = Query(None),
     limit: int = Query(50, ge=1, le=200),
+    _admin = Depends(require_system_admin),
     db: Session = Depends(get_db),
 ):
     """List recent background task executions."""
@@ -41,7 +45,11 @@ def list_jobs(
 
 
 @router.get("/{job_id}", response_model=JobRead)
-def get_job_status(job_id: str, db: Session = Depends(get_db)):
+def get_job_status(
+    job_id: str,
+    _admin = Depends(require_system_admin),
+    db: Session = Depends(get_db)
+):
     """Get the status and payload of a specific job."""
     job = db.query(BackgroundJob).filter(BackgroundJob.id == job_id).first()
     if not job:

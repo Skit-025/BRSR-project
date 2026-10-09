@@ -94,6 +94,10 @@ def init_db() -> None:
                     ALTER TABLE evidence_files ADD COLUMN IF NOT EXISTS attached_by_role VARCHAR(50);
                     ALTER TABLE evidence_files ADD COLUMN IF NOT EXISTS project_id VARCHAR(100);
                     ALTER TABLE evidence_files ADD COLUMN IF NOT EXISTS esg_indicator VARCHAR(100);
+                    ALTER TABLE evidence_files ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
+                    ALTER TABLE evidence_files ADD COLUMN IF NOT EXISTS deleted_by_id UUID REFERENCES users(id) ON DELETE SET NULL;
+                    ALTER TABLE evidence_files ADD COLUMN IF NOT EXISTS deleted_by_role VARCHAR(50);
+                    ALTER TABLE evidence_files ADD COLUMN IF NOT EXISTS deletion_reason TEXT;
                     
                     ALTER TABLE org_nodes ADD COLUMN IF NOT EXISTS project_description TEXT;
                     ALTER TABLE org_nodes ADD COLUMN IF NOT EXISTS enabled_activity_categories JSONB DEFAULT '[]'::jsonb;
@@ -172,6 +176,10 @@ def init_db() -> None:
                 ALTER TABLE evidence_files ADD COLUMN IF NOT EXISTS attached_by_role VARCHAR(50);
                 ALTER TABLE evidence_files ADD COLUMN IF NOT EXISTS project_id VARCHAR(100);
                 ALTER TABLE evidence_files ADD COLUMN IF NOT EXISTS esg_indicator VARCHAR(100);
+                ALTER TABLE evidence_files ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
+                ALTER TABLE evidence_files ADD COLUMN IF NOT EXISTS deleted_by_id UUID REFERENCES users(id) ON DELETE SET NULL;
+                ALTER TABLE evidence_files ADD COLUMN IF NOT EXISTS deleted_by_role VARCHAR(50);
+                ALTER TABLE evidence_files ADD COLUMN IF NOT EXISTS deletion_reason TEXT;
 
                 ALTER TABLE org_nodes ADD COLUMN IF NOT EXISTS project_description TEXT;
                 ALTER TABLE org_nodes ADD COLUMN IF NOT EXISTS enabled_activity_categories JSONB DEFAULT '[]'::jsonb;

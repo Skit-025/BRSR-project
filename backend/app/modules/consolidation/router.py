@@ -2,6 +2,10 @@ from typing import List, Optional, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from app.db.session import get_db
+from app.modules.auth.models import User
+from app.modules.auth.router import get_current_active_user
+from app.security.sod import assert_can_run_consolidation
+from app.security.scope import assert_user_authorized_for_project
 from app.modules.consolidation.models import ConsolidatedValue
 from app.modules.consolidation.schemas import (
     ConsolidatedValueRead,
@@ -53,12 +57,16 @@ def get_consolidation_status(db: Session = Depends(get_db)):
 @router.post("/run", response_model=ConsolidationRunResponse, status_code=status.HTTP_200_OK)
 def trigger_consolidation(
     req: ConsolidationRunRequest,
+    current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db)
 ):
     """
     F22-F23: Triggers deterministic post-order roll-up of approved site numbers
     up to Business Units, Subsidiaries, and MEIL Group.
     """
+    assert_can_run_consolidation(current_user.role)
+    if req.root_node_id:
+        assert_user_authorized_for_project(db, current_user, req.root_node_id, "trigger consolidation for this entity")
     try:
         res = run_consolidation_engine(db, req.period_id, req.root_node_id)
         return res
@@ -69,12 +77,14 @@ def trigger_consolidation(
 def get_consolidated_figures(
     entity_id: str,
     period_id: str,
+    current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db)
 ):
     """
     Retrieves rolled-up KPI values for a parent node (BU, Subsidiary, or Group)
     including child contribution lineage (raw value, boundary share %, weighted value).
     """
+    assert_user_authorized_for_project(db, current_user, entity_id, "view consolidated figures for this entity")
     values = db.query(ConsolidatedValue).filter(
         ConsolidatedValue.entity_id == entity_id,
         ConsolidatedValue.period_id == period_id
@@ -86,6 +96,7 @@ def get_consolidated_figures(
 def get_bu_drilldown(
     bu_id: str,
     period_id: str,
+    current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db)
 ):
     """
@@ -96,6 +107,7 @@ def get_bu_drilldown(
     - Granular breakdown of each constituent project:
       raw inputs, calculation methodology, approval status, and evidence files.
     """
+    assert_user_authorized_for_project(db, current_user, bu_id, "view BU drilldown for this entity")
     from app.modules.org.models import OrgNode
     from app.modules.collection.models import Submission, DataPoint, SubmissionStatus
     from app.modules.evidence.models import EvidenceFile, EvidenceLink

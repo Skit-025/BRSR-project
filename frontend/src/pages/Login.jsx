@@ -29,7 +29,7 @@ const PLATFORM_ROLES = [
     highlight: 'Subsidiary View'
   },
   {
-    role: 'BU Admin / Reviewer',
+    role: 'BU Admin',
     name: 'Rajesh V.',
     email: 'bu.admin@aarohan.in',
     desc: 'Solar EPC & Operations review queue, Segregation of Duties approval & change requests.',
@@ -39,7 +39,7 @@ const PLATFORM_ROLES = [
     highlight: 'Review Queue'
   },
   {
-    role: 'Project User',
+    role: 'Project Admin',
     name: 'Ravi Kumar',
     email: 'project.user@aarohan.in',
     desc: '250 MW Odisha Solar Park raw operational fact entry, statutory voucher uploads & draft submission.',
@@ -75,9 +75,9 @@ export default function Login() {
       const loggedUser = await login(identifier, password);
       if (loggedUser.role === 'system_admin') {
         navigate('/admin/users');
-      } else if (loggedUser.role === 'project_data_entry_user' || loggedUser.role === 'maker') {
+      } else if (loggedUser.role === 'project_admin') {
         navigate('/projects');
-      } else if (loggedUser.role === 'bu_admin' || loggedUser.role === 'bu_reviewer' || loggedUser.role === 'checker') {
+      } else if (loggedUser.role === 'bu_admin') {
         navigate('/workflow');
       } else {
         navigate('/dashboard');

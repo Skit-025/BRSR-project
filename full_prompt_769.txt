@@ -1,0 +1,576 @@
+<USER_REQUEST>
+# IMPLEMENTATION PROMPT: HIERARCHICAL DELETION, TRASH CAN, AUDIT TRAIL, AND ROLE GOVERNANCE
+
+## 1. ROLE AND PRIMARY OBJECTIVE
+
+Act as a senior full-stack engineer working inside the existing BRSR/ESG application.
+
+Implement a complete, production-grade **Hierarchical Deletion and Audit Management System** covering evidence, organizational entities, data collection, reviews, reports, and administrative operations.
+
+### Non-negotiable engineering priorities
+
+1. Do not break existing functionality, API contracts, frontend routes, database relationships, authentication, authorization, workflows, or integrations.
+2. Do not rebuild existing modules when extending them is sufficient.
+3. Do not introduce hardcoded users, roles, permissions, hierarchy relationships, or mock audit records.
+4. Reuse the existing authentication, RBAC, organizational hierarchy, database models, notification services, and UI components wherever possible.
+5. Inspect the actual codebase before implementation. Verify existing roles, aliases, permissions, relationships, and deletion behavior rather than assuming they match this specification.
+6. Implement the feature end-to-end: database, backend services, API endpoints, frontend controls, audit logs, authorization, migrations, tests, and integration.
+7. Every destructive or administrative action must be authorized and auditable on the server. Hiding a button in the frontend is not authorization.
+8. Preserve existing records and relationships during migrations. Never perform a destructive migration simply to simplify the implementation.
+
+## 2. ORGANIZATIONAL HIERARCHY
+
+The application uses the following administrative hierarchy:
+
+System Admin
+└── Group Admin
+    ├── Group ESG Manager and other permitted subordinate roles
+    └── Subsidiary Admin
+        └── Subsidiary ESG Manager and other permitted subordinate roles
+            └── BU Admin
+                └── BU ESG Manager and other permitted subordinate roles
+                    └── Project Admin
+                        └── Project Data Entry User and other permitted subordinate roles
+
+Treat this as the intended authority ordering, not an instruction to invent new roles or change the existing organizational data model. Inspect the actual hierarchy and resolve role aliases to their canonical roles.
+
+The primary administrative levels relevant to this feature are:
+
+- System Admin
+- Group Admin
+- Subsidiary Admin
+- BU Admin
+- Project Admin
+
+Existing ESG managers, reviewers, data-entry users, auditors, read-only users, and other roles must retain their existing permissions unless an explicitly authorized change is required.
+
+A user's authority must be evaluated using both their canonical role and their organizational scope. A role at a higher level must not automatically expose unrelated groups, subsidiaries, business units, or projects.
+
+## 3. EVIDENCE DELETION
+
+### 3.1 Delete button for every evidence record
+
+Add a delete action to every evidence record wherever that evidence is displayed, including the evidence repository, data collection forms, evidence attachments, and other existing evidence views.
+
+The action must appear only when the authenticated user has deletion permission for that particular record.
+
+Before deletion:
+
+1. Display the evidence name, document type, associated business record, organizational scope, and other identifying details.
+2. Require the user to enter their current account password.
+3. Require a non-empty deletion reason.
+4. Display a confirmation dialog identifying the exact evidence being deleted.
+5. Validate the password against the authenticated user's existing password hash on the backend.
+6. Recheck the user's authorization and the evidence's current state on the backend.
+7. Execute the deletion only after all checks succeed.
+
+Never store or log plaintext passwords. Do not trust a frontend-only password check, a client-supplied user ID, or a client-supplied role.
+
+### 3.2 Evidence deletion semantics
+
+Use soft deletion or an equivalent recoverable archival mechanism unless the existing legal retention policy requires a different behavior.
+
+When evidence is deleted:
+
+- Remove it from normal active evidence views.
+- Preserve the evidence's metadata, uploader, original owner, organization, linked business record, deletion timestamp, deleting user, and deletion reason.
+- Preserve the original file securely or retain an appropriate protected archival reference, subject to existing retention requirements.
+- Preserve the evidence's historical relationships and review history.
+- Prevent normal users from accessing deleted files through direct URLs or previously issued links.
+- Ensure deletion does not silently break associated reports, reviews, emissions calculations, or historical submissions.
+- Record the action in an append-only audit trail.
+
+If permanent purging is required, implement it as a separate, tightly restricted retention operation. It must not erase mandatory audit records.
+
+## 4. HIERARCHICAL TRASH CAN
+
+Create a dedicated Trash Can interface using the application's existing navigation, design system, and authorization mechanisms.
+
+The Trash Can must show deleted evidence according to the following rules.
+
+| Role | Evidence deletion records visible |
+|---|---|
+| System Admin | All evidence deletions across the system, including Group Admins and every subordinate role |
+| Group Admin | Evidence deletions within their authorized group scope, including their own and subordinate users' records |
+| Subsidiary Admin | Evidence deletions within their authorized subsidiary scope, including their own and subordinate users' records |
+| BU Admin | Evidence deletions within their authorized business unit scope, including their own and subordinate users' records, particularly Project Admin deletions |
+| Project Admin | Only their own evidence deletion records |
+| Other roles | Only the records explicitly permitted by their existing authorization policy; default to their own records |
+
+These visibility rules must be enforced on the backend, not merely by filtering a frontend list.
+
+### Trash Can record details
+
+Each entry must display:
+
+- Evidence name and type.
+- Original evidence identifier.
+- Original owner/uploader.
+- Deleting user's name and account identifier.
+- Deleting user's canonical role at the time of deletion.
+- Deletion timestamp, displayed in the application's configured timezone.
+- Mandatory deletion reason.
+- Original group, subsidiary, business unit, and project, where applicable.
+- Associated record or form.
+- Current deletion/retention status.
+- Available actions, based on the user's actual permissions.
+
+Include search, filtering, sorting, pagination, and an evidence detail view where practical.
+
+### Restoration
+
+If the existing product supports restoration, provide a Restore action only to authorized users. Restoration must be audited and must revalidate the user's permissions, record relationships, and conflicts.
+
+Do not expose permanent deletion or unrestricted file downloads through the Trash Can.
+
+## 5. TWO DISTINCT AUDIT VISIBILITY POLICIES
+
+Implement separate authorization policies for evidence deletions and administrative/business-data deletions.
+
+### A. Evidence audit visibility
+
+Evidence deletion records follow the hierarchical Trash Can rules in Section 4. They must not become globally visible merely because an evidence record was deleted.
+
+### B. Business and administrative audit visibility
+
+Deletion, update, rename, and creation events affecting organizational entities or business records must be recorded in a general Administrative Audit Log.
+
+This audit log must make the relevant actions visible to authorized administrators according to the policy below:
+
+- System Admin: all applicable events across the system.
+- Group Admin: applicable events within their authorized group scope, including their own actions and those of subordinate administrators.
+- Subsidiary Admin: applicable events within their authorized subsidiary scope.
+- BU Admin: applicable events within their authorized BU scope.
+- Project Admin: their own actions and other events explicitly permitted by policy.
+
+Where the requirement is that a business-data deletion must be visible to everyone, implement a separate authorized audit-event visibility rule that exposes the deletion event and its necessary metadata to authorized application users without exposing restricted evidence files, credentials, sensitive business payloads, or unrelated personal information.
+
+Do not interpret global deletion-event visibility as permission to read every deleted record's complete contents.
+
+Each audit event must include:
+
+- Actor and actor's role at the time of the action.
+- Action type: CREATE, UPDATE, RENAME, DELETE, RESTORE, APPROVE, REJECT, or another applicable event.
+- Entity type and identifier.
+- Organizational scope.
+- Timestamp.
+- Mandatory reason for destructive or sensitive administrative actions.
+- Changed field names and appropriate before/after values for updates.
+- Request/correlation identifier where available.
+- Outcome: success or failure, where appropriate.
+
+Never record passwords, access tokens, session cookies, or other authentication secrets in audit data.
+
+## 6. BUSINESS DATA AND ADMINISTRATIVE OPERATIONS
+
+Implement a consistent action-control mechanism across all existing application modules.
+
+### 6.1 Project Admin
+
+Project Admin must be able to modify or delete records that their existing authorization permits them to manage within their project scope.
+
+Where the existing product explicitly allows Project Admin to edit or delete all records visible in an overview, preserve that capability and make every such operation auditable.
+
+This includes applicable operations in:
+
+- Data collection.
+- Evidence repository and linked evidence metadata.
+- Project-level reviews and submission workflows.
+- Project-related reports and dashboards.
+- Other project-scoped features currently available to the role.
+
+Do not grant Project Admin access to delete organizational entities or records outside their authorized scope. Do not grant deletion rights over Group Admin, Subsidiary Admin, or BU Admin resources merely because they appear in a shared overview.
+
+### 6.2 Subsidiary administration
+
+Subsidiary Admin must be able to create, update, rename, and delete business units and projects within their authorized subsidiary scope, subject to the applicable role policy.
+
+Apply mandatory reason capture, password reauthentication for destructive operations, backend authorization, dependency checks, and audit logging.
+
+Subsidiary Admin must not be able to delete or modify entities belonging to another subsidiary unless an existing, explicitly authorized permission allows it.
+
+### 6.3 BU administration
+
+BU Admin must be able to create, update, rename, and delete projects within their authorized BU scope, subject to existing authorization rules.
+
+They must also be able to manage applicable BU-scoped data and records under their existing permissions.
+
+Every applicable create, update, rename, and delete action must be auditable.
+
+### 6.4 Group Admin and System Admin
+
+Group Admin and System Admin must be able to perform the organization-wide administrative and business-data operations permitted by their respective scopes.
+
+The permission model must support authorized management of:
+
+- Groups and subsidiaries.
+- Business units and projects.
+- Applicable data collection records.
+- Evidence metadata and evidence deletion.
+- Reviews and workflow records.
+- Consolidated reports and associated administrative records.
+- Value-chain records and other existing feature modules.
+- Other organizational or business entities that the current product explicitly allows them to manage.
+
+System Admin has system-wide authority.
+
+Group Admin has authority over their assigned group and its descendants, but must not be able to create, modify, or delete a System Admin or elevate their own privileges to System Admin.
+
+**Important:** The general business-data deletion privileges of Group Admin and System Admin must not bypass the distinct evidence-audit visibility policy.
+
+### 6.5 Operations that must never bypass audit controls
+
+Every destructive operation must:
+
+1. Check the user's current authorization.
+2. Validate organizational scope.
+3. Require a meaningful reason.
+4. Require password reauthentication for deletions and other configured sensitive actions.
+5. Check dependencies and prevent inconsistent data.
+6. Execute atomically where possible.
+7. Record the event durably.
+8. Return an explicit success or failure response.
+
+For update and rename actions, capture the relevant before/after values and reason where required by the applicable policy.
+
+For bulk operations, record every affected entity or use a traceable parent operation linked to individual entity-level events. Never silently delete multiple records without a corresponding audit trail.
+
+## 7. ROLE CREATION AND ROLE MANAGEMENT
+
+Implement role management for System Admin, Group Admin, and Subsidiary Admin with different authority boundaries.
+
+### 7.1 System Admin
+
+System Admin may create and manage permitted administrative roles across the system, including Group Admins and subordinate administrative roles.
+
+System Admin must not bypass protected system invariants, authentication checks, or audit requirements.
+
+### 7.2 Group Admin
+
+Group Admin may create and manage:
+
+- Another Group Admin within the applicable system policy.
+- Subsidiary Admins.
+- BU Admins and permitted subordinate roles.
+- Other existing roles below their authority.
+
+Group Admin must not create, modify, delete, or promote anyone to System Admin. Group Admin must not grant permissions exceeding their own delegated authority.
+
+If a newly created Group Admin is permitted by the existing product's policy, the new account must be scoped explicitly and must not inherit unrestricted access to unrelated groups.
+
+### 7.3 Subsidiary Admin
+
+Subsidiary Admin may initiate the creation or management of roles below their own authority, such as BU Admin and Project Admin, within the authorized subsidiary hierarchy.
+
+Subsidiary Admin must not directly create or activate a Group Admin, another Subsidiary Admin, or any superior-level administrator through this workflow.
+
+### 7.4 Mandatory approval workflow
+
+All role creation, role modification, and privileged role-management requests initiated by Subsidiary Admin must follow this approval sequence:
+
+1. Subsidiary Admin submits the request.
+2. The backend creates a durable pending request.
+3. The request appears in the Pending Requests queue for System Admin and Group Admin, according to their scope and approval permissions.
+4. The request contains the requester, target user or proposed account details, requested role, organizational scope, justification, timestamp, and status.
+5. The request remains pending until an authorized System Admin or Group Admin approves or rejects it.
+6. On approval, the backend revalidates the requester's authority, the approver's authority, the requested role, the target scope, and uniqueness constraints.
+7. Only after successful approval may the role change or account provisioning be committed.
+8. On rejection, record the rejection reason and notify the requester through the existing notification mechanism.
+9. Record submission, approval, rejection, and final provisioning outcomes in the administrative audit log.
+
+**No role activation, privileged permission grant, or account-access email may occur before approval.**
+
+The same approval workflow should apply to any role-management operation that grants privileges beyond the requester's delegated authority.
+
+Where existing policy permits Group Admin or System Admin to perform role management directly within their scope, preserve that ability without creating unnecessary approval bottlenecks. However, protected System Admin creation and modification must remain governed by the existing trusted provisioning policy.
+
+### 7.5 Role request security
+
+- Never allow a client to self-assign an administrative role.
+- Never trust a role name or organizational scope supplied by the frontend without server-side validation.
+- Prevent privilege escalation through aliases, alternate endpoints, direct database identifiers, or bulk role updates.
+- Prevent unauthorized modifications to existing protected accounts.
+- Prevent the requester from approving their own privileged request.
+- Enforce target-user uniqueness and scope constraints.
+- Record who approved or rejected each request and why.
+- Use existing email/notification services; do not hardcode recipients or SMTP credentials.
+
+## 8. PASSWORD REAUTHENTICATION
+
+Implement a reusable backend reauthentication mechanism for evidence deletion and other destructive operations covered by this specification.
+
+Requirements:
+
+- Validate the current authenticated user's password against the stored password hash.
+- Do not transmit passwords to third-party services.
+- Do not store plaintext passwords or include them in logs, analytics, audit events, or exception messages.
+- Return clear validation errors without disclosing sensitive authentication details.
+- Apply rate limiting and appropriate protections against brute-force attempts.
+- Revalidate authorization and resource state immediately before the operation.
+- Ensure that a failed password check produces no mutation.
+- Use the application's existing password hashing and authentication libraries.
+
+If the application supports federated or passwordless authentication, implement an appropriate equivalent step-up authentication mechanism rather than breaking those existing login flows.
+
+## 9. BACKEND ARCHITECTURE AND DATABASE CHANGES
+
+Inspect the actual codebase and adapt the design to the current architecture.
+
+Reuse existing models if equivalent tables already exist. Do not introduce duplicate audit, trash, or role-request tables unnecessarily.
+
+The implementation must support the following logical capabilities:
+
+### Deleted evidence record
+
+Store or preserve:
+
+- Evidence ID.
+- Original record and organizational references.
+- Original uploader.
+- Deleted-by user.
+- Deleted-at timestamp.
+- Mandatory deletion reason.
+- Deletion status.
+- Retention or restoration metadata where applicable.
+
+### Administrative audit event
+
+Store:
+
+- Actor ID and historical role.
+- Action and entity type.
+- Entity identifier.
+- Organizational scope.
+- Timestamp.
+- Reason.
+- Relevant field-level change metadata.
+- Correlation identifier.
+- Outcome.
+
+### Role-management request
+
+Store:
+
+- Request ID.
+- Requester.
+- Target user or proposed account.
+- Requested operation and role.
+- Organizational scope.
+- Justification.
+- Submission timestamp.
+- Status.
+- Approver.
+- Decision timestamp.
+- Rejection reason or approval notes.
+- Final provisioning outcome.
+
+Add appropriate foreign keys, indexes, constraints, migrations, and retention controls.
+
+Use database transactions for operations that require both a resource mutation and a corresponding audit record. Ensure audit persistence cannot silently fail while the business mutation succeeds. For asynchronous processing, use a transactional outbox or another reliable delivery pattern where appropriate.
+
+## 10. FRONTEND REQUIREMENTS
+
+Integrate the feature into the existing UI without redesigning unrelated pages.
+
+### Evidence interfaces
+
+- Add authorized Delete controls to each applicable evidence record.
+- Provide a confirmation modal showing the evidence identity.
+- Collect the current password and deletion reason.
+- Display validation and authorization errors clearly.
+- Prevent duplicate submissions while an operation is in progress.
+- Refresh the affected list after successful deletion.
+
+### Trash Can
+
+- Add a dedicated Trash Can navigation entry for eligible roles.
+- Render only records returned by the authorized backend query.
+- Show who deleted the evidence, when it was deleted, and the reason.
+- Provide relevant filters and a detail view.
+- Offer restoration only where permitted.
+
+### Administrative Audit Log
+
+- Provide authorized users with a searchable audit interface.
+- Display entity changes, deletion events, actors, timestamps, reasons, and outcomes.
+- Separate evidence deletion details from general business-data audit events.
+- Prevent unauthorized disclosure of deleted evidence contents.
+
+### Role-management dashboard
+
+- Provide role creation and management interfaces appropriate to each administrative role.
+- Show pending requests, request details, approval/rejection controls, and status history.
+- Require a decision reason for rejection.
+- Show final provisioning status and useful error feedback.
+- Never represent a pending request as an active role assignment.
+
+Reuse existing UI patterns, forms, modals, notification components, and navigation conventions.
+
+## 11. API AUTHORIZATION AND CONSISTENCY
+
+Audit all relevant backend endpoints, not just the new ones.
+
+For each evidence, organizational entity, data collection, review, report, value-chain, and role-management endpoint:
+
+- Identify its resource scope.
+- Identify who may read, create, update, rename, delete, restore, or approve.
+- Enforce permissions on the backend.
+- Check object-level authorization to prevent insecure direct object references.
+- Preserve existing valid operations.
+- Add audit events for covered mutations.
+- Ensure direct API calls cannot bypass frontend restrictions.
+- Ensure list, detail, export, bulk-action, and alternate endpoint paths enforce the same policy.
+
+Use centralized authorization policies or services where appropriate rather than duplicating inconsistent role checks throughout the codebase.
+
+Do not assume every role should receive the same delete permission. The effective permission must be derived from the requested action, the user's canonical role, delegated authority, resource type, and organizational scope.
+
+## 12. FAILURE HANDLING AND DATA INTEGRITY
+
+Handle at least these scenarios:
+
+- Incorrect password.
+- Missing deletion reason.
+- Insufficient permission.
+- Resource outside the user's organizational scope.
+- Resource already deleted.
+- Resource modified concurrently.
+- Parent entity deletion blocked by active children or retention constraints.
+- Audit persistence failure.
+- Invalid or expired role-management request.
+- Unauthorized or self-approved role request.
+- Duplicate account or role assignment.
+- Email or notification delivery failure.
+- Attempted privilege escalation.
+- Attempts to access deleted evidence by direct URL.
+- Attempted permanent deletion by an unauthorized role.
+
+Failures must not leave partial organizational changes, active unauthorized roles, or unaudited successful mutations.
+
+Do not automatically cascade-delete unrelated data merely because a parent record is deleted. Use explicit dependency checks, soft deletion, archival, or controlled cascading according to existing business rules.
+
+## 13. TESTING REQUIREMENTS
+
+Add automated tests covering:
+
+### Evidence deletion
+
+- Each authorized role can delete only permitted evidence.
+- Password verification is mandatory.
+- Deletion reason is mandatory.
+- Failed validation leaves the evidence unchanged.
+- Deleted evidence disappears from active views.
+- Deletion metadata and evidence relationships are preserved.
+- Direct download and API access are denied when unauthorized.
+
+### Hierarchical Trash Can
+
+- System Admin sees all evidence deletion records.
+- Group Admin sees records within their authorized group, including subordinate administrators.
+- Subsidiary Admin sees records within their authorized subsidiary.
+- BU Admin sees records within their authorized BU, including Project Admin deletions.
+- Project Admin sees their own records only.
+- Cross-group and cross-subsidiary leakage is prevented.
+- Non-administrative roles cannot bypass the defined visibility policy.
+
+### Administrative audit
+
+- Create, update, rename, delete, restore, approval, and rejection events are recorded as applicable.
+- Required reasons and before/after values are preserved.
+- Evidence contents are not exposed through unrelated audit views.
+- Failed operations do not create misleading success events.
+- Audit failure does not permit an unaudited mutation.
+
+### Role management
+
+- System Admin can manage roles within the permitted policy.
+- Group Admin can create authorized subordinate roles but cannot create or promote a System Admin.
+- Subsidiary Admin can request subordinate roles.
+- Requests remain pending until approval.
+- Rejected requests never activate the requested role.
+- Unauthorized users cannot approve requests.
+- Self-approval and privilege escalation are blocked.
+- Notification failure does not incorrectly change request status.
+- Existing role aliases continue to work consistently.
+
+### Regression
+
+- Existing authentication works.
+- Existing BRSR data-entry and evidence workflows work.
+- Existing review and approval workflows work.
+- Existing dashboards, reports, and value-chain features work.
+- Existing users and role assignments survive migrations.
+- Existing API consumers remain compatible unless a necessary, documented security correction is required.
+
+## 14. IMPLEMENTATION PROCESS
+
+Follow this sequence:
+
+**Phase 1 — Inspect**
+
+Map the existing role model, canonical roles and aliases, organizational relationships, evidence storage, authentication, authorization dependencies, deletion operations, audit models, notification services, API routes, and frontend navigation.
+
+**Phase 2 — Define policies**
+
+Produce a role/action/resource/scope permission matrix. Resolve conflicts between existing permissions and the new requirements before making schema or behavior changes.
+
+**Phase 3 — Design and migrate**
+
+Reuse existing models where possible. Add backward-compatible migrations for missing deletion metadata, audit records, and role-management requests.
+
+**Phase 4 — Implement backend**
+
+Implement centralized authorization, password reauthentication, evidence deletion, hierarchical Trash Can queries, business-data auditing, and role-request approval workflows.
+
+**Phase 5 — Implement frontend**
+
+Integrate deletion controls, confirmation dialogs, Trash Can, audit views, and role-management requests into the existing UI.
+
+**Phase 6 — Test**
+
+Run unit, integration, authorization, security, migration, and regression tests.
+
+**Phase 7 — Report**
+
+Provide a concise implementation report listing:
+
+- Files inspected and modified.
+- Existing behavior preserved.
+- New database models and migrations.
+- API endpoints added or changed.
+- Permission matrix implemented.
+- Frontend screens and controls added.
+- Tests executed and their actual results.
+- Remaining issues or assumptions.
+
+## 15. FINAL ACCEPTANCE CRITERIA
+
+The task is complete only when:
+
+1. Evidence deletion is password-protected, reason-required, and audited.
+2. The Trash Can enforces the specified hierarchical visibility rules.
+3. Business-data deletion and changes are recorded in the appropriate administrative audit log.
+4. Evidence deletion details are not exposed globally by accident.
+5. Project, BU, Subsidiary, Group, and System Admin permissions respect their actual scope and authority.
+6. Role requests cannot grant privileges before approval.
+7. Group Admin cannot create or promote a System Admin.
+8. Every covered mutation is authorized, validated, and auditable.
+9. Existing application functionality and stored data remain intact.
+10. Automated tests demonstrate the implemented permissions, security controls, and regression behavior.
+
+Do not claim completion merely because the UI has been added. Verify the database behavior, API enforcement, audit persistence, hierarchy filters, role approval workflow, and regression tests in the actual application. just do it withou changing other unnecessary files or without breaking logic cleanly do it
+
+</USER_REQUEST>
+<ADDITIONAL_METADATA>
+The current local time is: 2026-10-09T19:10:04+05:30.
+
+The user's current state is as follows:
+Active Document: c:\Users\codes\Desktop\BRSR-project\backend\app\config\settings.py (LANGUAGE_PYTHON)
+Cursor is on line: 21
+Other open documents:
+- c:\Users\codes\Desktop\BRSR-project\backend\alembic\versions\0005_migrate_to_five_role_architecture.py (LANGUAGE_PYTHON)
+- c:\Users\codes\Desktop\BRSR-project\backend\app\config\settings.py (LANGUAGE_PYTHON)
+- c:\Users\codes\Desktop\BRSR-project\backend\app\db\seed_demo_data.py (LANGUAGE_PYTHON)
+- c:\Users\codes\Desktop\BRSR-project\frontend\src\context\AuthContext.jsx (LANGUAGE_JAVASCRIPT)
+- c:\Users\codes\Desktop\BRSR-project\frontend\src\pages\EvidenceVault.jsx (LANGUAGE_JAVASCRIPT)
+</ADDITIONAL_METADATA>

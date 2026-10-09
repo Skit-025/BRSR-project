@@ -13,8 +13,13 @@ router = APIRouter(prefix="/admin", tags=["System Administration & Diagnostics"]
 router.include_router(jobs_router)
 
 
+from app.modules.auth.router import require_system_admin
+
 @router.get("/diagnostics", response_model=SystemDiagnostics)
-def get_system_diagnostics(db: Session = Depends(get_db)):
+def get_system_diagnostics(
+    _admin = Depends(require_system_admin),
+    db: Session = Depends(get_db)
+):
     """Inspects complete PostgreSQL health, row counts, and active configuration."""
     service = AdminService(db)
     return service.get_diagnostics()

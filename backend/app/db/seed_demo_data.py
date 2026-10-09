@@ -151,12 +151,13 @@ def seed_demo_data():
             db.flush()
         print(f"[OK] Project: {proj2.name}")
 
-        # 3. Users for all 4 roles
+        # 3. Users for all 5 roles (Five-Role Architecture)
         demo_users = [
-            ("group.admin@aarohan.in", "system_admin", "Aditya Sharma (Group ESG Director)", group.id),
+            ("admin@aarohan.in", "system_admin", "System Administrator", None),
+            ("group.admin@aarohan.in", "group_admin", "Aditya Sharma (Group ESG Director)", group.id),
             ("sub.admin@aarohan.in", "subsidiary_admin", "Meera Nair (Subsidiary ESG Manager)", sub1.id),
-            ("bu.admin@aarohan.in", "checker", "Rajesh V. (Transportation BU Reviewer)", bu1.id),
-            ("project.user@aarohan.in", "maker", "Ravi Kumar (Site Engineer P7)", proj1.id),
+            ("bu.admin@aarohan.in", "bu_admin", "Rajesh V. (Transportation BU Admin)", bu1.id),
+            ("project.user@aarohan.in", "project_admin", "Ravi Kumar (Site Engineer P7)", proj1.id),
         ]
         for email, role, full_name, node_id in demo_users:
             u = db.query(User).filter(User.email == email).first()
@@ -170,6 +171,12 @@ def seed_demo_data():
                     is_active=True
                 )
                 db.add(u)
+                db.flush()
+            else:
+                u.role = role
+                u.full_name = full_name
+                u.org_node_id = node_id
+                u.is_active = True
                 db.flush()
             print(f"[OK] User: {email} ({role})")
 

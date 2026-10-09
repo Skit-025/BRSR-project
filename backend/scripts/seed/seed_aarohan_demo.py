@@ -272,12 +272,13 @@ def seed_aarohan_demo():
             db.flush()
         print(f"[OK] Project 4: {proj4.name}")
 
-        # 3. Create the 4 Demo Personas
+        # 3. Create the 5 Demo Personas (Five-Role Architecture)
         demo_users = [
+            ("admin@aarohan.in", "system_admin", "Dr. Deepa Nair (Platform System Admin)", None),
             ("group.admin@aarohan.in", "group_admin", "Aditya Sharma (Group ESG Director)", group.id),
             ("sub.admin@aarohan.in", "subsidiary_admin", "Meera Nair (Subsidiary ESG Admin)", sub1.id),
-            ("bu.admin@aarohan.in", "bu_admin", "Rajesh V. (Solar EPC BU Reviewer)", bu1.id),
-            ("project.user@aarohan.in", "project_data_entry_user", "Ravi Kumar (Site Engineer - Odisha Solar)", proj1.id),
+            ("bu.admin@aarohan.in", "bu_admin", "Rajesh V. (Solar EPC BU Admin)", bu1.id),
+            ("project.user@aarohan.in", "project_admin", "Ravi Kumar (Site Engineer - Odisha Solar)", proj1.id),
         ]
         user_records = {}
         for email, role, full_name, node_id in demo_users:
@@ -298,7 +299,29 @@ def seed_aarohan_demo():
                 u.role = role
                 u.org_node_id = node_id
                 u.full_name = full_name
+                u.is_active = True
                 db.flush()
+
+            # Ensure role assignment
+            assignment = db.query(UserRoleAssignment).filter(
+                UserRoleAssignment.user_id == u.id,
+                UserRoleAssignment.is_active == True
+            ).first()
+            if not assignment:
+                assignment = UserRoleAssignment(
+                    user_id=u.id,
+                    role=role,
+                    entity_id=node_id,
+                    assigned_by_id=u.id,
+                    is_active=True
+                )
+                db.add(assignment)
+                db.flush()
+            else:
+                assignment.role = role
+                assignment.entity_id = node_id
+                db.flush()
+
             user_records[email] = u
             print(f"[OK] Persona: {email} -> {role} ({full_name})")
 
