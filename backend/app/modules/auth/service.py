@@ -582,3 +582,349 @@ def get_admin_audit_log(db: Session, admin_user: User, limit: int = 50):
         q = q.filter(AdminAuditEntry.actor_id == admin_user.id)
     return q.order_by(AdminAuditEntry.created_at.desc()).limit(limit).all()
 
+
+
+# ─── 6-Character Secure Password Generation ───────────────────────────────────
+
+def generate_6char_password() -> str:
+    """
+    Generate a cryptographically secure 6-character random password.
+    Avoids confusing characters. Contains at least 1 uppercase, 1 lowercase, 1 digit.
+    NEVER derives from user data or timestamps.
+    """
+    safe_upper = "ABCDEFGHJKLMNPQRSTUVWXYZ"
+    safe_lower = "abcdefghjkmnpqrstuvwxyz"
+    safe_digits = "23456789"
+    safe_set = safe_upper + safe_lower + safe_digits
+    mandatory = [
+        secrets.choice(safe_upper),
+        secrets.choice(safe_lower),
+        secrets.choice(safe_digits),
+    ]
+    rest = [secrets.choice(safe_set) for _ in range(3)]
+    combined = mandatory + rest
+    for i in range(len(combined) - 1, 0, -1):
+        j = secrets.randbelow(i + 1)
+        combined[i], combined[j] = combined[j], combined[i]
+    return "".join(combined)
+
+
+# ─── User Creation Request Workflow ───────────────────────────────────────────
+
+_REQUEST_ROLES = {"subsidiary_admin"}
+_APPROVER_ROLES = {"system_admin", "super_admin", "group_admin"}
+_SUBSIDIARY_REQUESTABLE_ROLES = {
+    "subsidiary_admin", "subsidiary_esg_manager", "bu_admin", "bu_esg_manager",
+    "bu_reviewer", "project_admin", "project_data_entry_user", "maker", "checker",
+}
+
+
+def _generate_request_number(db: Session) -> str:
+    """Generate a unique sequential request number like USR-REQ-20261009-0012."""
+    from app.modules.auth.models import UserCreationRequest
+    from datetime import date
+    today = date.today().strftime("%Y%m%d")
+    prefix = f"USR-REQ-{today}-"
+    count = db.query(UserCreationRequest).filter(
+        UserCreationRequest.request_number.like(f"{prefix}%")
+    ).count()
+    return f"{prefix}{str(count + 1).zfill(4)}"
+
+
+def _resolve_org_hierarchy(db: Session, org_node_id: Optional[str]) -> dict:
+    """Walk up the org tree from org_node_id and return group/subsidiary/bu/project labels."""
+    from app.modules.org.models import OrgNode
+    result = {
+        "group_id": None, "group_name": None,
+        "subsidiary_id": None, "subsidiary_name": None,
+        "bu_id": None, "bu_name": None,
+        "project_id": None, "project_name": None,
+    }
+    if not org_node_id:
+        return result
+    chain = []
+    curr = db.query(OrgNode).filter(OrgNode.id == org_node_id).first()
+    while curr:
+        chain.append(curr)
+        if not curr.parent_id:
+            break
+        curr = db.query(OrgNode).filter(OrgNode.id == curr.parent_id).first()
+    chain.reverse()
+    for node in chain:
+        t = (node.type or "").lower()
+        if t in ("group",) and result["group_id"] is None:
+            result["group_id"] = str(node.id)
+            result["group_name"] = node.name
+        elif t in ("company", "subsidiary") and result["subsidiary_id"] is None:
+            result["subsidiary_id"] = str(node.id)
+            result["subsidiary_name"] = node.name
+        elif t in ("business_unit", "bu") and result["bu_id"] is None:
+            result["bu_id"] = str(node.id)
+            result["bu_name"] = node.name
+        elif t in ("project", "site") and result["project_id"] is None:
+            result["project_id"] = str(node.id)
+            result["project_name"] = node.name
+    return result
+
+
+def submit_user_creation_request(
+    db: Session,
+    requester: User,
+    full_name: str,
+    email: str,
+    requested_role: str,
+    org_node_id: Optional[str] = None,
+    employee_id: Optional[str] = None,
+    phone: Optional[str] = None,
+    reason: Optional[str] = None,
+):
+    """Subsidiary Admin submits a PENDING user creation request. No official user is created yet."""
+    from app.modules.auth.models import UserCreationRequest
+
+    if requester.role not in _REQUEST_ROLES:
+        raise PermissionError(
+            f"Role '{requester.role}' cannot submit user creation requests. "
+            "Only subsidiary_admin uses this workflow."
+        )
+    if requested_role in ("system_admin", "super_admin", "group_admin"):
+        raise PermissionError(f"Subsidiary Admin cannot request role '{requested_role}'.")
+    if requested_role not in _SUBSIDIARY_REQUESTABLE_ROLES:
+        valid = ", ".join(sorted(_SUBSIDIARY_REQUESTABLE_ROLES))
+        raise PermissionError(
+            f"Role '{requested_role}' is not requestable by subsidiary_admin. Valid: {valid}."
+        )
+    if org_node_id and requester.org_node_id:
+        if not is_node_descendant(db, str(requester.org_node_id), str(org_node_id)):
+            raise PermissionError("Target org unit is outside your authorized scope.")
+
+    normalized_email = email.strip().lower()
+    existing_user = db.query(User).filter(
+        User.email == normalized_email, User.is_deleted == False
+    ).first()
+    if existing_user:
+        raise ValueError(f"An active user with email '{normalized_email}' already exists.")
+
+    existing_pending = db.query(UserCreationRequest).filter(
+        UserCreationRequest.email == normalized_email,
+        UserCreationRequest.status == "PENDING",
+    ).first()
+    if existing_pending:
+        raise ValueError(
+            f"A pending request for '{normalized_email}' already exists ({existing_pending.request_number})."
+        )
+
+    request_number = _generate_request_number(db)
+    org_hierarchy = _resolve_org_hierarchy(db, org_node_id)
+
+    ucr = UserCreationRequest(
+        request_number=request_number,
+        full_name=full_name.strip(),
+        email=normalized_email,
+        employee_id=(employee_id or "").strip() or None,
+        phone=(phone or "").strip() or None,
+        requested_role=requested_role,
+        org_node_id=org_node_id,
+        group_id=org_hierarchy["group_id"],
+        group_name=org_hierarchy["group_name"],
+        subsidiary_id=org_hierarchy["subsidiary_id"],
+        subsidiary_name=org_hierarchy["subsidiary_name"],
+        bu_id=org_hierarchy["bu_id"],
+        bu_name=org_hierarchy["bu_name"],
+        project_id=org_hierarchy["project_id"],
+        project_name=org_hierarchy["project_name"],
+        reason=reason,
+        status="PENDING",
+        requested_by_user_id=requester.id,
+        requested_by_name=requester.full_name,
+        requested_by_role=requester.role,
+        requested_by_employee_id=getattr(requester, "employee_id", None),
+        requested_by_email=requester.email,
+        requested_user_data={
+            "full_name": full_name.strip(),
+            "email": normalized_email,
+            "employee_id": employee_id,
+            "phone": phone,
+            "requested_role": requested_role,
+            "org_node_id": org_node_id,
+            "reason": reason,
+        }
+    )
+    db.add(ucr)
+    db.commit()
+    db.refresh(ucr)
+    log_admin_audit(
+        db, actor=requester, action="USER_REQUEST_SUBMITTED",
+        target_name=full_name, target_role=requested_role,
+        target_scope_id=org_node_id,
+        details={"request_number": request_number, "email": normalized_email}
+    )
+    return ucr
+
+
+def list_user_creation_requests(
+    db: Session, viewer: User, status_filter: Optional[str] = None
+) -> List:
+    """List user creation requests visible to the calling admin based on role and org scope."""
+    from app.modules.auth.models import UserCreationRequest
+    q = db.query(UserCreationRequest)
+    if status_filter:
+        q = q.filter(UserCreationRequest.status == status_filter.upper())
+    if viewer.role in ("system_admin", "super_admin"):
+        return q.order_by(UserCreationRequest.created_at.desc()).all()
+    if viewer.role == "group_admin":
+        all_reqs = q.order_by(UserCreationRequest.created_at.desc()).all()
+        if not viewer.org_node_id:
+            return all_reqs
+        return [
+            r for r in all_reqs
+            if not r.org_node_id or is_node_descendant(db, str(viewer.org_node_id), str(r.org_node_id))
+        ]
+    return q.filter(
+        UserCreationRequest.requested_by_user_id == viewer.id
+    ).order_by(UserCreationRequest.created_at.desc()).all()
+
+
+def approve_user_creation_request(
+    db: Session, approver: User, request_id: str
+) -> tuple:
+    """Approve PENDING request. Returns (updated_request, created_user, plaintext_6char_password)."""
+    from app.modules.auth.models import UserCreationRequest
+
+    if approver.role not in _APPROVER_ROLES:
+        raise PermissionError(
+            f"Role '{approver.role}' cannot approve user creation requests."
+        )
+    ucr = db.query(UserCreationRequest).filter(
+        UserCreationRequest.id == request_id
+    ).with_for_update().first()
+    if not ucr:
+        raise ValueError("User creation request not found.")
+    if ucr.status != "PENDING":
+        raise ValueError(f"Request is no longer PENDING (status: {ucr.status}).")
+    if str(ucr.requested_by_user_id) == str(approver.id):
+        raise PermissionError("Separation of duties: you cannot approve your own request.")
+    if approver.role == "group_admin" and approver.org_node_id:
+        if ucr.org_node_id and not is_node_descendant(db, str(approver.org_node_id), str(ucr.org_node_id)):
+            raise PermissionError("Request is outside your authorized organizational scope.")
+    if approver.role == "group_admin" and ucr.requested_role in ("system_admin", "super_admin"):
+        raise PermissionError("Group Admin cannot approve system_admin or super_admin roles.")
+
+    existing_user = db.query(User).filter(
+        User.email == ucr.email, User.is_deleted == False
+    ).first()
+    if existing_user:
+        raise ValueError(f"An active user with email '{ucr.email}' already exists.")
+
+    initial_password = generate_6char_password()
+    hashed_pwd = get_password_hash(initial_password)
+    now = datetime.now(timezone.utc)
+
+    new_user = User(
+        email=ucr.email,
+        hashed_password=hashed_pwd,
+        full_name=ucr.full_name,
+        role=ucr.requested_role,
+        org_node_id=ucr.org_node_id,
+        created_by_id=approver.id,
+        is_active=True,
+        must_change_password=True,
+    )
+    db.add(new_user)
+    db.flush()
+
+    assignment = UserRoleAssignment(
+        user_id=new_user.id,
+        role=ucr.requested_role,
+        entity_id=ucr.org_node_id,
+        assigned_by_id=approver.id,
+        is_active=True,
+    )
+    db.add(assignment)
+
+    ucr.status = "APPROVED"
+    ucr.approved_by_user_id = approver.id
+    ucr.approved_by_name = approver.full_name
+    ucr.approved_by_role = approver.role
+    ucr.approved_at = now
+    ucr.created_user_id = new_user.id
+
+    db.commit()
+    db.refresh(ucr)
+    db.refresh(new_user)
+
+    log_admin_audit(
+        db, actor=approver, action="USER_REQUEST_APPROVED",
+        target_user_id=str(new_user.id), target_name=new_user.full_name,
+        target_role=new_user.role,
+        target_scope_id=str(new_user.org_node_id) if new_user.org_node_id else None,
+        details={"request_number": ucr.request_number, "email": new_user.email}
+    )
+    log_admin_audit(
+        db, actor=approver, action="USER_CREATED",
+        target_user_id=str(new_user.id), target_name=new_user.full_name,
+        target_role=new_user.role,
+        target_scope_id=str(new_user.org_node_id) if new_user.org_node_id else None,
+        details={"source": "user_creation_request", "request_number": ucr.request_number}
+    )
+    return ucr, new_user, initial_password
+
+
+def reject_user_creation_request(
+    db: Session, rejector: User, request_id: str, rejection_reason: str
+):
+    """Reject a PENDING user creation request with a mandatory reason."""
+    from app.modules.auth.models import UserCreationRequest
+
+    if rejector.role not in _APPROVER_ROLES:
+        raise PermissionError(f"Role '{rejector.role}' cannot reject user creation requests.")
+    if not (rejection_reason or "").strip():
+        raise ValueError("A rejection reason is mandatory.")
+
+    ucr = db.query(UserCreationRequest).filter(
+        UserCreationRequest.id == request_id
+    ).with_for_update().first()
+    if not ucr:
+        raise ValueError("User creation request not found.")
+    if ucr.status != "PENDING":
+        raise ValueError(f"Request is no longer PENDING (status: {ucr.status}).")
+    if rejector.role == "group_admin" and rejector.org_node_id:
+        if ucr.org_node_id and not is_node_descendant(db, str(rejector.org_node_id), str(ucr.org_node_id)):
+            raise PermissionError("Request is outside your authorized scope.")
+
+    now = datetime.now(timezone.utc)
+    ucr.status = "REJECTED"
+    ucr.rejected_by_user_id = rejector.id
+    ucr.rejected_by_name = rejector.full_name
+    ucr.rejected_by_role = rejector.role
+    ucr.rejected_at = now
+    ucr.rejection_reason = rejection_reason.strip()
+
+    db.commit()
+    db.refresh(ucr)
+
+    log_admin_audit(
+        db, actor=rejector, action="USER_REQUEST_REJECTED",
+        target_name=ucr.full_name, target_role=ucr.requested_role,
+        target_scope_id=str(ucr.org_node_id) if ucr.org_node_id else None,
+        details={"request_number": ucr.request_number, "rejection_reason": rejection_reason.strip()}
+    )
+    return ucr
+
+
+def get_user_creation_request(db: Session, viewer: User, request_id: str):
+    """Fetch a single request with authorization enforcement."""
+    from app.modules.auth.models import UserCreationRequest
+    ucr = db.query(UserCreationRequest).filter(UserCreationRequest.id == request_id).first()
+    if not ucr:
+        raise ValueError("User creation request not found.")
+    if viewer.role in ("system_admin", "super_admin"):
+        return ucr
+    if viewer.role == "group_admin":
+        if not viewer.org_node_id:
+            return ucr
+        if ucr.org_node_id and not is_node_descendant(db, str(viewer.org_node_id), str(ucr.org_node_id)):
+            raise PermissionError("You do not have access to this request.")
+        return ucr
+    if str(ucr.requested_by_user_id) == str(viewer.id):
+        return ucr
+    raise PermissionError("You do not have access to this request.")

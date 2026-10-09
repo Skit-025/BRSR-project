@@ -28,6 +28,10 @@ from app.modules.auth.schemas import (
     UserInvitationRead,
     AdminDeactivateUserRequest,
     AdminAuditEntryRead,
+    UserCreationRequestCreate,
+    UserCreationRequestRead,
+    UserCreationRequestReject,
+    UserCreationRequestApproveResponse,
 )
 from app.modules.auth.service import (
     authenticate_user,
@@ -45,6 +49,11 @@ from app.modules.auth.service import (
     deactivate_user_scoped,
     list_users_for_admin_scoped,
     get_admin_audit_log,
+    submit_user_creation_request,
+    list_user_creation_requests,
+    approve_user_creation_request,
+    reject_user_creation_request,
+    get_user_creation_request,
 )
 from app.security.jwt import create_access_token, create_refresh_token, decode_access_token
 from app.security.rbac import Role
@@ -489,3 +498,146 @@ def get_audit_log_endpoint(
     return get_admin_audit_log(db=db, admin_user=admin_user, limit=limit)
 
 
+
+
+# ─── User Creation Request Workflow Endpoints ──────────────────────────────────
+
+@router.post(
+    "/admin/user-requests",
+    response_model=UserCreationRequestRead,
+    status_code=status.HTTP_201_CREATED,
+    summary="Submit a user creation request (Subsidiary Admin only)"
+)
+def submit_user_request(
+    payload: UserCreationRequestCreate,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Subsidiary Admin submits a PENDING user creation request.
+    No official user account is created yet. The request enters the approval queue.
+    """
+    try:
+        ucr = submit_user_creation_request(
+            db=db,
+            requester=current_user,
+            full_name=payload.full_name,
+            email=payload.email,
+            requested_role=payload.requested_role,
+            org_node_id=payload.org_node_id,
+            employee_id=payload.employee_id,
+            phone=payload.phone,
+            reason=payload.reason,
+        )
+        return ucr
+    except (ValueError, PermissionError) as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.get(
+    "/admin/user-requests",
+    response_model=List[UserCreationRequestRead],
+    status_code=status.HTTP_200_OK,
+    summary="List user creation requests visible to the calling admin"
+)
+def list_user_requests(
+    status_filter: Optional[str] = None,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Returns user creation requests within the calling admin's authorized scope.
+    system_admin/super_admin: all requests.
+    group_admin: requests within their org branch.
+    subsidiary_admin: own submitted requests.
+    """
+    try:
+        return list_user_creation_requests(db=db, viewer=current_user, status_filter=status_filter)
+    except PermissionError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+
+
+@router.get(
+    "/admin/user-requests/{request_id}",
+    response_model=UserCreationRequestRead,
+    status_code=status.HTTP_200_OK,
+    summary="Get a single user creation request"
+)
+def get_user_request(
+    request_id: str,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+):
+    try:
+        return get_user_creation_request(db=db, viewer=current_user, request_id=request_id)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except PermissionError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+
+
+@router.post(
+    "/admin/user-requests/{request_id}/approve",
+    response_model=UserCreationRequestApproveResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Approve a pending user creation request (group_admin / system_admin)"
+)
+def approve_user_request(
+    request_id: str,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Approves the request and atomically creates the official user account.
+    Returns the 6-character initial password — deliver securely to the new user.
+    The password is NEVER stored in plaintext, only its bcrypt/argon2 hash.
+    """
+    try:
+        ucr, new_user, initial_password = approve_user_creation_request(
+            db=db, approver=current_user, request_id=request_id
+        )
+        return UserCreationRequestApproveResponse(
+            success=True,
+            request=ucr,
+            user_id=str(new_user.id),
+            username=new_user.email,
+            role=new_user.role,
+            status="active",
+            initial_password=initial_password,
+            message=(
+                f"User '{new_user.full_name}' created successfully with role '{new_user.role}'. "
+                f"Securely deliver these 6-character credentials to the new employee. "
+                f"They must change their password on first login."
+            ),
+        )
+    except (ValueError, PermissionError) as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post(
+    "/admin/user-requests/{request_id}/reject",
+    response_model=UserCreationRequestRead,
+    status_code=status.HTTP_200_OK,
+    summary="Reject a pending user creation request with a mandatory reason"
+)
+def reject_user_request(
+    request_id: str,
+    payload: UserCreationRequestReject,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Rejects the request. A reason is mandatory.
+    The requesting Subsidiary Admin is notified via audit trail.
+    No user account is created.
+    """
+    try:
+        ucr = reject_user_creation_request(
+            db=db,
+            rejector=current_user,
+            request_id=request_id,
+            rejection_reason=payload.rejection_reason,
+        )
+        return ucr
+    except (ValueError, PermissionError) as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))

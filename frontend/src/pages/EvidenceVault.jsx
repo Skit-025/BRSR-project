@@ -299,6 +299,7 @@ export default function EvidenceVault() {
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [fileToDelete, setFileToDelete] = useState(null);
   const [adminPassword, setAdminPassword] = useState('');
+  const [deleteReason, setDeleteReason] = useState('');
   const [deleteError, setDeleteError] = useState(null);
   const [deleting, setDeleting] = useState(false);
 
@@ -323,6 +324,7 @@ export default function EvidenceVault() {
     }
     setFileToDelete(ev);
     setAdminPassword('');
+    setDeleteReason('');
     setDeleteError(null);
     setDeleteModalOpen(true);
   };
@@ -330,12 +332,13 @@ export default function EvidenceVault() {
   const handleConfirmDelete = async (e) => {
     e.preventDefault();
     if (!adminPassword.trim()) { setDeleteError('Please enter your admin password to authorize deletion.'); return; }
+    if (!deleteReason.trim()) { setDeleteError('A mandatory reason must be provided.'); return; }
     if (!fileToDelete) return;
     setDeleting(true); setDeleteError(null);
     try {
-      await evidenceApi.delete(fileToDelete.id, adminPassword.trim());
-      setNotice({ type: 'success', text: `🗑️ Evidence document "${fileToDelete.original_name || fileToDelete.filename}" permanently deleted.` });
-      setDeleteModalOpen(false); setFileToDelete(null); setAdminPassword(''); setDeleting(false);
+      await evidenceApi.delete(fileToDelete.id, adminPassword.trim(), deleteReason.trim());
+      setNotice({ type: 'success', text: `🗑️ Evidence document "${fileToDelete.original_name || fileToDelete.filename}" safely deleted.` });
+      setDeleteModalOpen(false); setFileToDelete(null); setAdminPassword(''); setDeleteReason(''); setDeleting(false);
       refetch();
     } catch (err) {
       setDeleteError(err.response?.data?.detail || err.message || 'Failed to delete evidence.');
@@ -1157,7 +1160,7 @@ export default function EvidenceVault() {
       {/* ── Delete Confirmation Modal ── */}
       {deleteModalOpen && fileToDelete && (
         <Modal isOpen={Boolean(deleteModalOpen && fileToDelete)}
-          onClose={() => { if (!deleting) { setDeleteModalOpen(false); setFileToDelete(null); setAdminPassword(''); setDeleteError(null); } }}
+          onClose={() => { if (!deleting) { setDeleteModalOpen(false); setFileToDelete(null); setAdminPassword(''); setDeleteReason(''); setDeleteError(null); } }}
           maxWidth="520px">
           <form onSubmit={handleConfirmDelete} style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 16 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -1172,9 +1175,9 @@ export default function EvidenceVault() {
 
             <div style={{ background: 'rgba(239,68,68,0.07)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 8, padding: '11px 14px', fontSize: 12, color: '#ef4444' }}>
               <div style={{ fontWeight: 700, marginBottom: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
-                <AlertTriangle size={13} /> Permanent Document Purge Warning
+                <AlertTriangle size={13} /> Controlled Soft Deletion
               </div>
-              You are about to permanently delete <strong>{fileToDelete.original_name || fileToDelete.filename}</strong>. This purges physical storage and revokes audit trace references.
+              You are about to soft-delete <strong>{fileToDelete.original_name || fileToDelete.filename}</strong>. This removes it from active views but preserves the cryptographic hash and audit trail.
             </div>
 
             <div style={{ background: 'var(--bg-elevated)', borderRadius: 8, padding: '10px 14px', border: '1px solid var(--border-default)', fontSize: 12 }}>
@@ -1194,7 +1197,18 @@ export default function EvidenceVault() {
               </label>
               <input type="password" value={adminPassword} onChange={(e) => { setAdminPassword(e.target.value); setDeleteError(null); }}
                 placeholder="Enter your administrative password" className="form-input"
-                style={{ width: '100%', fontSize: 13 }} autoFocus disabled={deleting} />
+                style={{ width: '100%', fontSize: 13, marginBottom: 12 }} autoFocus disabled={deleting} />
+
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6 }}>
+                Reason for Deletion <span style={{ color: '#ef4444' }}>*</span>
+              </label>
+              <textarea 
+                value={deleteReason} 
+                onChange={(e) => { setDeleteReason(e.target.value); setDeleteError(null); }}
+                placeholder="Enter a mandatory reason for deletion..."
+                style={{ width: '100%', boxSizing: 'border-box', padding: '10px 14px', borderRadius: 8, border: '1px solid var(--border-default)', fontSize: 13, minHeight: 70, background: 'var(--bg-card)' }}
+                disabled={deleting}
+              />
             </div>
 
             {deleteError && (
@@ -1204,10 +1218,10 @@ export default function EvidenceVault() {
             )}
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 9 }}>
-              <button type="button" onClick={() => { setDeleteModalOpen(false); setFileToDelete(null); setAdminPassword(''); setDeleteError(null); }}
+              <button type="button" onClick={() => { setDeleteModalOpen(false); setFileToDelete(null); setAdminPassword(''); setDeleteReason(''); setDeleteError(null); }}
                 className="btn btn-secondary" disabled={deleting} style={{ fontSize: 13 }}>Cancel</button>
-              <button type="submit" disabled={deleting || !adminPassword.trim()}
-                style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 13, padding: '7px 16px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: 7, opacity: (deleting || !adminPassword.trim()) ? 0.6 : 1, cursor: (deleting || !adminPassword.trim()) ? 'not-allowed' : 'pointer', fontWeight: 700 }}>
+              <button type="submit" disabled={deleting || !adminPassword.trim() || !deleteReason.trim()}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 13, padding: '7px 16px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: 7, opacity: (deleting || !adminPassword.trim() || !deleteReason.trim()) ? 0.6 : 1, cursor: (deleting || !adminPassword.trim() || !deleteReason.trim()) ? 'not-allowed' : 'pointer', fontWeight: 700 }}>
                 {deleting ? <><div className="spinner" style={{ width: 13, height: 13 }} /> Deleting…</> : <><Trash2 size={13} /> Confirm Delete</>}
               </button>
             </div>

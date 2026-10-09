@@ -4,7 +4,8 @@ import {
   Users, UserPlus, Shield, CheckCircle2, 
   Copy, Check, AlertCircle, Building2, RefreshCw, X,
   Mail, Send, Trash2, Clock, CheckCircle, Ban, History,
-  ChevronRight, ChevronDown, Award, Search, UserCheck, ShieldCheck
+  ChevronRight, ChevronDown, Award, Search, UserCheck, ShieldCheck,
+  FilePlus, ThumbsUp, ThumbsDown, FileQuestion
 } from 'lucide-react';
 import { authApi, orgApi } from '../api/client';
 import { useAuth } from '../context/AuthContext';
@@ -70,6 +71,24 @@ export default function UserManagement() {
   const [deactivateTarget, setDeactivateTarget] = useState(null);
   const [deactivateReason, setDeactivateReason] = useState('Administrative transition');
   const [deactivateError, setDeactivateError] = useState('');
+
+  // User Creation Request state
+  const [isUserReqOpen, setIsUserReqOpen] = useState(false);
+  const [reqFullName, setReqFullName] = useState('');
+  const [reqEmail, setReqEmail] = useState('');
+  const [reqPhone, setReqPhone] = useState('');
+  const [reqEmployeeId, setReqEmployeeId] = useState('');
+  const [reqRole, setReqRole] = useState('');
+  const [reqOrgNodeId, setReqOrgNodeId] = useState('');
+  const [reqReason, setReqReason] = useState('');
+  const [reqError, setReqError] = useState('');
+  const [lastApproved, setLastApproved] = useState(null);
+  const [copiedPwd, setCopiedPwd] = useState(false);
+
+  // Reject Request Modal state
+  const [rejectTarget, setRejectTarget] = useState(null);
+  const [rejectReason, setRejectReason] = useState('');
+  const [rejectError, setRejectError] = useState('');
 
   // Notification Banner
   const [notice, setNotice] = useState(null);
@@ -141,6 +160,22 @@ export default function UserManagement() {
       }
     },
   });
+
+  // Fetch User Creation Requests (PENDING requests from subsidiaries)
+  const { data: userRequests = [], isLoading: userReqLoading, refetch: refetchUserRequests } = useQuery({
+    queryKey: ['user-creation-requests', currentUser?.id],
+    queryFn: async () => {
+      if (localStorage.getItem('brsr_mock_mode') === 'true') return [];
+      try {
+        const res = await authApi.listUserRequests();
+        return res.data;
+      } catch (err) {
+        return [];
+      }
+    },
+  });
+
+  const pendingUserRequestsCount = userRequests.filter(r => r.status === 'PENDING').length;
 
   // Fetch Admin Audit Log
   const { data: auditLogs = [], isLoading: auditLoading, refetch: refetchAudit } = useQuery({
@@ -219,6 +254,58 @@ export default function UserManagement() {
       setInviteOrgNodeId(String(eligible[0].id));
     } else {
       setInviteOrgNodeId('');
+    }
+  };
+
+  // Determine allowed nodes for the selected request role
+  const eligibleNodesForReqRole = useMemo(() => {
+    if (!reqRole) return [];
+    const roleDef = ROLE_DEFINITIONS[reqRole];
+    if (!roleDef) return [];
+
+    let filtered = nodes;
+    if (authorizedNodeIds) {
+      filtered = filtered.filter(n => authorizedNodeIds.has(String(n.id)));
+    }
+
+    if (roleDef.tier === 'Group') {
+      return filtered.filter(n => ['group', 'company'].includes(n.type?.toLowerCase()));
+    } else if (roleDef.tier === 'Subsidiary') {
+      return filtered.filter(n => ['subsidiary', 'company'].includes(n.type?.toLowerCase()));
+    } else if (roleDef.tier === 'BU') {
+      return filtered.filter(n => ['business_unit', 'bu'].includes(n.type?.toLowerCase()));
+    } else if (roleDef.tier === 'Project') {
+      return filtered.filter(n => ['project', 'site'].includes(n.type?.toLowerCase()));
+    }
+    return filtered;
+  }, [reqRole, nodes, authorizedNodeIds]);
+
+  const handleReqRoleSelect = (roleVal) => {
+    setReqRole(roleVal);
+    const roleDef = ROLE_DEFINITIONS[roleVal];
+    if (!roleDef) return;
+
+    if (currentUser?.org_node_id && (
+      (currentRole === 'subsidiary_admin' && roleVal === 'subsidiary_admin') ||
+      (currentRole === 'bu_admin' && roleVal === 'bu_admin') ||
+      (currentRole === 'project_admin' && roleVal === 'project_admin')
+    )) {
+      setReqOrgNodeId(String(currentUser.org_node_id));
+      return;
+    }
+
+    const eligible = nodes.filter(n => {
+      if (authorizedNodeIds && !authorizedNodeIds.has(String(n.id))) return false;
+      if (roleDef.tier === 'BU') return ['business_unit', 'bu'].includes(n.type?.toLowerCase());
+      if (roleDef.tier === 'Project') return ['project', 'site'].includes(n.type?.toLowerCase());
+      if (roleDef.tier === 'Subsidiary') return ['subsidiary', 'company'].includes(n.type?.toLowerCase());
+      return true;
+    });
+
+    if (eligible.length > 0) {
+      setReqOrgNodeId(String(eligible[0].id));
+    } else {
+      setReqOrgNodeId('');
     }
   };
 
@@ -338,6 +425,86 @@ export default function UserManagement() {
     }
   });
 
+  // Submit User Creation Request Mutation (subsidiary_admin)
+  const submitUserReqMutation = useMutation({
+    mutationFn: async (payload) => authApi.submitUserRequest(payload),
+    onSuccess: (res) => {
+      qc.invalidateQueries({ queryKey: ['user-creation-requests'] });
+      setIsUserReqOpen(false);
+      setReqFullName(''); setReqEmail(''); setReqPhone('');
+      setReqEmployeeId(''); setReqRole(''); setReqOrgNodeId(''); setReqReason('');
+      setNotice({
+        type: 'success',
+        text: `User creation request ${res.data.request_number} submitted successfully. Awaiting approval from Group Admin.`
+      });
+    },
+    onError: (err) => {
+      setReqError(err.response?.data?.detail || 'Failed to submit user creation request.');
+    }
+  });
+
+  // Approve User Request Mutation (group_admin / system_admin)
+  const approveUserReqMutation = useMutation({
+    mutationFn: async (requestId) => authApi.approveUserRequest(requestId),
+    onSuccess: (res) => {
+      qc.invalidateQueries({ queryKey: ['user-creation-requests'] });
+      qc.invalidateQueries({ queryKey: ['admin-scoped-users'] });
+      qc.invalidateQueries({ queryKey: ['admin-audit-log'] });
+      setLastApproved(res.data);
+      setNotice({
+        type: 'success',
+        text: `User '${res.data.request?.full_name}' created successfully with 6-character initial password.`
+      });
+    },
+    onError: (err) => {
+      setNotice({ type: 'error', text: err.response?.data?.detail || 'Failed to approve request.' });
+    }
+  });
+
+  // Reject User Request Mutation (group_admin / system_admin)
+  const rejectUserReqMutation = useMutation({
+    mutationFn: async ({ requestId, reason }) => authApi.rejectUserRequest(requestId, reason),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['user-creation-requests'] });
+      qc.invalidateQueries({ queryKey: ['admin-audit-log'] });
+      setRejectTarget(null);
+      setRejectReason('');
+      setNotice({ type: 'success', text: 'User creation request has been rejected.' });
+    },
+    onError: (err) => {
+      setRejectError(err.response?.data?.detail || 'Failed to reject request.');
+    }
+  });
+
+  // Handler: open submit-request modal (subsidiary_admin)
+  const handleOpenUserReqModal = () => {
+    setReqError('');
+    setReqFullName(''); setReqEmail(''); setReqPhone('');
+    setReqEmployeeId(''); setReqReason('');
+    if (allowedRolesForInvite.length > 0) {
+      handleReqRoleSelect(allowedRolesForInvite[0].value);
+    }
+    setIsUserReqOpen(true);
+  };
+
+  // Handler: submit user creation request form
+  const handleSubmitUserReq = (e) => {
+    e.preventDefault();
+    if (!reqFullName.trim()) { setReqError('Full name is required.'); return; }
+    if (!reqEmail.trim() || !reqEmail.includes('@')) { setReqError('A valid corporate email is required.'); return; }
+    if (!reqRole) { setReqError('Please select a role.'); return; }
+    setReqError('');
+    submitUserReqMutation.mutate({
+      full_name: reqFullName.trim(),
+      email: reqEmail.trim(),
+      phone: reqPhone.trim() || null,
+      employee_id: reqEmployeeId.trim() || null,
+      requested_role: reqRole,
+      org_node_id: reqOrgNodeId || null,
+      reason: reqReason.trim() || null,
+    });
+  };
+
   // Filter active users
   const filteredUsers = users.filter((u) => {
     const matchRole = filterRole === 'ALL' || u.role === filterRole;
@@ -360,6 +527,10 @@ export default function UserManagement() {
   const activeUsersCount = users.filter(u => u.is_active !== false).length;
   const pendingInvitesCount = invitations.filter(i => i.status === 'PENDING').length;
   const suspendedUsersCount = users.filter(u => u.is_active === false).length;
+
+  // Whether current user is a subsidiary_admin (request workflow) or approver
+  const isSubsidiaryAdmin = currentRole === 'subsidiary_admin';
+  const canApproveRequests = ['system_admin', 'super_admin', 'group_admin'].includes(currentRole);
 
   return (
     <div className="page-content anim-fade-up" style={{ background: '#f8fafc' }}>
@@ -394,6 +565,7 @@ export default function UserManagement() {
             onClick={() => {
               refetchUsers();
               refetchInvitations();
+              refetchUserRequests();
               refetchAudit();
             }}
           >
@@ -401,7 +573,18 @@ export default function UserManagement() {
             <span>Refresh</span>
           </button>
 
-          {allowedRolesForInvite.length > 0 && (
+          {isSubsidiaryAdmin && (
+            <button
+              className="btn btn-primary"
+              style={{ borderRadius: 6, background: '#0070F3', color: '#fff', border: 'none', fontWeight: 600 }}
+              onClick={handleOpenUserReqModal}
+            >
+              <FilePlus size={14} />
+              <span>+ Request User Access</span>
+            </button>
+          )}
+
+          {!isSubsidiaryAdmin && allowedRolesForInvite.length > 0 && (
             <button
               className="btn btn-primary"
               style={{ borderRadius: 6, background: '#0070F3', color: '#fff', border: 'none', fontWeight: 600 }}
@@ -475,6 +658,70 @@ export default function UserManagement() {
         </div>
       )}
 
+      {/* Approved User Initial Credentials Card (Shown ONCE) */}
+      {lastApproved && (
+        <div className="credential-success-card anim-slide" style={{ marginBottom: 20, borderLeft: '4px solid #10b981', background: '#f0fdf4' }}>
+          <div className="credential-success-header">
+            <div className="credential-icon" style={{ background: '#d1fae5' }}>
+              <CheckCircle2 size={20} color="#059669" />
+            </div>
+            <div>
+              <h3 style={{ color: '#065f46', fontSize: '15px', margin: 0, fontWeight: 700 }}>
+                User Creation Approved &amp; Initial Password Generated
+              </h3>
+              <p style={{ color: '#047857', fontSize: '12px', margin: '3px 0 0' }}>
+                Account for <strong>{lastApproved.request?.full_name}</strong> ({lastApproved.request?.email}) has been provisioned.
+                This initial 6-character password is <strong>displayed only once</strong>. Securely communicate it to the user.
+              </p>
+            </div>
+            <button className="icon-btn" onClick={() => setLastApproved(null)} style={{ marginLeft: 'auto' }}>
+              <X size={16} />
+            </button>
+          </div>
+
+          <div className="credential-details-grid" style={{ marginTop: 14 }}>
+            <div className="cred-box">
+              <span className="cred-label">Approved User</span>
+              <span className="cred-val highlight">{lastApproved.request?.full_name}</span>
+            </div>
+            <div className="cred-box">
+              <span className="cred-label">Email</span>
+              <span className="cred-val">{lastApproved.request?.email}</span>
+            </div>
+            <div className="cred-box">
+              <span className="cred-label">Assigned Role</span>
+              <span className="cred-val role-pill">
+                {ROLE_DEFINITIONS[lastApproved.request?.requested_role]?.label || lastApproved.request?.requested_role}
+              </span>
+            </div>
+            <div className="cred-box">
+              <span className="cred-label">Scope</span>
+              <span className="cred-val">{getNodeDisplay(lastApproved.request?.org_node_id)}</span>
+            </div>
+            <div className="cred-box" style={{ gridColumn: 'span 2', background: '#ffffff', border: '1px solid #a7f3d0', padding: '10px 14px', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div>
+                <span className="cred-label" style={{ color: '#065f46', fontWeight: 600 }}>Initial 6-Character Password (One-Time Display)</span>
+                <div style={{ fontFamily: 'monospace', fontSize: '18px', fontWeight: 700, letterSpacing: '0.15em', color: '#0f172a', marginTop: 4 }}>
+                  {lastApproved.initial_password}
+                </div>
+              </div>
+              <button
+                className="btn btn-secondary btn-sm"
+                onClick={() => {
+                  navigator.clipboard.writeText(lastApproved.initial_password);
+                  setCopiedPwd(true);
+                  setTimeout(() => setCopiedPwd(false), 2000);
+                }}
+                style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600 }}
+              >
+                {copiedPwd ? <Check size={14} color="#059669" /> : <Copy size={14} />}
+                <span>{copiedPwd ? 'Copied' : 'Copy Password'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* KPI Counters Strip */}
       <div className="stat-grid" style={{ marginBottom: 24 }}>
         <div className="stat-card">
@@ -491,6 +738,11 @@ export default function UserManagement() {
           <div className="stat-label">Pending Invitations</div>
           <div className="stat-value text-amber">{pendingInvitesCount}</div>
           <div className="stat-desc">Awaiting secure onboarding</div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-label">Pending Requests</div>
+          <div className="stat-value text-indigo" style={{ color: '#6366f1' }}>{pendingUserRequestsCount}</div>
+          <div className="stat-desc">Subsidiary creation workflow</div>
         </div>
         <div className="stat-card">
           <div className="stat-label">Deactivated / Suspended</div>
@@ -517,6 +769,16 @@ export default function UserManagement() {
           <Mail size={14} />
           <span>Pending Invitations ({pendingInvitesCount})</span>
         </button>
+        {(isSubsidiaryAdmin || canApproveRequests) && (
+          <button
+            className={`btn ${activeTab === 'requests' ? 'btn-primary' : 'btn-secondary'}`}
+            style={{ borderRadius: '8px 8px 0 0', borderBottom: 'none' }}
+            onClick={() => setActiveTab('requests')}
+          >
+            <FileQuestion size={14} />
+            <span>Pending Requests {pendingUserRequestsCount > 0 ? `(${pendingUserRequestsCount})` : ''}</span>
+          </button>
+        )}
         <button
           className={`btn ${activeTab === 'tree' ? 'btn-primary' : 'btn-secondary'}`}
           style={{ borderRadius: '8px 8px 0 0', borderBottom: 'none' }}
@@ -1164,6 +1426,234 @@ export default function UserManagement() {
               onClick={() => deactivateMutation.mutate({ id: deactivateTarget.id, reason: deactivateReason })}
             >
               {deactivateMutation.isPending ? 'Deactivating...' : 'Confirm Deactivation'}
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* MODAL: Submit User Creation Request (Subsidiary Admin) */}
+      <Modal
+        isOpen={isUserReqOpen}
+        onClose={() => setIsUserReqOpen(false)}
+        maxWidth="580px"
+      >
+        <div className="modal-header">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div className="modal-header-icon" style={{ background: 'rgba(99, 102, 241, 0.15)' }}>
+              <FilePlus size={18} color="#6366f1" />
+            </div>
+            <div>
+              <h3 style={{ fontSize: '16px', color: '#fff' }}>Request User Access</h3>
+              <p style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                Submit user creation request to Group Admin for approval &amp; auto-generated password
+              </p>
+            </div>
+          </div>
+          <button className="icon-btn" onClick={() => setIsUserReqOpen(false)}>
+            <X size={18} />
+          </button>
+        </div>
+
+        {reqError && (
+          <div className="login-error-banner" style={{ margin: '16px 20px 0' }}>
+            <AlertCircle size={16} />
+            <span>{reqError}</span>
+          </div>
+        )}
+
+        <form onSubmit={handleSubmitUserReq} className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {/* Section 1: Personal Information */}
+          <div style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: 16 }}>
+            <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--brand-400)', textTransform: 'uppercase', marginBottom: 12 }}>
+              1. Requested User Information
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <div className="form-group" style={{ gridColumn: 'span 2' }}>
+                <label className="form-label">Full Name *</label>
+                <input
+                  type="text"
+                  className="form-control"
+                  placeholder="e.g. Ananya Sen"
+                  value={reqFullName}
+                  onChange={(e) => setReqFullName(e.target.value)}
+                  required
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Corporate Email *</label>
+                <input
+                  type="email"
+                  className="form-control"
+                  placeholder="user@enterprise.com"
+                  value={reqEmail}
+                  onChange={(e) => setReqEmail(e.target.value)}
+                  required
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Phone Number (Optional)</label>
+                <input
+                  type="tel"
+                  className="form-control"
+                  placeholder="+91 98765 43210"
+                  value={reqPhone}
+                  onChange={(e) => setReqPhone(e.target.value)}
+                />
+              </div>
+              <div className="form-group" style={{ gridColumn: 'span 2' }}>
+                <label className="form-label">Employee ID (Optional)</label>
+                <input
+                  type="text"
+                  className="form-control"
+                  placeholder="e.g. EMP-2024-8841"
+                  value={reqEmployeeId}
+                  onChange={(e) => setReqEmployeeId(e.target.value)}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Section 2: Role & Hierarchy Scope */}
+          <div style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: 16 }}>
+            <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--brand-400)', textTransform: 'uppercase', marginBottom: 12 }}>
+              2. Requested Role &amp; Unit Boundary
+            </div>
+            <div className="form-group" style={{ marginBottom: 12 }}>
+              <label className="form-label">Requested Role *</label>
+              <select
+                className="form-control"
+                value={reqRole}
+                onChange={(e) => handleReqRoleSelect(e.target.value)}
+                required
+              >
+                {allowedRolesForInvite.map((r) => (
+                  <option key={r.value} value={r.value}>
+                    {r.label} ({r.tier})
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="form-group">
+              <label className="form-label">Organizational Unit *</label>
+              <select
+                className="form-control"
+                value={reqOrgNodeId}
+                onChange={(e) => setReqOrgNodeId(e.target.value)}
+              >
+                {eligibleNodesForReqRole.length === 0 ? (
+                  <option value="">No eligible units in branch</option>
+                ) : (
+                  eligibleNodesForReqRole.map((n) => (
+                    <option key={n.id} value={n.id}>
+                      {n.name} ({n.type?.toUpperCase()})
+                    </option>
+                  ))
+                )}
+              </select>
+            </div>
+          </div>
+
+          {/* Section 3: Justification */}
+          <div>
+            <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--brand-400)', textTransform: 'uppercase', marginBottom: 8 }}>
+              3. Business Justification
+            </div>
+            <div className="form-group">
+              <label className="form-label">Justification / Operational Need (Optional)</label>
+              <textarea
+                className="form-control"
+                rows={3}
+                placeholder="Describe operational responsibilities (e.g. BRSR Principle 6 emission data reporting for BU Plant A)..."
+                value={reqReason}
+                onChange={(e) => setReqReason(e.target.value)}
+                style={{ resize: 'vertical' }}
+              />
+            </div>
+          </div>
+
+          <div className="modal-actions" style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 16 }}>
+            <button type="button" className="btn btn-secondary" onClick={() => setIsUserReqOpen(false)}>
+              Cancel
+            </button>
+            <button type="submit" className="btn btn-primary" disabled={submitUserReqMutation.isPending}>
+              <Send size={14} />
+              <span>{submitUserReqMutation.isPending ? 'Submitting Request...' : 'Submit Request for Approval'}</span>
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* MODAL: Reject User Creation Request (Mandatory Reason) */}
+      <Modal
+        isOpen={!!rejectTarget}
+        onClose={() => setRejectTarget(null)}
+        maxWidth="500px"
+      >
+        <div className="modal-header">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div className="modal-header-icon" style={{ background: 'rgba(239, 68, 68, 0.15)' }}>
+              <ThumbsDown size={18} color="var(--rose-400)" />
+            </div>
+            <div>
+              <h3 style={{ fontSize: '16px', color: '#fff' }}>Reject User Creation Request</h3>
+              <p style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                {rejectTarget?.request_number} — Mandatory rejection audit justification
+              </p>
+            </div>
+          </div>
+          <button className="icon-btn" onClick={() => setRejectTarget(null)}>
+            <X size={18} />
+          </button>
+        </div>
+
+        {rejectError && (
+          <div className="login-error-banner" style={{ margin: '16px 20px 0' }}>
+            <AlertCircle size={16} />
+            <span>{rejectError}</span>
+          </div>
+        )}
+
+        <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <p style={{ fontSize: '13px', lineHeight: 1.5, margin: 0 }}>
+            You are rejecting the user creation request for{' '}
+            <strong style={{ color: '#fff' }}>{rejectTarget?.full_name}</strong> ({rejectTarget?.email})
+            for role <strong style={{ color: 'var(--brand-400)' }}>{ROLE_DEFINITIONS[rejectTarget?.requested_role]?.label || rejectTarget?.requested_role}</strong>.
+          </p>
+
+          <div className="form-group">
+            <label className="form-label">Mandatory Rejection Reason *</label>
+            <textarea
+              className="form-control"
+              rows={3}
+              value={rejectReason}
+              onChange={(e) => setRejectReason(e.target.value)}
+              placeholder="e.g. Duplicate person already exists in another unit, or incorrect role level requested..."
+              required
+              style={{ resize: 'vertical' }}
+            />
+            <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: 4 }}>
+              Minimum 3 characters. This reason will be recorded in the audit log and visible to the requesting subsidiary admin.
+            </div>
+          </div>
+
+          <div className="modal-actions" style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 12 }}>
+            <button type="button" className="btn btn-secondary" onClick={() => setRejectTarget(null)}>
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary"
+              style={{ background: 'var(--rose-600)', borderColor: 'var(--rose-600)' }}
+              disabled={rejectUserReqMutation.isPending || !rejectReason.trim() || rejectReason.trim().length < 3}
+              onClick={() => {
+                if (!rejectReason.trim() || rejectReason.trim().length < 3) {
+                  setRejectError('A rejection reason of at least 3 characters is required.');
+                  return;
+                }
+                rejectUserReqMutation.mutate({ requestId: rejectTarget.id, reason: rejectReason.trim() });
+              }}
+            >
+              {rejectUserReqMutation.isPending ? 'Rejecting...' : 'Confirm Rejection'}
             </button>
           </div>
         </div>

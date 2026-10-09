@@ -144,3 +144,70 @@ class AdminAuditEntry(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     target_scope_id = Column(PG_UUID(as_uuid=False), nullable=True)
     details = Column(JSONB, nullable=False, default=dict)
 
+
+class UserCreationRequestStatus(str, enum.Enum):
+    PENDING = "PENDING"
+    APPROVED = "APPROVED"
+    REJECTED = "REJECTED"
+    CANCELLED = "CANCELLED"
+
+
+class UserCreationRequest(Base, UUIDPrimaryKeyMixin, TimestampMixin):
+    """
+    User creation request initiated by Subsidiary Admin or authorized delegator.
+    Requires Group Admin or System Admin approval before official account creation.
+    Snapshot data preserves historical identity for auditing regardless of future role changes.
+    """
+    __tablename__ = "user_creation_requests"
+
+    request_number = Column(String(50), unique=True, index=True, nullable=False)
+
+    # Requested user details
+    full_name = Column(String(255), nullable=False)
+    email = Column(String(255), index=True, nullable=False)
+    employee_id = Column(String(100), nullable=True)
+    phone = Column(String(50), nullable=True)
+    requested_role = Column(String(50), nullable=False, index=True)
+
+    # Organizational scope hierarchy snapshot
+    org_node_id = Column(PG_UUID(as_uuid=False), ForeignKey("org_nodes.id", ondelete="SET NULL"), nullable=True, index=True)
+    group_id = Column(PG_UUID(as_uuid=False), nullable=True)
+    group_name = Column(String(255), nullable=True)
+    subsidiary_id = Column(PG_UUID(as_uuid=False), nullable=True)
+    subsidiary_name = Column(String(255), nullable=True)
+    bu_id = Column(PG_UUID(as_uuid=False), nullable=True)
+    bu_name = Column(String(255), nullable=True)
+    project_id = Column(PG_UUID(as_uuid=False), nullable=True)
+    project_name = Column(String(255), nullable=True)
+
+    # Lifecycle & status
+    reason = Column(Text, nullable=True)
+    status = Column(String(30), default="PENDING", nullable=False, index=True)
+
+    # Requester identity snapshot (captured at creation time)
+    requested_by_user_id = Column(PG_UUID(as_uuid=False), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    requested_by_name = Column(String(255), nullable=False)
+    requested_by_role = Column(String(50), nullable=False)
+    requested_by_employee_id = Column(String(100), nullable=True)
+    requested_by_email = Column(String(255), nullable=True)
+
+    # Approver identity snapshot (captured at approval time)
+    approved_by_user_id = Column(PG_UUID(as_uuid=False), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    approved_by_name = Column(String(255), nullable=True)
+    approved_by_role = Column(String(50), nullable=True)
+    approved_at = Column(DateTime(timezone=True), nullable=True)
+
+    # Rejecter identity snapshot (captured at rejection time)
+    rejected_by_user_id = Column(PG_UUID(as_uuid=False), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    rejected_by_name = Column(String(255), nullable=True)
+    rejected_by_role = Column(String(50), nullable=True)
+    rejected_at = Column(DateTime(timezone=True), nullable=True)
+    rejection_reason = Column(Text, nullable=True)
+
+    # Created user binding (populated upon successful approval)
+    created_user_id = Column(PG_UUID(as_uuid=False), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+
+    # Extensible user payload snapshot
+    requested_user_data = Column(JSONB, default=dict, nullable=False)
+
+

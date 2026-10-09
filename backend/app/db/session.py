@@ -107,6 +107,48 @@ def init_db() -> None:
                     UPDATE evidence_files
                     SET evidence_display_id = 'EVD-' || UPPER(SUBSTRING(REPLACE(id::text, '-', ''), 1, 8))
                     WHERE evidence_display_id IS NULL;
+
+                    CREATE TABLE IF NOT EXISTS user_creation_requests (
+                        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                        request_number VARCHAR(50) UNIQUE NOT NULL,
+                        full_name VARCHAR(255) NOT NULL,
+                        email VARCHAR(255) NOT NULL,
+                        employee_id VARCHAR(100),
+                        phone VARCHAR(50),
+                        requested_role VARCHAR(50) NOT NULL,
+                        org_node_id UUID REFERENCES org_nodes(id) ON DELETE SET NULL,
+                        group_id UUID,
+                        group_name VARCHAR(255),
+                        subsidiary_id UUID,
+                        subsidiary_name VARCHAR(255),
+                        bu_id UUID,
+                        bu_name VARCHAR(255),
+                        project_id UUID,
+                        project_name VARCHAR(255),
+                        reason TEXT,
+                        status VARCHAR(30) DEFAULT 'PENDING' NOT NULL,
+                        requested_by_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+                        requested_by_name VARCHAR(255) NOT NULL,
+                        requested_by_role VARCHAR(50) NOT NULL,
+                        requested_by_employee_id VARCHAR(100),
+                        requested_by_email VARCHAR(255),
+                        approved_by_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+                        approved_by_name VARCHAR(255),
+                        approved_by_role VARCHAR(50),
+                        approved_at TIMESTAMPTZ,
+                        rejected_by_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+                        rejected_by_name VARCHAR(255),
+                        rejected_by_role VARCHAR(50),
+                        rejected_at TIMESTAMPTZ,
+                        rejection_reason TEXT,
+                        created_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+                        requested_user_data JSONB DEFAULT '{}'::jsonb NOT NULL,
+                        created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
+                        updated_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
+                    );
+                    CREATE INDEX IF NOT EXISTS ix_user_creation_requests_status ON user_creation_requests(status);
+                    CREATE INDEX IF NOT EXISTS ix_user_creation_requests_requested_by ON user_creation_requests(requested_by_user_id);
+                    CREATE INDEX IF NOT EXISTS ix_user_creation_requests_email ON user_creation_requests(email);
                 """))
                 logger.info("⚡ Database already initialized — startup accelerated.")
                 return

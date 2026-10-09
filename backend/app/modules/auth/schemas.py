@@ -155,3 +155,69 @@ class AdminAuditEntryRead(BaseModel):
     created_at: Optional[datetime] = None
 
 
+class UserCreationRequestCreate(BaseModel):
+    full_name: str
+    email: EmailStr
+    employee_id: Optional[str] = None
+    phone: Optional[str] = None
+    requested_role: str
+    org_node_id: Optional[str] = None
+    reason: Optional[str] = None
+
+
+class UserCreationRequestReject(BaseModel):
+    rejection_reason: str = Field(..., min_length=3, description="Mandatory reason for rejecting user creation request")
+
+
+class UserCreationRequestRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    request_number: str
+    full_name: str
+    email: str
+    employee_id: Optional[str] = None
+    phone: Optional[str] = None
+    requested_role: str
+    org_node_id: Optional[str] = None
+    group_id: Optional[str] = None
+    group_name: Optional[str] = None
+    subsidiary_id: Optional[str] = None
+    subsidiary_name: Optional[str] = None
+    bu_id: Optional[str] = None
+    bu_name: Optional[str] = None
+    project_id: Optional[str] = None
+    project_name: Optional[str] = None
+    reason: Optional[str] = None
+    status: str
+    requested_by_user_id: Optional[str] = None
+    requested_by_name: str
+    requested_by_role: str
+    requested_by_employee_id: Optional[str] = None
+    requested_by_email: Optional[str] = None
+    approved_by_user_id: Optional[str] = None
+    approved_by_name: Optional[str] = None
+    approved_by_role: Optional[str] = None
+    approved_at: Optional[datetime] = None
+    rejected_by_user_id: Optional[str] = None
+    rejected_by_name: Optional[str] = None
+    rejected_by_role: Optional[str] = None
+    rejected_at: Optional[datetime] = None
+    rejection_reason: Optional[str] = None
+    created_user_id: Optional[str] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+
+class UserCreationRequestApproveResponse(BaseModel):
+    success: bool = True
+    request: UserCreationRequestRead
+    user_id: str
+    username: str
+    role: str
+    status: str = "active"
+    initial_password: str
+    message: str = "User request approved and official account successfully created."
+
+
+

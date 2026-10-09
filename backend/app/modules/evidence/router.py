@@ -24,6 +24,7 @@ logger = logging.getLogger(__name__)
 
 class EvidenceDeleteRequest(BaseModel):
     password: str
+    reason: str
 
 router = APIRouter(prefix="/evidence", tags=["Evidence Vault & AI Pre-fill"])
 
@@ -229,42 +230,97 @@ def delete_evidence_file(
     db: Session = Depends(get_db)
 ):
     """
-    Deletes an evidence file and its cryptographic hash record.
-    Restricted to system_admin and his 1 level down roles (group_admin, esg_manager).
-    Enforces re-entering admin password for audit authorization.
+    Soft-deletes an evidence file, preserving historical records.
+    Restricted by role and scope. Requires password and reason.
     """
-    allowed_roles = [Role.SYSTEM_ADMIN.value, Role.GROUP_ADMIN.value, Role.ESG_MANAGER.value]
+    if not del_req.reason or not del_req.reason.strip() or del_req.reason.strip().lower() == "n/a":
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="A mandatory, descriptive reason must be provided for deletion."
+        )
+
+    allowed_roles = [
+        Role.SYSTEM_ADMIN.value, Role.SUPER_ADMIN.value,
+        Role.GROUP_ADMIN.value, Role.SUBSIDIARY_ADMIN.value,
+        Role.BU_ADMIN.value, Role.PROJECT_ADMIN.value
+    ]
     if current_user.role not in allowed_roles:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"Access denied. Only {allowed_roles} have authority to delete evidence files."
+            detail=f"Access denied. Role '{current_user.role}' is not authorized to delete evidence."
         )
 
     # Verify admin password
-    if not current_user.password_hash or not verify_password(del_req.password, current_user.password_hash):
+    if not current_user.hashed_password or not verify_password(del_req.password, current_user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid admin password. Evidence deletion aborted."
+            detail="Invalid password. Deletion aborted."
         )
 
-    evidence = db.query(EvidenceFile).filter(EvidenceFile.id == evidence_id).first()
+    evidence = db.query(EvidenceFile).filter(EvidenceFile.id == evidence_id, EvidenceFile.is_deleted == False).first()
     if not evidence:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Evidence file not found.")
 
-    filename = evidence.original_name
-    storage_key = evidence.storage_key
+    # Scope Authorization
+    if current_user.role not in (Role.SYSTEM_ADMIN.value, Role.SUPER_ADMIN.value):
+        from app.modules.org.models import OrgNode
+        from app.modules.auth.service import is_node_descendant
+        if not current_user.org_node_id:
+            if current_user.role != Role.GROUP_ADMIN.value:
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Missing organizational scope for your role.")
+        else:
+            # Resolve evidence's project_id (code) to OrgNode
+            ev_node = db.query(OrgNode).filter(OrgNode.code == evidence.project_id).first()
+            if not ev_node or not is_node_descendant(db, str(current_user.org_node_id), str(ev_node.id)):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Evidence belongs to a project outside your authorized scope."
+                )
 
+    filename = evidence.original_name
+    
+    # Soft delete instead of hard delete to preserve audit history
+    evidence.is_deleted = True
+    evidence.scan_status = "deleted"
+    
     # Delete any datapoint links
     db.query(EvidenceLink).filter(EvidenceLink.evidence_id == evidence.id).delete()
 
-    # Delete storage file
-    try:
-        storage_service.delete_file(storage_key)
-    except Exception as e:
-        logger.warning(f"Storage file cleanup error: {e}")
+    # Create detailed audit log
+    from app.modules.audit.service import AuditService
+    from app.modules.audit.schemas import AuditLogCreate
+    audit_svc = AuditService(db)
+    
+    details = {
+        "reason": del_req.reason.strip(),
+        "evidence_id": evidence.evidence_display_id,
+        "sha_hash": evidence.sha256,
+        "document_name": evidence.original_name,
+        "document_type": evidence.doc_type,
+        "bill_type": evidence.bill_type,
+        "esg_indicator": evidence.esg_indicator,
+        "project_id": evidence.project_id,
+        "attached_by_role": evidence.attached_by_role,
+        "deleted_by_role": current_user.role,
+        "deleted_by_name": current_user.full_name,
+        "result": "SUCCESS"
+    }
+    
+    audit_svc.log_event(
+        AuditLogCreate(
+            action="DELETE",
+            target_type="EVIDENCE",
+            target_id=str(evidence.id),
+            actor_id=str(current_user.id),
+            actor_email=current_user.email,
+            actor_role=current_user.role,
+            changes={"is_deleted": True},
+            details=details,
+            ip_address="0.0.0.0"
+        )
+    )
 
-    db.delete(evidence)
     db.commit()
 
-    return {"success": True, "message": f"Evidence file '{filename}' was permanently deleted."}
+    return {"success": True, "message": f"Evidence file '{filename}' was safely deleted."}
 

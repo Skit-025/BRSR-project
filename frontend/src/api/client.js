@@ -102,7 +102,16 @@ export const authApi = {
     api.post(`/auth/admin/users/${id}/deactivate`, { reason, preserve_records: true }),
   getAdminAuditLog: (limit = 50) =>
     api.get('/auth/admin/audit-log', { params: { limit } }),
+  // ── User Creation Requests (Subsidiary Admin → Group/System Admin Approval) ──
+  submitUserRequest: (data) => api.post('/auth/admin/user-requests', data),
+  listUserRequests: (status) =>
+    api.get('/auth/admin/user-requests', status ? { params: { status_filter: status } } : {}),
+  getUserRequest: (id) => api.get(`/auth/admin/user-requests/${id}`),
+  approveUserRequest: (id) => api.post(`/auth/admin/user-requests/${id}/approve`),
+  rejectUserRequest: (id, rejection_reason) =>
+    api.post(`/auth/admin/user-requests/${id}/reject`, { rejection_reason }),
 };
+
 
 // ─────────────────────────────────────────────────────────────────
 // Executive Dashboards & Data Quality
@@ -181,7 +190,7 @@ export const evidenceApi = {
     }),
   getDownloadUrl: (id) => `${API_BASE}/evidence/${id}/download`,
   getViewUrl: (id) => `${API_BASE}/evidence/${id}/view`,
-  delete: (id, password) => api.delete(`/evidence/${id}`, { data: { password } }),
+  delete: (id, password, reason) => api.delete(`/evidence/${id}`, { data: { password, reason } }),
   link: (data) => api.post('/evidence/link', data),
   extract: (id, docTypeHint) =>
     api.post(`/evidence/${id}/extract`, null, {

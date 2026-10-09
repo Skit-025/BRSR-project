@@ -77,6 +77,7 @@ import ValueChain     from './pages/ValueChain';
 import Assurance      from './pages/Assurance';
 import BackgroundJobs from './pages/BackgroundJobs';
 import AarohanAI      from './pages/AarohanAI';
+import Trash          from './pages/Trash';
 
 // ── Disclosure pages (Type 3 forms — spec §46) ────────────────────────────────
 // BU Disclosures: targets, initiatives, BU-specific data (spec §23)
@@ -340,10 +341,15 @@ export default function App() {
                   </PermissionGuard>
                 } />
 
-                {/* Audit Log */}
+                {/* Audit Log & Trash */}
                 <Route path="/audit" element={
                   <PermissionGuard perms={['user:manage', 'org:read']}>
                     <AuditLog />
+                  </PermissionGuard>
+                } />
+                <Route path="/trash" element={
+                  <PermissionGuard>
+                    <Trash />
                   </PermissionGuard>
                 } />
 

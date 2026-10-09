@@ -7,7 +7,7 @@ import {
   AlertTriangle, ClipboardList,
   FileSpreadsheet, ClipboardCheck,
   Settings, Command,
-  HardHat, Factory, Truck, RefreshCw, Leaf
+  HardHat, Factory, Truck, RefreshCw, Leaf, Trash2
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useOrgPeriods, useOrgNodes, useWorkflowQueue } from '../hooks/useApi';
@@ -97,6 +97,7 @@ export default function Sidebar() {
         items: [
           hasPermission('user:manage') && { to: '/admin/users', label: 'User Governance', icon: Settings },
           hasPermission('consolidation:read') && { to: '/admin/jobs', label: 'Pipeline Tasks', icon: RefreshCw },
+          { to: '/trash', label: 'Trash', icon: Trash2 },
         ].filter(Boolean)
       },
     ].filter(Boolean);
