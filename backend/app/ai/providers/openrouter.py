@@ -84,9 +84,11 @@ class OpenRouterProvider(BaseAIProvider):
             messages.append({"role": "system", "content": system_prompt})
 
         user_message = (
-            f"You MUST return strictly valid JSON matching this schema: {json.dumps(schema_dict)}\n"
-            f"Do not include any explanation or markdown formatting outside the JSON block.\n\n"
-            f"Prompt: {prompt}"
+            f"You MUST return a valid JSON object populated with actual values according to this schema:\n"
+            f"{json.dumps(schema_dict)}\n\n"
+            f"CRITICAL: Do NOT echo or output the schema definition, '$defs', or schema types. Output a JSON data object where the fields are populated with the answers.\n"
+            f"Output strictly valid JSON with no conversational text or markdown code fences outside the JSON.\n\n"
+            f"Input Task:\n{prompt}"
         )
         messages.append({"role": "user", "content": user_message})
 
@@ -106,7 +108,7 @@ class OpenRouterProvider(BaseAIProvider):
                 "max_tokens": 1500
             }
             try:
-                with httpx.Client(timeout=25.0) as client:
+                with httpx.Client(timeout=30.0) as client:
                     resp = client.post(f"{self.BASE_URL}/chat/completions", headers=self._headers(), json=payload)
                     resp.raise_for_status()
                     data = resp.json()
@@ -164,7 +166,7 @@ class OpenRouterProvider(BaseAIProvider):
             }
             try:
                 logger.info(f"Calling OpenRouter vision model '{model}'...")
-                with httpx.Client(timeout=25.0) as client:
+                with httpx.Client(timeout=30.0) as client:
                     resp = client.post(f"{self.BASE_URL}/chat/completions", headers=self._headers(), json=payload)
                     resp.raise_for_status()
                     data = resp.json()
@@ -193,7 +195,7 @@ class OpenRouterProvider(BaseAIProvider):
             "temperature": 0.2
         }
 
-        with httpx.Client(timeout=35.0) as client:
+        with httpx.Client(timeout=30.0) as client:
             resp = client.post(f"{self.BASE_URL}/chat/completions", headers=self._headers(), json=payload)
             resp.raise_for_status()
             data = resp.json()

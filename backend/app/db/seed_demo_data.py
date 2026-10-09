@@ -153,10 +153,10 @@ def seed_demo_data():
 
         # 3. Users for all 4 roles
         demo_users = [
-            ("admin@meil.in", "system_admin", "Group ESG Controller (Admin)", group.id),
-            ("sub.manager@meil.in", "subsidiary_admin", "Meera S. (Subsidiary ESG Manager)", sub1.id),
-            ("bu.reviewer@meil.in", "checker", "Rajesh V. (Transportation BU Reviewer)", bu1.id),
-            ("collector.tunnel@meil.in", "maker", "Ravi Kumar (Site Engineer P7)", proj1.id),
+            ("group.admin@aarohan.in", "system_admin", "Aditya Sharma (Group ESG Director)", group.id),
+            ("sub.admin@aarohan.in", "subsidiary_admin", "Meera Nair (Subsidiary ESG Manager)", sub1.id),
+            ("bu.admin@aarohan.in", "checker", "Rajesh V. (Transportation BU Reviewer)", bu1.id),
+            ("project.user@aarohan.in", "maker", "Ravi Kumar (Site Engineer P7)", proj1.id),
         ]
         for email, role, full_name, node_id in demo_users:
             u = db.query(User).filter(User.email == email).first()
@@ -215,7 +215,7 @@ def seed_demo_data():
                 period_id=period.id,
                 status=SubmissionStatus.SUBMITTED.value,
                 version=1,
-                maker_id=db.query(User).filter(User.email == "collector.tunnel@meil.in").first().id,
+                maker_id=db.query(User).filter(User.email == "project.user@aarohan.in").first().id,
                 submitted_at=datetime.now(timezone.utc),
                 notes="Zojila P7 March Pack. 4 of 8 metrics auto-reconciled with DISCOM utility bill TSS-04 and fuel register."
             )

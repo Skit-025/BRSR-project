@@ -24,18 +24,23 @@ import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
 revision = "0004"
-down_revision = "0003_dashboard_materialized_views"
+down_revision = "0003"
 branch_labels = None
 depends_on = None
 
 
 def upgrade() -> None:
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    existing_tables = inspector.get_table_names()
+
     # ── 1. Org Level Disclosures (Type 3 Form storage) ────────────────────────
     # Stores BU / Subsidiary / Group level disclosures with JSON payload.
     # Each record = one org level + one period + one disclosure_type (bu / subsidiary / group).
     # Multiple records can exist per period (one per section: section_a, section_b, section_c, general).
-    op.create_table(
-        "org_level_disclosures",
+    if "org_level_disclosures" not in existing_tables:
+        op.create_table(
+            "org_level_disclosures",
         sa.Column("id",                sa.String(36),   nullable=False, primary_key=True),
         sa.Column("org_node_id",       sa.String(36),   nullable=False, index=True),
         sa.Column("period_id",         sa.String(36),   nullable=True,  index=True),
@@ -65,12 +70,12 @@ def upgrade() -> None:
                             name="uq_org_period_disclosure_section"),
     )
 
-    # Index for fast lookup by org node + period
-    op.create_index(
-        "ix_disclosures_org_period",
-        "org_level_disclosures",
-        ["org_node_id", "period_id"],
-    )
+        # Index for fast lookup by org node + period
+        op.create_index(
+            "ix_disclosures_org_period",
+            "org_level_disclosures",
+            ["org_node_id", "period_id"],
+        )
 
     # ── 2. Report staleness tracking column ───────────────────────────────────
     # Adds a "stale_since" timestamp to reports, so we can show the staleness banner (spec §49).
@@ -94,8 +99,9 @@ def upgrade() -> None:
 
     # ── 3. Calculation job status table ───────────────────────────────────────
     # Tracks the multi-step pipeline status for background calculation jobs (spec §48).
-    op.create_table(
-        "calculation_jobs",
+    if "calculation_jobs" not in existing_tables:
+        op.create_table(
+            "calculation_jobs",
         sa.Column("id",              sa.String(36),  nullable=False, primary_key=True),
         sa.Column("trigger_event",   sa.String(100), nullable=False),
         # What triggered this job: "submission_approved" | "bu_approved" | "subsidiary_approved" | "manual"
