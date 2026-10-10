@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import aarohanLogo from '../assets/AAROHAN LOGO.png';
 import { useNavigate } from 'react-router-dom';
 import {
   ShieldCheck, Leaf, Building2, Zap, Droplets,
@@ -213,27 +214,16 @@ export default function Landing() {
         }}>
           {/* Logo */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }} onClick={() => navigate('/')}>
-            <div style={{
-              width: 32,
-              height: 32,
-              borderRadius: 8,
-              background: 'linear-gradient(135deg, #2563EB, #10B981)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              boxShadow: '0 2px 8px rgba(37, 99, 235, 0.25)'
-            }}>
-              <Leaf size={18} color="#FFFFFF" />
-            </div>
-            <div>
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
-                <span style={{ fontSize: 16, fontWeight: 800, letterSpacing: '-0.3px', color: '#09090B' }}>AAROHAN</span>
-                <span style={{ fontSize: 10.5, fontWeight: 700, color: '#2563EB', background: '#EFF6FF', border: '1px solid #BFDBFE', padding: '1px 6px', borderRadius: 4 }}>
-                  ESG OS
-                </span>
-              </div>
-              <div style={{ fontSize: 10, color: '#64748B', marginTop: -1 }}>Enterprise BRSR Assurance Platform</div>
-            </div>
+            <img
+              src={aarohanLogo}
+              alt="AAROHAN Logo"
+              style={{
+                height: 80,
+                width: 'auto',
+                objectFit: 'contain',
+                display: 'block',
+              }}
+            />
           </div>
 
           {/* Navigation Links */}

@@ -4,8 +4,11 @@ Authentication & Provisioning Router.
 Enforces the mandatory architecture: System Admin is the SOLE authority for user creation/deletion.
 All logins return JWT access and refresh tokens.
 """
+import logging
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Request
+
+logger = logging.getLogger(__name__)
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 
@@ -454,6 +457,11 @@ def invite_user(
         invitation = create_invitation_by_admin(db=db, admin_user=admin_user, req=payload)
         return invitation
     except (ValueError, PermissionError) as e:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        db.rollback()
+        logger.error("Unhandled exception in invite_user: %s", str(e), exc_info=True)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 

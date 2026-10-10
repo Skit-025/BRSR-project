@@ -7,22 +7,82 @@ from app.modules.org.models import OrgNode
 from app.modules.collection.models import Submission, DataPoint, SubmissionStatus
 
 
-def is_new_railway_project(node: OrgNode) -> bool:
+# Seed/demo entity code prefixes — these keep curated mock data when no real data exists.
+# ONLY list very specific well-known seeded demo entities, NOT broad prefixes like "MEIL-" or "GRP-"
+# which would catch newly-created real entities.
+_SEED_EXACT_CODES = {
+    # Well-known demo hierarchy from KNOWN_ENTITY_MOCKS
+    "PRJ-ZOJILA-P7",
+    "PRJ-HWY-001",
+    "PRJ-ODISHA-SOLAR",
+    "BU-TRANS",
+    "MEIL-GROUP",
+    # Original Aarohan / MEIL demo hierarchy created during onboarding seed
+    "MEIL-HYDRO",         # MEIL Hydrocarbons original
+    "MEIL-GROUP",
+}
+
+# Prefix-based: Only match codes that start with these specific patterns
+# (all of these are auto-generated seeded data from seed scripts, not user-created)
+_SEED_CODE_PREFIXES = (
+    "PRJ-ZOJILA",
+    "PRJ-HWY-001",
+    "PRJ-ODISHA-SOLAR",
+    "GRP-",               # auto-generated group codes from seed script (GRP-XXXXXX pattern)
+    "SITE-RPT-",
+    "SITE-LOCK-",
+    "SITE-TEST-",
+    "PRJ-A-",             # highway project A units from seed
+    "PRJ-B-JV-",          # tunnel JV projects from seed
+    "PRJ-FLOW-",          # flow project codes from seed
+    "PRJ-LNG-",           # LNG projects from seed
+    "SUB-A-",             # auto-generated subsidiary A from seed
+    "SUB-B-",             # auto-generated subsidiary B from seed
+    "BU-A1-",             # auto-generated BU from seed
+    "BU-TRANS",
+    "MEIL-GROUP",
+    "MEIL-HYDRO",
+)
+
+
+def is_seed_demo_entity(node: OrgNode) -> bool:
     """
-    Identifies the newly created railway tunnel project which must show strictly zero/null.
+    Returns True if this node is a pre-seeded demo entity that should keep
+    curated mock data when no real data has been entered yet.
+
+    Returns False for all newly-created real entities (e.g. subsidiaries
+    created by the group admin after the initial seed), which must show
+    strictly zero/null until real data is submitted.
+
+    Decision matrix:
+    - MEIL-GROUP, BU-TRANS, PRJ-ZOJILA-P7 etc. (in _SEED_EXACT_CODES) -> True
+    - GRP-XXXXXX, SITE-RPT-XXXXXX, PRJ-A-XXXXXX etc. (seed script generated) -> True
+    - MEIL-BUSINESS-UNIT-001, AAROHAN-CONSTRUCTION-02 (user-created) -> False
+    - PRJ-CHARMINAR-TERMI-9324 (user-created project) -> False
     """
     if not node:
         return False
-    name = (node.name or "").lower()
+    code = (node.code or "").upper()
+    # First check exact codes
+    if code in {c.upper() for c in _SEED_EXACT_CODES}:
+        return True
+    # Then check prefixes
+    for prefix in _SEED_CODE_PREFIXES:
+        if code.startswith(prefix.upper()):
+            return True
+    return False
+
+
+def is_new_railway_project(node: OrgNode) -> bool:
+    """
+    Legacy check kept for import compatibility in service.py.
+    Delegates to is_seed_demo_entity negation logic now.
+    Identifies railway-tunnel projects that must start at zero.
+    """
+    if not node:
+        return False
     code = (node.code or "").lower()
-    return (
-        "railway" in name or
-        "koraput" in name or
-        "railway" in code or
-        "prj-railway" in code or
-        "railway_tunnel" in code or
-        "--6477" in code
-    )
+    return "prj-railway" in code or "railway_tunnel" in code or "--6477" in code or "--6713" in code
 
 
 # Curated realistic mocks for primary entities so every selection has distinct, consistent numbers
@@ -366,40 +426,42 @@ def get_executive_kpis(db: Session, period_id: str, entity_id: str) -> Dict[str,
             }
         }
 
-    # 3. Fallback: If railway project is brand new and has no activity data, return 0.0
-    if is_new_railway_project(node):
+    # 3. No real data found. Decision:
+    #    - Pre-seeded demo entities → return curated mock so demos look populated
+    #    - Newly created real entities → strict zeros until user enters real data
+    if is_seed_demo_entity(node):
+        mock = get_entity_mock_data(node)
+        s1 = mock.get("scope1", 0.0)
+        s2 = mock.get("scope2", 0.0)
         return {
             "environmental": {
-                "total_energy_gj": 0.0,
-                "scope1_emissions_tco2e": 0.0,
-                "scope2_emissions_tco2e": 0.0,
-                "total_ghg_tco2e": 0.0,
-                "water_consumption_kl": 0.0,
-                "waste_generated_mt": 0.0,
+                "total_energy_gj": mock.get("energy_gj", 0.0),
+                "scope1_emissions_tco2e": s1,
+                "scope2_emissions_tco2e": s2,
+                "total_ghg_tco2e": round(s1 + s2, 2),
+                "water_consumption_kl": mock.get("water_kl", 0.0),
+                "waste_generated_mt": mock.get("waste_mt", 0.0),
             },
             "social": {
-                "ltifr": 0.0,
-                "fatalities": 0,
-                "total_employees": 0,
+                "ltifr": mock.get("ltifr", 0.0),
+                "fatalities": mock.get("fatalities", 0),
+                "total_employees": mock.get("employees", 0),
             }
         }
 
-    # Otherwise, provide distinct, entity-specific mock data between 70% and 90%
-    mock = get_entity_mock_data(node)
-    s1 = mock.get("scope1", 0.0)
-    s2 = mock.get("scope2", 0.0)
+    # Newly created entity — no real data yet, return strict zeros
     return {
         "environmental": {
-            "total_energy_gj": mock.get("energy_gj", 0.0),
-            "scope1_emissions_tco2e": s1,
-            "scope2_emissions_tco2e": s2,
-            "total_ghg_tco2e": round(s1 + s2, 2),
-            "water_consumption_kl": mock.get("water_kl", 0.0),
-            "waste_generated_mt": mock.get("waste_mt", 0.0),
+            "total_energy_gj": 0.0,
+            "scope1_emissions_tco2e": 0.0,
+            "scope2_emissions_tco2e": 0.0,
+            "total_ghg_tco2e": 0.0,
+            "water_consumption_kl": 0.0,
+            "waste_generated_mt": 0.0,
         },
         "social": {
-            "ltifr": mock.get("ltifr", 0.0),
-            "fatalities": mock.get("fatalities", 0),
-            "total_employees": mock.get("employees", 0),
+            "ltifr": 0.0,
+            "fatalities": 0,
+            "total_employees": 0,
         }
     }

@@ -7,9 +7,25 @@ Supports Resend API and development fallback logging.
 import os
 import logging
 from typing import Optional, Tuple
+from urllib.parse import quote
 from app.config.settings import settings
 
 logger = logging.getLogger("aarohan.email")
+
+def generate_secure_password_setup_link(
+    email: str,
+    invitation_token: str,
+    redirect_url: Optional[str] = None
+) -> str:
+    """
+    Generates a secure password-setup onboarding link for SMTP email invitation.
+    """
+    clean_email = email.lower().strip()
+    frontend_base = getattr(settings, "FRONTEND_BASE_URL", "http://localhost:5173").rstrip("/")
+    setup_link = f"{frontend_base}/setup-password?token={invitation_token}&email={quote(clean_email)}"
+    logger.info("Generated secure application onboarding link for %s", clean_email)
+    return setup_link
+
 
 ROLE_DISPLAY_NAMES = {
     "system_admin": "System Administrator",

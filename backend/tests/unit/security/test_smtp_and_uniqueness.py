@@ -7,7 +7,7 @@ Unit tests for:
 import pytest
 from unittest.mock import patch, MagicMock
 from app.services.smtp_email_service import is_smtp_configured, send_smtp_email
-from app.services.firebase_auth_service import reconcile_or_create_firebase_user, generate_secure_password_setup_link
+from app.services.email_invitation_service import generate_secure_password_setup_link
 
 
 def test_smtp_placeholder_mode_detection():
@@ -59,13 +59,8 @@ def test_smtp_live_mode_calls_smtp():
             mock_server.sendmail.assert_called_once()
 
 
-def test_local_token_invitation_replaces_firebase():
-    # Firebase replaced with local deterministic token generation
-    uid, is_new = reconcile_or_create_firebase_user("engineer@meil.in", "Lead Engineer")
-    assert uid.startswith("usr_")
-    assert is_new is True
-
-    # Password setup link points to local frontend route without firebase dependency
+def test_smtp_password_setup_link():
+    # Password setup link points to local frontend route for SMTP email invitation
     link = generate_secure_password_setup_link("engineer@meil.in", "inv_token_abc123")
     assert "/setup-password?token=inv_token_abc123&email=engineer%40meil.in" in link
 

@@ -71,7 +71,5 @@ class Settings(BaseSettings):
     
     # Optional Legacy/Fallback Providers
     RESEND_API_KEY: Optional[str] = None
-    FIREBASE_CREDENTIALS_PATH: Optional[str] = None
-    FIREBASE_PROJECT_ID: Optional[str] = None
 
 settings = Settings()

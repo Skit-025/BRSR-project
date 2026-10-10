@@ -15,6 +15,7 @@ from app.modules.dashboards.schemas import (
 from app.modules.dashboards.kpis import (
     get_executive_kpis,
     is_new_railway_project,
+    is_seed_demo_entity,
     get_entity_mock_data,
 )
 from app.modules.dashboards.quality_score import compute_esg_quality_score
@@ -124,11 +125,7 @@ class DashboardService:
                 total_reporting_entities = 0
                 brsr_status = "Submissions Pending"
             else:
-                # Dynamic scaling towards 100% completion as data is entered:
-                # 1. Data coverage advances with filled metrics (standard pack ~16 metrics)
                 data_cov_pct = min(100.0, max(1.0, round((filled_count / 16.0) * 100.0, 1)))
-
-                # 2. Progress percentage advances through workflow states + data completeness
                 if approved > 0:
                     progress_pct = min(100.0, round(85.0 + (data_cov_pct * 0.15), 1))
                     brsr_status = "SEBI Aligned"
@@ -138,13 +135,11 @@ class DashboardService:
                 else:
                     progress_pct = min(50.0, round(data_cov_pct * 0.50, 1))
                     brsr_status = "In Progress"
-
-                # 3. Confidence & Assurance score grows with data coverage & progress
                 assurance_score = min(100.0, round(progress_pct * 0.6 + data_cov_pct * 0.4, 1))
                 qs_grade = "A" if assurance_score >= 88 else ("B+" if assurance_score >= 78 else ("B" if assurance_score >= 65 else ("C" if assurance_score >= 40 else "D")))
                 qs = {"score": assurance_score, "grade": qs_grade}
-        else:
-            # Pre-existing entities: must be strictly between 70% and 90% as requested
+        elif is_seed_demo_entity(target_node) and not has_real_filled_data:
+            # Pre-seeded demo entity with no real data: use curated mock so the demo looks populated
             mock = get_entity_mock_data(target_node)
             progress_pct = mock.get("progress", 82.0)
             data_cov_pct = mock.get("coverage", 84.0)
@@ -156,6 +151,31 @@ class DashboardService:
             total_sub = mock.get("total_sub", 1)
             total_reporting_entities = mock.get("total_entities", 1)
             brsr_status = "SEBI Aligned"
+        elif has_real_filled_data:
+            # Any entity that has real submitted data: compute dynamically
+            data_cov_pct = min(100.0, max(1.0, round((filled_count / max(total_reporting_entities * 16, 1)) * 100.0, 1)))
+            if approved > 0:
+                progress_pct = min(100.0, round(85.0 + (data_cov_pct * 0.15), 1))
+                brsr_status = "SEBI Aligned"
+            elif in_rev > 0:
+                progress_pct = min(80.0, round(50.0 + (data_cov_pct * 0.30), 1))
+                brsr_status = "In Review"
+            else:
+                progress_pct = min(50.0, round(data_cov_pct * 0.50, 1))
+                brsr_status = "In Progress"
+            assurance_score = min(100.0, round(progress_pct * 0.6 + data_cov_pct * 0.4, 1))
+            qs_grade = "A" if assurance_score >= 88 else ("B+" if assurance_score >= 78 else ("B" if assurance_score >= 65 else ("C" if assurance_score >= 40 else "D")))
+            qs = {"score": assurance_score, "grade": qs_grade}
+        else:
+            # Newly created real entity with zero filled data -> strict zeros
+            progress_pct = 0.0
+            data_cov_pct = 0.0
+            assurance_score = 0.0
+            qs = {"score": 0.0, "grade": "—"}
+            # Keep actual draft/total counts (don't zero those out — empty drafts are still real)
+            approved = 0
+            in_rev = 0
+            brsr_status = "Submissions Pending"
 
         sub_progress = SubmissionProgressSummary(
             total_entities=total_reporting_entities,
@@ -172,10 +192,12 @@ class DashboardService:
 
         # 3. Principle Summaries (Principles 1 through 9)
         principles: List[PrincipleSummary] = []
+        # Determine whether this entity has real data (for principles calculation)
+        is_no_data_entity = not has_real_filled_data and not is_seed_demo_entity(target_node) and not is_railway
         for p_num in range(1, 10):
             p_metrics = self.db.query(Metric).filter(Metric.principle == p_num).all()
             tot_p_m = len(p_metrics)
-            if is_railway and not has_real_filled_data:
+            if is_no_data_entity or (is_railway and not has_real_filled_data):
                 rep_m = 0
                 p_comp = 0.0
             else:
@@ -203,17 +225,84 @@ class DashboardService:
             ).all()
 
             for child in child_nodes:
-                if is_new_railway_project(child):
-                    c_pct = 0.0
-                    c_stat = "Draft"
-                    c_stat_type = "neutral"
-                    c_ev = "0/0"
-                else:
+                # Get real submission stats for this child and its descendants
+                child_is_seed = is_seed_demo_entity(child)
+
+                if child_is_seed and not has_real_filled_data:
+                    # Demo child: use curated mock
                     c_mock = get_entity_mock_data(child)
                     c_pct = c_mock.get("coverage", 82.0)
                     c_stat = "Ready" if c_pct >= 85.0 else "In Review"
                     c_stat_type = "success" if c_stat == "Ready" else "neutral"
                     c_ev = "4/4" if c_stat == "Ready" else "3/4"
+                else:
+                    # Real/new child: compute from actual submissions
+                    from app.modules.auth.service import get_descendant_node_ids
+                    import uuid as _uuid
+                    child_desc_raw = get_descendant_node_ids(self.db, str(child.id))
+                    child_scope = set()
+                    child_scope.add(child.id)
+                    for d in child_desc_raw:
+                        try:
+                            child_scope.add(_uuid.UUID(str(d)))
+                        except (ValueError, TypeError):
+                            pass
+
+                    child_subs = []
+                    if effective_period_uuid:
+                        child_subs = (
+                            self.db.query(Submission)
+                            .filter(
+                                Submission.entity_id.in_(list(child_scope)),
+                                Submission.period_id == effective_period_uuid,
+                                Submission.is_deleted == False,
+                            )
+                            .all()
+                        )
+
+                    child_approved = sum(1 for s in child_subs if s.status in [
+                        SubmissionStatus.BU_APPROVED.value,
+                        SubmissionStatus.SUBSIDIARY_APPROVED.value,
+                        SubmissionStatus.CONSOLIDATED.value,
+                    ])
+                    child_in_rev = sum(1 for s in child_subs if s.status in [
+                        SubmissionStatus.SUBMITTED.value,
+                        SubmissionStatus.UNDER_BU_REVIEW.value,
+                    ])
+
+                    if child_subs:
+                        from app.modules.collection.models import DataPoint
+                        child_sub_ids = [s.id for s in child_subs]
+                        child_dps = self.db.query(DataPoint).filter(
+                            DataPoint.submission_id.in_(child_sub_ids),
+                            DataPoint.is_deleted == False,
+                        ).all()
+                        child_filled = sum(
+                            1 for d in child_dps
+                            if d.value_numeric is not None or (d.value_text is not None and str(d.value_text).strip() != "")
+                        )
+                        # Coverage = filled metrics / expected (16 per project = sensible default)
+                        expected = max(len(child_subs) * 16, 1)
+                        c_pct = min(100.0, round((child_filled / expected) * 100.0, 1))
+                    else:
+                        child_filled = 0
+                        c_pct = 0.0
+
+                    if child_approved > 0:
+                        c_stat = "Approved"
+                        c_stat_type = "success"
+                    elif child_in_rev > 0:
+                        c_stat = "In Review"
+                        c_stat_type = "neutral"
+                    elif child_subs:
+                        c_stat = "Draft"
+                        c_stat_type = "neutral"
+                    else:
+                        c_stat = "Awaiting Submission"
+                        c_stat_type = "warning"
+
+                    total_child_metrics = max(len(child_subs) * 16, 0)
+                    c_ev = f"{child_filled}/{total_child_metrics}" if total_child_metrics > 0 else "0/0"
 
                 route = f"/disclosure/bu?nodeId={child.id}" if child.type in ("bu", "business_unit") else (
                     f"/disclosure/subsidiary?nodeId={child.id}" if child.type == "subsidiary" else f"/projects/{child.id}"

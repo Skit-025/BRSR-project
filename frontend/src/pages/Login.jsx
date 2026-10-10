@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import aarohanLogo from '../assets/AAROHAN LOGO.png';
 import { useNavigate, Link } from 'react-router-dom';
 import {
   Lock, User, Eye, EyeOff, ShieldCheck, ArrowRight,
@@ -149,22 +150,16 @@ export default function Login() {
         zIndex: 10
       }}>
         <Link to="/landing" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{
-            width: 34,
-            height: 34,
-            borderRadius: 8,
-            background: 'linear-gradient(135deg, #2563EB, #10B981)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            boxShadow: '0 2px 8px rgba(37, 99, 235, 0.2)'
-          }}>
-            <Leaf size={18} color="#FFFFFF" />
-          </div>
-          <div>
-            <span style={{ fontSize: 15, fontWeight: 900, color: '#09090B', letterSpacing: '-0.02em', display: 'block' }}>AAROHAN</span>
-            <span style={{ fontSize: 9.5, color: '#64748B', fontWeight: 700, letterSpacing: '0.08em', display: 'block' }}>ESG SAAS PLATFORM</span>
-          </div>
+          <img
+            src={aarohanLogo}
+            alt="AAROHAN Logo"
+            style={{
+              height: 76,
+              width: 'auto',
+              objectFit: 'contain',
+              display: 'block',
+            }}
+          />
         </Link>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>

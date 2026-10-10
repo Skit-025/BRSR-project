@@ -14,6 +14,87 @@ const SUB_TABS = [
   { id: 'section_c_overrides', label: 'Section C: Direct Metrics', icon: Layers, desc: 'Subsidiary-owned metrics and non-project disclosures' },
 ];
 
+const getInitialFormData = (subNode) => {
+  const code = subNode?.code || '';
+  const isSeed = code === 'AAROHAN-GROUP' || code.startsWith('SUB-A-') || code.startsWith('SUB-B-') || code === 'SUB-HYDRO-01';
+
+  if (isSeed) {
+    return {
+      section_a_org: {
+        corporate_name: subNode?.name || 'Aarohan Renewable Energy Pvt. Ltd.',
+        cin_number: 'U40106MH2018PTC312456',
+        registered_office_address: 'Aarohan Towers, Plot 14, BKC, Bandra East, Mumbai - 400051',
+        contact_person: 'Corporate Sustainability Officer',
+        contact_email: 'esg.compliance@aarohan-energy.in',
+        website: 'https://aarohan-energy.in',
+        reporting_boundary: 'Standalone entity and operational sites',
+        total_employees_permanent: '14250',
+        total_workers_permanent: '28400',
+        female_employees_pct: '14.5',
+        csr_average_net_profit_cr: '124.50',
+        csr_spent_amount_cr: '2.52',
+        grievance_complaints_received: '4',
+        grievance_complaints_resolved: '4',
+      },
+      section_b_p1: {
+        has_ethics_policy: true,
+        has_human_rights_policy: true,
+        has_environment_policy: true,
+        has_stakeholder_policy: true,
+        board_committee_responsible: 'CSR & Sustainability Committee of the Board',
+        policy_weblink: 'https://aarohan-energy.in/sustainability/policies',
+        review_frequency_months: '12',
+        independent_directors_oversight: true,
+        stakeholder_grievance_redressal_in_place: true
+      },
+      section_c_overrides: {
+        subsidiary_r_and_d_spend_pct_turnover: '1.2',
+        patents_granted_count: '6',
+        extended_producer_responsibility_registered: true,
+        green_building_certified_sqft: '450000',
+        internal_carbon_pricing_inr: '1850'
+      }
+    };
+  }
+
+  return {
+    section_a_org: {
+      corporate_name: subNode?.name || '',
+      cin_number: '',
+      registered_office_address: '',
+      contact_person: '',
+      contact_email: '',
+      website: '',
+      reporting_boundary: 'Standalone entity and operational sites',
+      total_employees_permanent: '',
+      total_workers_permanent: '',
+      female_employees_pct: '',
+      csr_average_net_profit_cr: '',
+      csr_spent_amount_cr: '',
+      grievance_complaints_received: '',
+      grievance_complaints_resolved: '',
+    },
+    section_b_p1: {
+      has_ethics_policy: false,
+      has_human_rights_policy: false,
+      has_environment_policy: false,
+      has_stakeholder_policy: false,
+      board_committee_responsible: '',
+      policy_weblink: '',
+      review_frequency_months: '',
+      independent_directors_oversight: false,
+      stakeholder_grievance_redressal_in_place: false
+    },
+    section_c_overrides: {
+      subsidiary_r_and_d_spend_pct_turnover: '',
+      patents_granted_count: '',
+      extended_producer_responsibility_registered: false,
+      green_building_certified_sqft: '',
+      internal_carbon_pricing_inr: ''
+    }
+  };
+};
+
 export default function SubsidiaryDisclosure() {
   const { user, isSystemAdmin, isSubsidiaryAdmin, isSubEsgManager } = useAuth();
   const { data: orgNodes = [] } = useOrgNodes();
@@ -35,43 +116,12 @@ export default function SubsidiaryDisclosure() {
   const [disclosureStatus, setDisclosureStatus] = useState('DRAFT');
   const [disclosureId, setDisclosureId] = useState(null);
 
-  // Form states
-  const [formData, setFormData] = useState({
-    section_a_org: {
-      corporate_name: 'Aarohan Renewable Energy Pvt. Ltd.',
-      cin_number: 'U40106MH2018PTC312456',
-      registered_office_address: 'Aarohan Towers, Plot 14, BKC, Bandra East, Mumbai - 400051',
-      contact_person: 'Corporate Sustainability Officer',
-      contact_email: 'esg.compliance@aarohan-energy.in',
-      website: 'https://aarohan-energy.in',
-      reporting_boundary: 'Standalone entity and operational sites',
-      total_employees_permanent: '14250',
-      total_workers_permanent: '28400',
-      female_employees_pct: '14.5',
-      csr_average_net_profit_cr: '124.50',
-      csr_spent_amount_cr: '2.52',
-      grievance_complaints_received: '4',
-      grievance_complaints_resolved: '4',
-    },
-    section_b_p1: {
-      has_ethics_policy: true,
-      has_human_rights_policy: true,
-      has_environment_policy: true,
-      has_stakeholder_policy: true,
-      board_committee_responsible: 'CSR & Sustainability Committee of the Board',
-      policy_weblink: 'https://aarohan-energy.in/sustainability/policies',
-      review_frequency_months: '12',
-      independent_directors_oversight: true,
-      stakeholder_grievance_redressal_in_place: true
-    },
-    section_c_overrides: {
-      subsidiary_r_and_d_spend_pct_turnover: '1.2',
-      patents_granted_count: '6',
-      extended_producer_responsibility_registered: true,
-      green_building_certified_sqft: '450000',
-      internal_carbon_pricing_inr: '1850'
-    }
-  });
+  const selectedSubNode = useMemo(() => {
+    return subNodes.find(n => n.id === selectedSub);
+  }, [subNodes, selectedSub]);
+
+  // Form states initialized dynamically
+  const [formData, setFormData] = useState(() => getInitialFormData(null));
 
   useEffect(() => {
     if (subNodes.length > 0 && !selectedSub) {
@@ -92,6 +142,8 @@ export default function SubsidiaryDisclosure() {
     let isMounted = true;
     setLoading(true);
 
+    const baseData = getInitialFormData(selectedSubNode);
+
     disclosuresApi.getSection('subsidiary', selectedSub, selectedPeriod, activeTab)
       .then(res => {
         if (!isMounted) return;
@@ -101,20 +153,34 @@ export default function SubsidiaryDisclosure() {
           if (res.data.payload && Object.keys(res.data.payload).length > 0) {
             setFormData(prev => ({
               ...prev,
-              [activeTab]: res.data.payload
+              [activeTab]: { ...baseData[activeTab], ...res.data.payload }
             }));
+            return;
           }
         }
+        setDisclosureId(null);
+        setDisclosureStatus('DRAFT');
+        setFormData(prev => ({
+          ...prev,
+          [activeTab]: baseData[activeTab]
+        }));
       })
       .catch(err => {
-        console.warn('Could not fetch subsidiary disclosure section:', err);
+        if (isMounted) {
+          setDisclosureId(null);
+          setDisclosureStatus('DRAFT');
+          setFormData(prev => ({
+            ...prev,
+            [activeTab]: baseData[activeTab]
+          }));
+        }
       })
       .finally(() => {
         if (isMounted) setLoading(false);
       });
 
     return () => { isMounted = false; };
-  }, [selectedSub, selectedPeriod, activeTab]);
+  }, [selectedSub, selectedPeriod, activeTab, selectedSubNode]);
 
   const handleFieldChange = (sectionKey, field, val) => {
     setFormData(prev => ({

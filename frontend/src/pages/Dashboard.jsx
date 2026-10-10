@@ -41,16 +41,25 @@ export default function Dashboard() {
 
   const selectedNode = nodes.find(n => n.id === activeEntityId) || rootNode;
   const isRailwayProject = Boolean(
-    selectedNode && (
+    selectedNode &&
+    (
       (selectedNode.name || '').toLowerCase().includes('railway') ||
       (selectedNode.code || '').toLowerCase().includes('railway') ||
-      (selectedNode.code || '').includes('--6477')
+      (selectedNode.code || '').includes('--6477') ||
+      (selectedNode.code || '').includes('--6713')
     )
   );
 
   const { data: summary, isLoading: summaryLoading } = useDashboardSummary(
     activePeriodId,
     activeEntityId
+  );
+
+  // True for any entity that has no real data yet (newly created or no submissions filled)
+  // This drives all the "pending" vs "done" UI states across the dashboard
+  const hasNoData = (
+    isRailwayProject ||
+    (summary && (summary.data_coverage_pct ?? 0) === 0 && (summary.key_environmental_kpis?.total_energy_gj ?? 0) === 0)
   );
 
   const openLineage = (code = 'ENV-ENERGY-001') => {
@@ -64,29 +73,29 @@ export default function Dashboard() {
   const envKpis = summary?.key_environmental_kpis || {};
   const socKpis = summary?.key_social_kpis || {};
 
-  const displayEnergy = !isRailwayProject && envKpis.total_energy_gj != null && envKpis.total_energy_gj > 0
+  const displayEnergy = !hasNoData && envKpis.total_energy_gj != null && envKpis.total_energy_gj > 0
     ? `${Number(envKpis.total_energy_gj).toLocaleString()} GJ`
     : '—';
 
-  const displayWater = !isRailwayProject && envKpis.water_consumption_kl != null && envKpis.water_consumption_kl > 0
+  const displayWater = !hasNoData && envKpis.water_consumption_kl != null && envKpis.water_consumption_kl > 0
     ? `${Number(envKpis.water_consumption_kl).toLocaleString()} kL`
     : '—';
 
-  const displayGhg = !isRailwayProject && envKpis.total_ghg_tco2e != null && envKpis.total_ghg_tco2e > 0
+  const displayGhg = !hasNoData && envKpis.total_ghg_tco2e != null && envKpis.total_ghg_tco2e > 0
     ? Number(envKpis.total_ghg_tco2e).toLocaleString()
     : '—';
 
-  const displayScope1 = !isRailwayProject && envKpis.scope1_emissions_tco2e != null && envKpis.scope1_emissions_tco2e > 0
+  const displayScope1 = !hasNoData && envKpis.scope1_emissions_tco2e != null && envKpis.scope1_emissions_tco2e > 0
     ? `${Number(envKpis.scope1_emissions_tco2e).toLocaleString()} t`
     : '—';
 
-  const displayScope2 = !isRailwayProject && envKpis.scope2_emissions_tco2e != null && envKpis.scope2_emissions_tco2e > 0
+  const displayScope2 = !hasNoData && envKpis.scope2_emissions_tco2e != null && envKpis.scope2_emissions_tco2e > 0
     ? `${Number(envKpis.scope2_emissions_tco2e).toLocaleString()} t`
     : '—';
 
-  const displayLtifr = !isRailwayProject && socKpis.ltifr != null && socKpis.ltifr > 0 ? Number(socKpis.ltifr).toFixed(2) : '—';
-  const displayFatalities = !isRailwayProject && socKpis.fatalities != null ? `${socKpis.fatalities} Fatalities` : '0 Fatalities';
-  const displayWaste = !isRailwayProject && envKpis.waste_generated_mt != null && envKpis.waste_generated_mt > 0
+  const displayLtifr = !hasNoData && socKpis.ltifr != null && socKpis.ltifr > 0 ? Number(socKpis.ltifr).toFixed(2) : '—';
+  const displayFatalities = !hasNoData && socKpis.fatalities != null ? `${socKpis.fatalities} Fatalities` : '0 Fatalities';
+  const displayWaste = !hasNoData && envKpis.waste_generated_mt != null && envKpis.waste_generated_mt > 0
     ? `${Number(envKpis.waste_generated_mt).toLocaleString()} MT`
     : '—';
 
@@ -107,7 +116,7 @@ export default function Dashboard() {
       }));
     }
 
-    const subNodes = nodes.filter(n => ['subsidiary', 'business_unit', 'bu', 'project'].includes(n.type?.toLowerCase()));
+    const subNodes = nodes.filter(n => n.parent_id === activeEntityId);
     if (subNodes.length > 0) {
       return subNodes.map((node, idx) => {
         const pct = summary?.submission_progress?.overall_progress_pct != null ? summary.submission_progress.overall_progress_pct : 0;
@@ -126,7 +135,7 @@ export default function Dashboard() {
       });
     }
     return [];
-  }, [nodes, summary]);
+  }, [nodes, summary, activeEntityId]);
 
 
   return (
@@ -362,14 +371,14 @@ export default function Dashboard() {
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 8 }}>
             {[
-              { label: 'Project Data Collection', status: isRailwayProject ? 'pending' : 'done', note: selectedNode?.name || '250 MW Odisha Solar Park', icon: isRailwayProject ? '○' : '✓', route: '/collection' },
-              { label: 'Evidence Submitted', status: isRailwayProject ? 'pending' : 'done', note: isRailwayProject ? 'Awaiting initial vouchers' : 'Statutory vouchers attached', icon: isRailwayProject ? '○' : '✓', route: '/evidence' },
-              { label: 'BU Review & Gate', status: isRailwayProject ? 'pending' : 'done', note: isRailwayProject ? 'Pending review' : 'Review gate verified', icon: isRailwayProject ? '○' : '✓', route: '/workflow' },
-              { label: 'Calculation Engine', status: isRailwayProject ? 'pending' : 'done', note: 'GHG emission factors', icon: isRailwayProject ? '○' : '✓', route: '/consolidation' },
-              { label: 'BU Aggregation', status: isRailwayProject ? 'pending' : 'done', note: 'Operating BUs rolled up', icon: isRailwayProject ? '○' : '✓', route: '/disclosure/bu' },
-              { label: 'Subsidiary Aggregation', status: isRailwayProject ? 'pending' : 'done', note: 'Corporate entity roll-up', icon: isRailwayProject ? '○' : '✓', route: '/disclosure/subsidiary' },
-              { label: 'Group Aggregation', status: isRailwayProject ? 'pending' : 'done', note: 'Enterprise post-order roll-up', icon: isRailwayProject ? '○' : '✓', route: '/consolidation' },
-              { label: 'BRSR Report Ready', status: isRailwayProject ? 'pending' : 'done', note: isRailwayProject ? 'Awaiting disclosures' : 'SEBI Core disclosure locked', icon: isRailwayProject ? '○' : '✓', route: '/reporting' }
+              { label: 'Project Data Collection', status: hasNoData ? 'pending' : 'done', note: hasNoData ? 'Awaiting first data entry' : (selectedNode?.name || 'Activity data collected'), icon: hasNoData ? '○' : '✓', route: '/collection' },
+              { label: 'Evidence Submitted', status: hasNoData ? 'pending' : 'done', note: hasNoData ? 'Awaiting initial vouchers' : 'Statutory vouchers attached', icon: hasNoData ? '○' : '✓', route: '/evidence' },
+              { label: 'BU Review & Gate', status: hasNoData ? 'pending' : (summary?.submission_progress?.in_review > 0 || summary?.submission_progress?.approved > 0 ? 'done' : 'pending'), note: hasNoData ? 'Pending submission' : 'Review gate verified', icon: hasNoData ? '○' : (summary?.submission_progress?.in_review > 0 || summary?.submission_progress?.approved > 0 ? '✓' : '○'), route: '/workflow' },
+              { label: 'Calculation Engine', status: hasNoData ? 'pending' : 'done', note: 'GHG emission factors', icon: hasNoData ? '○' : '✓', route: '/consolidation' },
+              { label: 'BU Aggregation', status: hasNoData ? 'pending' : 'done', note: 'Operating BUs rolled up', icon: hasNoData ? '○' : '✓', route: '/disclosure/bu' },
+              { label: 'Subsidiary Aggregation', status: hasNoData ? 'pending' : 'done', note: 'Corporate entity roll-up', icon: hasNoData ? '○' : '✓', route: '/disclosure/subsidiary' },
+              { label: 'Group Aggregation', status: hasNoData ? 'pending' : 'done', note: 'Enterprise post-order roll-up', icon: hasNoData ? '○' : '✓', route: '/consolidation' },
+              { label: 'BRSR Report Ready', status: hasNoData ? 'pending' : (summary?.submission_progress?.approved > 0 ? 'done' : 'pending'), note: hasNoData ? 'Awaiting disclosures' : (summary?.submission_progress?.approved > 0 ? 'SEBI Core disclosure locked' : 'Pending approval'), icon: hasNoData ? '○' : (summary?.submission_progress?.approved > 0 ? '✓' : '○'), route: '/reporting' }
             ].map((st, i) => (
               <div
                 key={i}
@@ -377,13 +386,13 @@ export default function Dashboard() {
                 style={{
                   padding: '9px 12px',
                   borderRadius: 7,
-                  border: '1px solid #BBF7D0',
-                  background: '#F0FDF4',
+                  border: st.status === 'done' ? '1px solid #BBF7D0' : '1px solid #E2E8F0',
+                  background: st.status === 'done' ? '#F0FDF4' : '#F8FAFC',
                   cursor: 'pointer',
                   transition: 'all 0.15s ease'
                 }}
               >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700, color: '#15803D' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700, color: st.status === 'done' ? '#15803D' : '#64748B' }}>
                   <span>{st.icon}</span>
                   <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{st.label}</span>
                 </div>
@@ -417,17 +426,31 @@ export default function Dashboard() {
               <span style={{ fontSize: 11, fontWeight: 700, color: '#64748B', letterSpacing: '0.06em', textTransform: 'uppercase', fontFamily: 'ui-monospace, monospace' }}>
                 DATA COVERAGE
               </span>
-              <span style={{
-                background: '#DCFCE7',
-                color: '#15803D',
-                fontSize: 11,
-                fontWeight: 700,
-                padding: '2px 8px',
-                borderRadius: 9999,
-                border: '1px solid #BBF7D0'
-              }}>
-                ↗ +4.2% YoY
-              </span>
+              {hasNoData ? (
+                <span style={{
+                  background: '#F1F5F9',
+                  color: '#64748B',
+                  fontSize: 11,
+                  fontWeight: 700,
+                  padding: '2px 8px',
+                  borderRadius: 9999,
+                  border: '1px solid #E2E8F0'
+                }}>
+                  Pending Baseline
+                </span>
+              ) : (
+                <span style={{
+                  background: '#DCFCE7',
+                  color: '#15803D',
+                  fontSize: 11,
+                  fontWeight: 700,
+                  padding: '2px 8px',
+                  borderRadius: 9999,
+                  border: '1px solid #BBF7D0'
+                }}>
+                  ↗ +4.2% YoY
+                </span>
+              )}
             </div>
 
             <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
@@ -611,14 +634,14 @@ export default function Dashboard() {
                     {displayEnergy}
                   </span>
                   <span style={{
-                    background: '#DCFCE7',
-                    color: '#15803D',
+                    background: hasNoData ? '#F1F5F9' : '#DCFCE7',
+                    color: hasNoData ? '#64748B' : '#15803D',
                     fontSize: 10.5,
                     fontWeight: 700,
                     padding: '1px 6px',
                     borderRadius: 4
                   }}>
-                    -6.2% vs base
+                    {hasNoData ? 'No baseline data' : '-6.2% vs base'}
                   </span>
                 </div>
               </div>
@@ -654,16 +677,16 @@ export default function Dashboard() {
                     padding: '1px 6px',
                     borderRadius: 4
                   }}>
-                    {isRailwayProject ? '—' : '84.1% recycled'}
+                    {hasNoData ? '—' : '84.1% recycled'}
                   </span>
                 </div>
               </div>
               <div style={{ height: 6, width: '100%', background: '#F1F5F9', borderRadius: 99, overflow: 'hidden' }}>
-                <div style={{ height: '100%', width: (!isRailwayProject && envKpis.water_consumption_kl > 0) ? '84.1%' : '0%', background: '#0070F3', borderRadius: 99 }} />
+                <div style={{ height: '100%', width: (!hasNoData && envKpis.water_consumption_kl > 0) ? '84.1%' : '0%', background: '#0070F3', borderRadius: 99 }} />
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10.5, color: '#64748B' }}>
                 <span>Zero untreated discharge mandate</span>
-                <span>{isRailwayProject ? 'Closed-loop efficiency: —' : 'Closed-loop efficiency: 91%'}</span>
+                <span>{hasNoData ? 'Closed-loop efficiency: —' : 'Closed-loop efficiency: 91%'}</span>
               </div>
             </div>
 
@@ -709,7 +732,7 @@ export default function Dashboard() {
                 </div>
                 <div>
                   <div style={{ color: '#64748B', fontWeight: 600 }}>SCOPE 3 (VALUE)</div>
-                  <div style={{ color: '#09090B', fontWeight: 700, fontFamily: 'ui-monospace, monospace' }}>{isRailwayProject ? '—' : '352.7 t'}</div>
+                  <div style={{ color: '#09090B', fontWeight: 700, fontFamily: 'ui-monospace, monospace' }}>{hasNoData ? '—' : '352.7 t'}</div>
                 </div>
               </div>
 
@@ -792,101 +815,112 @@ export default function Dashboard() {
                 Distributed GHG protocol emission factor recalculation across scope ledgers.
               </p>
 
-              {/* Steps list */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 4 }}>
-                {/* Step 1 */}
-                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-                  <div style={{
-                    width: 18, height: 18, borderRadius: 4, background: '#DCFCE7',
-                    color: '#15803D', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: 10, flexShrink: 0, marginTop: 1
-                  }}>
-                    ✓
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, fontWeight: 600, color: '#09090B' }}>
-                      <span>Project P-103 Highway</span>
-                      <span style={{ color: '#15803D', fontSize: 11 }}>Approved</span>
-                    </div>
-                    <div style={{ fontSize: 10.5, color: '#64748B' }}>
-                      Activity data audited & signed off by BU Manager
-                    </div>
-                  </div>
-                </div>
-
-                {/* Step 2 */}
-                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-                  <div style={{
-                    width: 18, height: 18, borderRadius: 4, background: '#DCFCE7',
-                    color: '#15803D', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: 10, flexShrink: 0, marginTop: 1
-                  }}>
-                    ✓
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, fontWeight: 600, color: '#09090B' }}>
-                      <span>Infrastructure BU Aggregation</span>
-                      <span style={{ color: '#15803D', fontSize: 11 }}>Calculated</span>
-                    </div>
-                    <div style={{ fontSize: 10.5, color: '#64748B' }}>
-                      Scope 1 & Scope 2 intensity metrics compiled
-                    </div>
-                  </div>
-                </div>
-
-                {/* Step 3: Running with dark active box */}
+              {/* Steps list – data-driven, not hardcoded */}
+              {hasNoData ? (
+                /* Empty state for newly created entities with no data */
                 <div style={{
                   display: 'flex',
-                  alignItems: 'flex-start',
+                  flexDirection: 'column',
+                  alignItems: 'center',
                   gap: 10,
+                  padding: '20px 16px',
                   background: '#F8FAFC',
-                  padding: '8px 10px',
-                  borderRadius: 6,
-                  border: '1px solid #E2E8F0'
+                  border: '1px dashed #CBD5E1',
+                  borderRadius: 8,
+                  marginTop: 4
                 }}>
-                  <div style={{
-                    width: 18, height: 18, borderRadius: 4, background: '#0070F3',
-                    color: '#FFFFFF', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: 10, flexShrink: 0, marginTop: 1
-                  }}>
-                    ◐
+                  <div style={{ fontSize: 28 }}>⚙️</div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: '#475569', textAlign: 'center' }}>
+                    Awaiting Activity Data Ingestion
                   </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, fontWeight: 700, color: '#09090B' }}>
-                      <span>Odisha Subsidiary Aggregation</span>
-                      <span style={{
-                        background: '#EFF6FF', color: '#1D4ED8', border: '1px solid #BFDBFE',
-                        fontSize: 10, padding: '1px 5px', borderRadius: 3
-                      }}>
-                        Running (42s)
-                      </span>
-                    </div>
-                    <div style={{ fontSize: 10.5, color: '#64748B', marginTop: 2 }}>
-                      Reconciling grid emission factors with CEA v19.0 dataset
-                    </div>
+                  <div style={{ fontSize: 11.5, color: '#94A3B8', textAlign: 'center', lineHeight: 1.4 }}>
+                    Once project data is submitted, the GHG calculation engine will automatically run emission factor calculations for Scope 1, 2 & 3.
                   </div>
+                  <button
+                    onClick={() => navigate('/collection')}
+                    style={{
+                      marginTop: 4,
+                      padding: '7px 16px',
+                      background: '#0070F3',
+                      color: '#FFFFFF',
+                      border: 'none',
+                      borderRadius: 6,
+                      fontSize: 12,
+                      fontWeight: 600,
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Submit Project Data →
+                  </button>
                 </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 4 }}>
+                  {/* Step 1: Project data submitted */}
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                    <div style={{
+                      width: 18, height: 18, borderRadius: 4, background: '#DCFCE7',
+                      color: '#15803D', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: 10, flexShrink: 0, marginTop: 1
+                    }}>✓</div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, fontWeight: 600, color: '#09090B' }}>
+                        <span>{selectedNode?.name || 'Project Data'}</span>
+                        <span style={{ color: '#15803D', fontSize: 11 }}>
+                          {(summary?.submission_progress?.approved ?? 0) > 0 ? 'Approved' : 'Submitted'}
+                        </span>
+                      </div>
+                      <div style={{ fontSize: 10.5, color: '#64748B' }}>
+                        Activity data collected ({summary?.submission_progress?.total_submissions ?? 0} submission{summary?.submission_progress?.total_submissions !== 1 ? 's' : ''})
+                      </div>
+                    </div>
+                  </div>
 
-                {/* Step 4: Queued */}
-                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-                  <div style={{
-                    width: 18, height: 18, borderRadius: 4, border: '1px dashed #CBD5E1',
-                    color: '#94A3B8', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: 10, flexShrink: 0, marginTop: 1
-                  }}>
-                    ○
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, fontWeight: 500, color: '#64748B' }}>
-                      <span>Group Consolidation</span>
-                      <span style={{ fontSize: 11, color: '#94A3B8' }}>Queued</span>
+                  {/* Step 2: BU Aggregation */}
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                    <div style={{
+                      width: 18, height: 18, borderRadius: 4,
+                      background: (summary?.submission_progress?.approved ?? 0) > 0 ? '#DCFCE7' : '#EFF6FF',
+                      color: (summary?.submission_progress?.approved ?? 0) > 0 ? '#15803D' : '#1D4ED8',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: 10, flexShrink: 0, marginTop: 1
+                    }}>
+                      {(summary?.submission_progress?.approved ?? 0) > 0 ? '✓' : '◐'}
                     </div>
-                    <div style={{ fontSize: 10.5, color: '#94A3B8' }}>
-                      Final inter-company netting and equity share weighting
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, fontWeight: 600, color: '#09090B' }}>
+                        <span>BU Aggregation</span>
+                        <span style={{ color: (summary?.submission_progress?.approved ?? 0) > 0 ? '#15803D' : '#1D4ED8', fontSize: 11 }}>
+                          {(summary?.submission_progress?.approved ?? 0) > 0 ? 'Calculated' : 'Processing'}
+                        </span>
+                      </div>
+                      <div style={{ fontSize: 10.5, color: '#64748B' }}>
+                        Scope 1 & Scope 2 intensity metrics compiled
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Step 3: Subsidiary / Group roll-up */}
+                  <div style={{
+                    display: 'flex', alignItems: 'flex-start', gap: 10,
+                    background: '#F8FAFC', padding: '8px 10px', borderRadius: 6, border: '1px solid #E2E8F0'
+                  }}>
+                    <div style={{
+                      width: 18, height: 18, borderRadius: 4, border: '1px dashed #CBD5E1',
+                      color: '#94A3B8', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: 10, flexShrink: 0, marginTop: 1
+                    }}>○</div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, fontWeight: 500, color: '#64748B' }}>
+                        <span>Group Consolidation</span>
+                        <span style={{ fontSize: 11, color: '#94A3B8' }}>Queued</span>
+                      </div>
+                      <div style={{ fontSize: 10.5, color: '#94A3B8' }}>
+                        Final inter-company netting and equity share weighting
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
+              )}
 
               <div style={{ marginTop: 2 }}>
                 <span
@@ -896,6 +930,7 @@ export default function Dashboard() {
                   View calculation pipeline & lineage →
                 </span>
               </div>
+
             </div>
 
             {/* Audit & Activity Stream Card */}

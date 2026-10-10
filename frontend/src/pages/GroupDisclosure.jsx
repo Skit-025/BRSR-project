@@ -12,6 +12,70 @@ const GROUP_TABS = [
   { id: 'group_policies', label: 'Group Commitments', icon: Award, desc: 'Enterprise Net-Zero targets, RE100, and group ESG policies' },
   { id: 'group_governance', label: 'Board Governance', icon: ShieldCheck, desc: 'Board committee oversight, CSR charter, and assurance provider' },
 ];
+const getInitialFormData = (groupNode) => {
+  const code = groupNode?.code || '';
+  const isSeed = code === 'MEIL-GROUP' || code === 'AAROHAN-GROUP';
+
+  if (isSeed) {
+    return {
+      group_general: {
+        group_legal_name: groupNode?.name || 'Aarohan Infrastructure & Energy Group',
+        consolidation_approach: 'Operational Control (100% boundary for fully managed entities)',
+        subsidiaries_count_in_scope: '14',
+        joint_ventures_count: '6',
+        total_group_revenue_cr: '28450.00',
+        statutory_financial_year: 'FY 2024-25',
+      },
+      group_policies: {
+        enterprise_net_zero_year: '2045',
+        renewable_target_2030_pct: '60',
+        water_neutral_target_year: '2030',
+        supplier_code_of_conduct_enforced: true,
+        human_rights_due_diligence_published: true,
+        executive_compensation_linked_to_esg: true,
+        whistleblower_ombudsperson_active: true
+      },
+      group_governance: {
+        board_committee_title: 'Enterprise Sustainability, Risk and CSR Committee',
+        committee_chair_name: 'Independent Director & Board Member',
+        independent_directors_on_committee_pct: '66',
+        assurance_standard: 'ISAE 3000 (Revised) & SEBI BRSR Core Guidance',
+        assurance_provider: 'Independent Statutory Assurance Firm',
+        assurance_scope: 'BRSR Core Key Performance Indicators (Reasonable Assurance)',
+        assurance_opinion_type: 'Unmodified / Clean'
+      }
+    };
+  }
+
+  return {
+    group_general: {
+      group_legal_name: groupNode?.name || '',
+      consolidation_approach: '',
+      subsidiaries_count_in_scope: '',
+      joint_ventures_count: '',
+      total_group_revenue_cr: '',
+      statutory_financial_year: '',
+    },
+    group_policies: {
+      enterprise_net_zero_year: '',
+      renewable_target_2030_pct: '',
+      water_neutral_target_year: '',
+      supplier_code_of_conduct_enforced: false,
+      human_rights_due_diligence_published: false,
+      executive_compensation_linked_to_esg: false,
+      whistleblower_ombudsperson_active: false
+    },
+    group_governance: {
+      board_committee_title: '',
+      committee_chair_name: '',
+      independent_directors_on_committee_pct: '',
+      assurance_standard: '',
+      assurance_provider: '',
+      assurance_scope: '',
+      assurance_opinion_type: ''
+    }
+  };
+};
 
 export default function GroupDisclosure() {
   const { user, isSystemAdmin, isGroupAdmin, isGroupEsgManager } = useAuth();
@@ -33,34 +97,7 @@ export default function GroupDisclosure() {
   const [disclosureStatus, setDisclosureStatus] = useState('DRAFT');
   const [disclosureId, setDisclosureId] = useState(null);
 
-  const [formData, setFormData] = useState({
-    group_general: {
-      group_legal_name: 'Aarohan Infrastructure & Energy Group',
-      consolidation_approach: 'Operational Control (100% boundary for fully managed entities)',
-      subsidiaries_count_in_scope: '14',
-      joint_ventures_count: '6',
-      total_group_revenue_cr: '28450.00',
-      statutory_financial_year: 'FY 2024-25',
-    },
-    group_policies: {
-      enterprise_net_zero_year: '2045',
-      renewable_target_2030_pct: '60',
-      water_neutral_target_year: '2030',
-      supplier_code_of_conduct_enforced: true,
-      human_rights_due_diligence_published: true,
-      executive_compensation_linked_to_esg: true,
-      whistleblower_ombudsperson_active: true
-    },
-    group_governance: {
-      board_committee_title: 'Enterprise Sustainability, Risk and CSR Committee',
-      committee_chair_name: 'Independent Director & Board Member',
-      independent_directors_on_committee_pct: '66',
-      assurance_standard: 'ISAE 3000 (Revised) & SEBI BRSR Core Guidance',
-      assurance_provider: 'Independent Statutory Assurance Firm',
-      assurance_scope: 'BRSR Core Key Performance Indicators (Reasonable Assurance)',
-      assurance_opinion_type: 'Unmodified / Clean'
-    }
-  });
+  const [formData, setFormData] = useState(() => getInitialFormData(null));
 
   useEffect(() => {
     if (periods.length > 0 && !selectedPeriod) {
@@ -73,6 +110,8 @@ export default function GroupDisclosure() {
     let isMounted = true;
     setLoading(true);
 
+    const baseData = getInitialFormData(groupNode);
+
     disclosuresApi.getSection('group', groupNode.id, selectedPeriod, activeTab)
       .then(res => {
         if (!isMounted) return;
@@ -82,13 +121,27 @@ export default function GroupDisclosure() {
           if (res.data.payload && Object.keys(res.data.payload).length > 0) {
             setFormData(prev => ({
               ...prev,
-              [activeTab]: res.data.payload
+              [activeTab]: { ...baseData[activeTab], ...res.data.payload }
             }));
+            return;
           }
         }
+        setDisclosureId(null);
+        setDisclosureStatus('DRAFT');
+        setFormData(prev => ({
+          ...prev,
+          [activeTab]: baseData[activeTab]
+        }));
       })
       .catch(err => {
-        console.warn('Could not fetch group disclosure section:', err);
+        if (isMounted) {
+          setDisclosureId(null);
+          setDisclosureStatus('DRAFT');
+          setFormData(prev => ({
+            ...prev,
+            [activeTab]: baseData[activeTab]
+          }));
+        }
       })
       .finally(() => {
         if (isMounted) setLoading(false);

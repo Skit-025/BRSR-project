@@ -165,6 +165,11 @@ def delete_user_by_admin(
     Requires administrator password and mandatory reason.
     Group Admin cannot delete System Admin or Group Admin accounts.
     """
+    # Fetch target user
+    target_user = db.query(User).filter(User.id == user_id, User.is_deleted == False).first()
+    if not target_user:
+        raise ValueError("User not found or already deleted.")
+
     # Hierarchical role gate & scope validation
     if admin_user.role == Role.SYSTEM_ADMIN.value:
         pass
@@ -525,22 +530,25 @@ def log_admin_audit(
 def create_invitation_by_admin(db: Session, admin_user: User, req) -> "UserInvitation":
     from app.modules.auth.models import UserInvitation
     from app.modules.org.models import OrgNode
-    from app.services.firebase_auth_service import reconcile_or_create_firebase_user, generate_secure_password_setup_link
-    from app.services.email_invitation_service import send_invitation_email
+    from app.services.email_invitation_service import send_invitation_email, generate_secure_password_setup_link
 
     validate_admin_delegation(db, admin_user, req.role, req.org_node_id)
 
-    # Check if active user already exists
+    # Check if user already exists (active or deleted to prevent DB integrity error)
     clean_email = req.email.lower().strip()
-    existing_user = db.query(User).filter(User.email == clean_email, User.is_deleted == False).first()
+    existing_user = db.query(User).filter(User.email == clean_email).first()
     if existing_user:
+        if getattr(existing_user, "is_deleted", False):
+            raise ValueError(f"A deleted user account with email '{req.email}' exists. Please restore or reactivate the user account.")
         raise ValueError(f"An active user with email '{req.email}' already exists.")
 
     # Check phone uniqueness
     clean_phone = (getattr(req, "phone", None) or "").strip() or None
     if clean_phone:
-        existing_phone_user = db.query(User).filter(User.phone == clean_phone, User.is_deleted == False).first()
+        existing_phone_user = db.query(User).filter(User.phone == clean_phone).first()
         if existing_phone_user:
+            if getattr(existing_phone_user, "is_deleted", False):
+                raise ValueError(f"A deleted user account with phone '{clean_phone}' exists.")
             raise ValueError(f"An active user with phone '{clean_phone}' already exists.")
         existing_phone_inv = db.query(UserInvitation).filter(
             UserInvitation.phone == clean_phone,
@@ -550,10 +558,15 @@ def create_invitation_by_admin(db: Session, admin_user: User, req) -> "UserInvit
         if existing_phone_inv:
             raise ValueError(f"A pending invitation for phone '{clean_phone}' already exists.")
 
-    # 1. Local account reconciliation
-    firebase_uid, _ = reconcile_or_create_firebase_user(clean_email, req.full_name.strip())
+    existing_inv = db.query(UserInvitation).filter(
+        UserInvitation.email == clean_email,
+        UserInvitation.status.in_(["PENDING", "SENT"]),
+        UserInvitation.is_deleted == False
+    ).first()
+    if existing_inv:
+        raise ValueError(f"A pending invitation for email '{clean_email}' already exists.")
 
-    # 2. Scope name derivation for email
+    # Scope name derivation for email
     scope_name = None
     if req.org_node_id:
         node = db.query(OrgNode).filter(OrgNode.id == req.org_node_id).first()
@@ -611,7 +624,7 @@ def create_invitation_by_admin(db: Session, admin_user: User, req) -> "UserInvit
         invited_by_id=admin_user.id,
         status="SENT" if email_ok else "FAILED",
         invitation_token=invitation_token,
-        firebase_uid=firebase_uid,
+        firebase_uid=None,
         setup_link=setup_link,
         delivery_status="SENT" if email_ok else "FAILED",
         delivery_error=email_err,
@@ -628,7 +641,6 @@ def create_invitation_by_admin(db: Session, admin_user: User, req) -> "UserInvit
         details={
             "email": clean_email,
             "invitation_id": str(invitation.id),
-            "firebase_uid": firebase_uid,
             "delivery_status": invitation.delivery_status
         }
     )
@@ -661,8 +673,7 @@ def list_invitations_for_admin(db: Session, admin_user: User) -> List["UserInvit
 def resend_invitation(db: Session, admin_user: User, invitation_id: str) -> "UserInvitation":
     from app.modules.auth.models import UserInvitation
     from app.modules.org.models import OrgNode
-    from app.services.firebase_auth_service import generate_secure_password_setup_link
-    from app.services.email_invitation_service import send_invitation_email
+    from app.services.email_invitation_service import send_invitation_email, generate_secure_password_setup_link
 
     inv = db.query(UserInvitation).filter(UserInvitation.id == invitation_id, UserInvitation.is_deleted == False).first()
     if not inv:

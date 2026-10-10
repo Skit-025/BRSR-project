@@ -14,6 +14,76 @@ const SECTIONS = [
   { id: 'bu_governance', label: 'BU Governance & Risk', icon: Shield, desc: 'Oversight structure and sustainability accountability' },
 ];
 
+const getInitialFormData = (buNode) => {
+  const code = buNode?.code || '';
+  const isSeed = code === 'BU-TRANS' || code.startsWith('BU-A1-') || code === 'BU-HYDRO-01';
+
+  if (isSeed) {
+    return {
+      bu_targets: {
+        energy_reduction_pct: '',
+        energy_baseline_year: 'FY 2023-24',
+        energy_target_year: 'FY 2027-28',
+        water_recycle_pct: '',
+        ghg_reduction_pct: '',
+        renewable_energy_target_pct: '',
+        zero_waste_target_year: '',
+        net_zero_commitment_year: '2045',
+      },
+      bu_initiatives: [
+        {
+          id: 1,
+          name: 'Rooftop Solar & Microgrid Installation',
+          category: 'Renewable Energy',
+          capex_inr_lakhs: '125',
+          expected_co2_reduction_tco2e: '340',
+          status: 'In Progress',
+          milestone: '70% commissioning complete'
+        },
+        {
+          id: 2,
+          name: 'Effluent Zero Liquid Discharge (ZLD) Retrofit',
+          category: 'Water Conservation',
+          capex_inr_lakhs: '80',
+          expected_co2_reduction_tco2e: '45',
+          status: 'Completed',
+          milestone: 'Commissioned Q1'
+        }
+      ],
+      bu_governance: {
+        bu_esg_lead_name: '',
+        lead_designation: 'Head of Operations / ESG',
+        committee_meeting_frequency: 'Monthly',
+        risk_mitigation_framework: 'ISO 14001 & ISO 45001 Integrated System',
+        audit_mechanism: 'Quarterly Internal ESG Peer Review',
+        escalation_protocol: 'Reported directly to Subsidiary ESG Committee'
+      }
+    };
+  }
+
+  return {
+    bu_targets: {
+      energy_reduction_pct: '',
+      energy_baseline_year: '',
+      energy_target_year: '',
+      water_recycle_pct: '',
+      ghg_reduction_pct: '',
+      renewable_energy_target_pct: '',
+      zero_waste_target_year: '',
+      net_zero_commitment_year: '',
+    },
+    bu_initiatives: [],
+    bu_governance: {
+      bu_esg_lead_name: '',
+      lead_designation: '',
+      committee_meeting_frequency: 'Quarterly',
+      risk_mitigation_framework: '',
+      audit_mechanism: '',
+      escalation_protocol: ''
+    }
+  };
+};
+
 export default function BUDisclosure() {
   const { user, isSystemAdmin, isBuAdmin, isBuEsgManager } = useAuth();
   const { data: orgNodes = [] } = useOrgNodes();
@@ -32,47 +102,12 @@ export default function BUDisclosure() {
   const [submitting, setSubmitting] = useState(false);
   const [notice, setNotice] = useState(null);
 
-  // Form payload states
-  const [formData, setFormData] = useState({
-    bu_targets: {
-      energy_reduction_pct: '',
-      energy_baseline_year: 'FY 2023-24',
-      energy_target_year: 'FY 2027-28',
-      water_recycle_pct: '',
-      ghg_reduction_pct: '',
-      renewable_energy_target_pct: '',
-      zero_waste_target_year: '',
-      net_zero_commitment_year: '2045',
-    },
-    bu_initiatives: [
-      {
-        id: 1,
-        name: 'Rooftop Solar & Microgrid Installation',
-        category: 'Renewable Energy',
-        capex_inr_lakhs: '125',
-        expected_co2_reduction_tco2e: '340',
-        status: 'In Progress',
-        milestone: '70% commissioning complete'
-      },
-      {
-        id: 2,
-        name: 'Effluent Zero Liquid Discharge (ZLD) Retrofit',
-        category: 'Water Conservation',
-        capex_inr_lakhs: '80',
-        expected_co2_reduction_tco2e: '45',
-        status: 'Completed',
-        milestone: 'Commissioned Q1'
-      }
-    ],
-    bu_governance: {
-      bu_esg_lead_name: '',
-      lead_designation: 'Head of Operations / ESG',
-      committee_meeting_frequency: 'Monthly',
-      risk_mitigation_framework: 'ISO 14001 & ISO 45001 Integrated System',
-      audit_mechanism: 'Quarterly Internal ESG Peer Review',
-      escalation_protocol: 'Reported directly to Subsidiary ESG Committee'
-    }
-  });
+  const selectedBUNode = useMemo(() => {
+    return buNodes.find(n => n.id === selectedBU);
+  }, [buNodes, selectedBU]);
+
+  // Form payload states initialized dynamically
+  const [formData, setFormData] = useState(() => getInitialFormData(null));
 
   const [disclosureStatus, setDisclosureStatus] = useState('DRAFT');
   const [disclosureId, setDisclosureId] = useState(null);
@@ -97,29 +132,45 @@ export default function BUDisclosure() {
     let isMounted = true;
     setLoading(true);
 
+    const baseData = getInitialFormData(selectedBUNode);
+
     disclosuresApi.getSection('bu', selectedBU, selectedPeriod, activeTab)
       .then(res => {
         if (!isMounted) return;
         if (res.data) {
           setDisclosureId(res.data.id);
           setDisclosureStatus(res.data.status || 'DRAFT');
-          if (res.data.payload && Object.keys(res.data.payload).length > 0) {
+          if (res.data.payload && (Array.isArray(res.data.payload) ? res.data.payload.length > 0 : Object.keys(res.data.payload).length > 0)) {
             setFormData(prev => ({
               ...prev,
               [activeTab]: res.data.payload
             }));
+            return;
           }
         }
+        setDisclosureId(null);
+        setDisclosureStatus('DRAFT');
+        setFormData(prev => ({
+          ...prev,
+          [activeTab]: baseData[activeTab]
+        }));
       })
       .catch(err => {
-        console.warn('Could not fetch BU disclosure section, using defaults:', err);
+        if (isMounted) {
+          setDisclosureId(null);
+          setDisclosureStatus('DRAFT');
+          setFormData(prev => ({
+            ...prev,
+            [activeTab]: baseData[activeTab]
+          }));
+        }
       })
       .finally(() => {
         if (isMounted) setLoading(false);
       });
 
     return () => { isMounted = false; };
-  }, [selectedBU, selectedPeriod, activeTab]);
+  }, [selectedBU, selectedPeriod, activeTab, selectedBUNode]);
 
   const handleTargetChange = (field, val) => {
     setFormData(prev => ({
