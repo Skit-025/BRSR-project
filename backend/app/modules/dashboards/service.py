@@ -12,14 +12,12 @@ from app.modules.dashboards.schemas import (
     SubmissionProgressSummary,
     PrincipleSummary,
 )
-from app.modules.dashboards.kpis import get_executive_kpis
+from app.modules.dashboards.kpis import (
+    get_executive_kpis,
+    is_new_railway_project,
+    get_entity_mock_data,
+)
 from app.modules.dashboards.quality_score import compute_esg_quality_score
-
-
-PRE_EXISTING_DEMO_CODES = {
-    "AAROHAN-GROUP", "AAROHAN-RENEW", "BU-SOLAR", "PRJ-ODISHA-SOLAR",
-    "BU-WIND", "PRJ-GUJ-WIND", "AAROHAN-INFRA", "BU-HIGHWAYS", "PRJ-HIGHWAY-NH16"
-}
 
 
 class DashboardService:
@@ -27,19 +25,54 @@ class DashboardService:
         self.db = db
 
     def get_summary(self, period_id: str, entity_id: str) -> ExecutiveDashboardSummary:
-        period = self.db.query(ReportingPeriod).filter(ReportingPeriod.id == period_id).first()
-        period_label = period.code if period else "Current Period"
+        import uuid
+        is_period_uuid = False
+        try:
+            uuid.UUID(str(period_id))
+            is_period_uuid = True
+        except (ValueError, TypeError):
+            pass
+
+        if is_period_uuid:
+            period = self.db.query(ReportingPeriod).filter(ReportingPeriod.id == period_id).first()
+        else:
+            period = self.db.query(ReportingPeriod).filter(ReportingPeriod.code == period_id).first()
+
+        period_label = period.code if period else str(period_id)
+        effective_period_uuid = None
+        if period:
+            effective_period_uuid = period.id
+        else:
+            try:
+                effective_period_uuid = uuid.UUID(str(period_id))
+            except (ValueError, TypeError):
+                effective_period_uuid = None
 
         from app.modules.auth.service import get_descendant_node_ids
-        target_node = self.db.query(OrgNode).filter(OrgNode.id == entity_id).first()
-        if not target_node:
+        is_entity_uuid = False
+        try:
+            uuid.UUID(str(entity_id))
+            is_entity_uuid = True
+        except (ValueError, TypeError):
+            pass
+
+        if is_entity_uuid:
+            target_node = self.db.query(OrgNode).filter(OrgNode.id == entity_id).first()
+        else:
             target_node = self.db.query(OrgNode).filter(OrgNode.code == entity_id).first()
 
-        scoped_entity_ids = [entity_id]
+        scoped_entity_ids = []
         total_reporting_entities = 1
         if target_node:
             desc_ids = get_descendant_node_ids(self.db, str(target_node.id))
-            scoped_entity_ids = list(set([str(target_node.id)] + [str(d) for d in desc_ids]))
+            valid_uuids = set()
+            valid_uuids.add(target_node.id)
+            for d in desc_ids:
+                try:
+                    valid_uuids.add(uuid.UUID(str(d)))
+                except (ValueError, TypeError):
+                    continue
+            scoped_entity_ids = list(valid_uuids)
             reporting_nodes = self.db.query(OrgNode).filter(
                 OrgNode.id.in_(scoped_entity_ids),
                 OrgNode.type.in_(["project", "site", "bu", "business_unit"]),
@@ -47,87 +80,69 @@ class DashboardService:
             ).all()
             total_reporting_entities = max(len(reporting_nodes), 1)
 
-        node_code = (target_node.code or "").upper() if target_node else ""
-        is_pre_existing = node_code in PRE_EXISTING_DEMO_CODES or (target_node and target_node.is_root)
+        is_railway = is_new_railway_project(target_node)
 
         # 1. Submission Progress scoped to this entity and its descendants
-        submissions = (
-            self.db.query(Submission)
-            .filter(
-                Submission.entity_id.in_(scoped_entity_ids),
-                Submission.period_id == period_id,
-                Submission.is_deleted == False
+        submissions = []
+        if scoped_entity_ids and effective_period_uuid:
+            submissions = (
+                self.db.query(Submission)
+                .filter(
+                    Submission.entity_id.in_(scoped_entity_ids),
+                    Submission.period_id == effective_period_uuid,
+                    Submission.is_deleted == False
+                )
+                .all()
             )
-            .all()
-        )
         total_sub = len(submissions)
         approved = sum(1 for s in submissions if s.status in [SubmissionStatus.BU_APPROVED.value, SubmissionStatus.SUBSIDIARY_APPROVED.value, SubmissionStatus.CONSOLIDATED.value])
         in_rev = sum(1 for s in submissions if s.status in [SubmissionStatus.SUBMITTED.value, SubmissionStatus.UNDER_BU_REVIEW.value])
         draft = sum(1 for s in submissions if s.status == SubmissionStatus.DRAFT.value)
         rejected = sum(1 for s in submissions if s.status == SubmissionStatus.RETURNED.value)
 
-        has_real_submissions = total_sub > 0
+        is_railway = is_new_railway_project(target_node)
 
-        if has_real_submissions:
-            # Dynamically calculate progress from actual database submissions
+        # Check for real filled operational data points
+        has_real_filled_data = False
+        filled_count = 0
+        if total_sub > 0:
             from app.modules.collection.models import DataPoint
             sub_ids = [s.id for s in submissions]
             dps = self.db.query(DataPoint).filter(DataPoint.submission_id.in_(sub_ids), DataPoint.is_deleted == False).all()
-            filled_count = sum(1 for d in dps if d.value_numeric is not None or d.value_text is not None)
-            total_expected_dps = max(len(dps), total_reporting_entities * 40)
+            filled_count = sum(1 for d in dps if d.value_numeric is not None or (d.value_text is not None and str(d.value_text).strip() != ""))
+            if filled_count > 0 and approved > 0:
+                has_real_filled_data = True
 
-            if total_reporting_entities > 0 and approved > 0:
-                progress_pct = min(100.0, round((approved / total_reporting_entities) * 100.0, 1))
-            elif total_expected_dps > 0 and filled_count > 0:
-                progress_pct = min(100.0, round((filled_count / total_expected_dps) * 100.0, 1))
-            else:
-                progress_pct = 0.0
-
-            data_cov_pct = min(100.0, round((filled_count / total_expected_dps) * 100.0, 1)) if total_expected_dps > 0 else progress_pct
-            qs = compute_esg_quality_score(self.db, sub_ids)
-            assurance_score = min(100.0, round(progress_pct * 0.9 + qs["score"] * 0.1, 1))
-            brsr_status = "SEBI Aligned" if approved > 0 else "Submissions Pending"
-        else:
-            # No real submissions for this entity
-            if is_pre_existing:
-                # Realistic baseline data strictly between 70% and 90%
-                if target_node and target_node.type == "group":
-                    progress_pct = 85.4
-                    data_cov_pct = 88.2
-                    assurance_score = 84.5
-                    qs = {"score": 87.6, "grade": "B+"}
-                    approved, in_rev, draft, total_sub = 11, 2, 1, 14
-                    total_reporting_entities = 14
-                elif target_node and target_node.type == "subsidiary":
-                    progress_pct = 82.6
-                    data_cov_pct = 84.8
-                    assurance_score = 81.3
-                    qs = {"score": 86.2, "grade": "B+"}
-                    approved, in_rev, draft, total_sub = 5, 1, 0, 6
-                    total_reporting_entities = 6
-                elif target_node and target_node.type in ("business_unit", "bu"):
-                    progress_pct = 78.4
-                    data_cov_pct = 79.5
-                    assurance_score = 76.5
-                    qs = {"score": 78.8, "grade": "B"}
-                    approved, in_rev, draft, total_sub = 2, 1, 0, 3
-                    total_reporting_entities = 3
-                else: # project
-                    progress_pct = 88.0
-                    data_cov_pct = 88.5
-                    assurance_score = 85.0
-                    qs = {"score": 89.2, "grade": "B+"}
-                    approved, in_rev, draft, total_sub = 1, 0, 0, 1
-                    total_reporting_entities = 1
-                brsr_status = "SEBI Aligned"
-            else:
-                # Newly created entity with no data -> strictly 0.0%
+        if is_railway:
+            # Rule: Railway project is new -> strictly 0.0% / empty until real data & approvals are recorded
+            if not has_real_filled_data:
                 progress_pct = 0.0
                 data_cov_pct = 0.0
                 assurance_score = 0.0
                 qs = {"score": 0.0, "grade": "—"}
                 approved, in_rev, draft, total_sub = 0, 0, 0, 0
+                total_reporting_entities = 0
                 brsr_status = "Submissions Pending"
+            else:
+                # Real progress dynamically takes over as user inputs data & approvals
+                progress_pct = min(100.0, max(0.0, round((approved / max(total_reporting_entities, 1)) * 100.0, 1)))
+                data_cov_pct = min(100.0, max(0.0, round((filled_count / (max(total_reporting_entities, 1) * 40)) * 100.0, 1)))
+                qs = compute_esg_quality_score(self.db, sub_ids)
+                assurance_score = min(100.0, round(progress_pct * 0.9 + qs["score"] * 0.1, 1))
+                brsr_status = "SEBI Aligned" if progress_pct >= 70.0 else "In Progress"
+        else:
+            # Pre-existing entities: must be strictly between 70% and 90% as requested
+            mock = get_entity_mock_data(target_node)
+            progress_pct = mock.get("progress", 82.0)
+            data_cov_pct = mock.get("coverage", 84.0)
+            assurance_score = mock.get("assurance", 81.0)
+            qs = {"score": mock.get("qs_score", 85.0), "grade": mock.get("qs_grade", "B+")}
+            approved = mock.get("approved", 1)
+            in_rev = mock.get("in_rev", 0)
+            draft = mock.get("draft", 0)
+            total_sub = mock.get("total_sub", 1)
+            total_reporting_entities = mock.get("total_entities", 1)
+            brsr_status = "SEBI Aligned"
 
         sub_progress = SubmissionProgressSummary(
             total_entities=total_reporting_entities,
@@ -147,15 +162,13 @@ class DashboardService:
         for p_num in range(1, 10):
             p_metrics = self.db.query(Metric).filter(Metric.principle == p_num).all()
             tot_p_m = len(p_metrics)
-            if has_real_submissions:
-                rep_m = tot_p_m if approved > 0 else int(tot_p_m * (progress_pct / 100.0))
-                p_comp = round(progress_pct, 1)
-            elif is_pre_existing:
-                rep_m = tot_p_m if p_num <= 8 else 0
-                p_comp = round(progress_pct, 1) if p_num <= 8 else 0.0
-            else:
+            if is_railway and not has_real_filled_data:
                 rep_m = 0
                 p_comp = 0.0
+            else:
+                # Principles 1 through 8 active, Principle 9 optional
+                rep_m = tot_p_m if p_num <= 8 else 0
+                p_comp = round(progress_pct, 1) if p_num <= 8 else 0.0
 
             principles.append(
                 PrincipleSummary(
@@ -176,37 +189,18 @@ class DashboardService:
                 OrgNode.is_deleted == False
             ).all()
 
-            # Baseline mock variations between 70% and 90% for pre-existing children
-            demo_pcts = [89.4, 82.1, 78.6, 85.2, 74.5, 88.0]
-
-            for idx, child in enumerate(child_nodes):
-                c_subs = self.db.query(Submission).filter(
-                    Submission.entity_id == child.id,
-                    Submission.period_id == period_id,
-                    Submission.is_deleted == False
-                ).all()
-
-                child_is_pre = (child.code or "").upper() in PRE_EXISTING_DEMO_CODES
-
-                if len(c_subs) > 0:
-                    c_app = sum(1 for s in c_subs if s.status in [SubmissionStatus.BU_APPROVED.value, SubmissionStatus.SUBSIDIARY_APPROVED.value, SubmissionStatus.CONSOLIDATED.value])
-                    c_rev = sum(1 for s in c_subs if s.status in [SubmissionStatus.SUBMITTED.value, SubmissionStatus.UNDER_BU_REVIEW.value])
-                    c_pct = 100.0 if c_app > 0 else (50.0 if c_rev > 0 else 25.0)
-                    c_stat = "Ready" if c_app > 0 else ("In Review" if c_rev > 0 else "Draft")
-                    c_stat_type = "success" if c_app > 0 else ("neutral" if c_rev > 0 else "neutral")
-                    c_ev = f"{c_app}/{len(c_subs)}"
-                elif child_is_pre:
-                    # Pre-existing seeded child: realistic baseline between 70% and 90%
-                    c_pct = demo_pcts[idx % len(demo_pcts)]
-                    c_stat = "Ready" if c_pct >= 85.0 else "In Review"
-                    c_stat_type = "success" if c_stat == "Ready" else "neutral"
-                    c_ev = "4/4" if c_stat == "Ready" else "3/4"
-                else:
-                    # Newly created child: strictly 0%
+            for child in child_nodes:
+                if is_new_railway_project(child):
                     c_pct = 0.0
                     c_stat = "Draft"
                     c_stat_type = "neutral"
                     c_ev = "0/0"
+                else:
+                    c_mock = get_entity_mock_data(child)
+                    c_pct = c_mock.get("coverage", 82.0)
+                    c_stat = "Ready" if c_pct >= 85.0 else "In Review"
+                    c_stat_type = "success" if c_stat == "Ready" else "neutral"
+                    c_ev = "4/4" if c_stat == "Ready" else "3/4"
 
                 route = f"/disclosure/bu?nodeId={child.id}" if child.type in ("bu", "business_unit") else (
                     f"/disclosure/subsidiary?nodeId={child.id}" if child.type == "subsidiary" else f"/projects/{child.id}"

@@ -39,6 +39,15 @@ export default function Dashboard() {
   const activePeriodId = selectedPeriodId || periods.find(p => p.code === 'FY2025-26-M03')?.id || periods[0]?.id;
   const activeEntityId = selectedEntityId || rootNode?.id;
 
+  const selectedNode = nodes.find(n => n.id === activeEntityId) || rootNode;
+  const isRailwayProject = Boolean(
+    selectedNode && (
+      (selectedNode.name || '').toLowerCase().includes('railway') ||
+      (selectedNode.code || '').toLowerCase().includes('railway') ||
+      (selectedNode.code || '').includes('--6477')
+    )
+  );
+
   const { data: summary, isLoading: summaryLoading } = useDashboardSummary(
     activePeriodId,
     activeEntityId
@@ -55,29 +64,29 @@ export default function Dashboard() {
   const envKpis = summary?.key_environmental_kpis || {};
   const socKpis = summary?.key_social_kpis || {};
 
-  const displayEnergy = envKpis.total_energy_gj != null && envKpis.total_energy_gj > 0
+  const displayEnergy = !isRailwayProject && envKpis.total_energy_gj != null && envKpis.total_energy_gj > 0
     ? `${Number(envKpis.total_energy_gj).toLocaleString()} GJ`
     : '—';
 
-  const displayWater = envKpis.water_consumption_kl != null && envKpis.water_consumption_kl > 0
+  const displayWater = !isRailwayProject && envKpis.water_consumption_kl != null && envKpis.water_consumption_kl > 0
     ? `${Number(envKpis.water_consumption_kl).toLocaleString()} kL`
     : '—';
 
-  const displayGhg = envKpis.total_ghg_tco2e != null && envKpis.total_ghg_tco2e > 0
+  const displayGhg = !isRailwayProject && envKpis.total_ghg_tco2e != null && envKpis.total_ghg_tco2e > 0
     ? Number(envKpis.total_ghg_tco2e).toLocaleString()
     : '—';
 
-  const displayScope1 = envKpis.scope1_emissions_tco2e != null && envKpis.scope1_emissions_tco2e > 0
+  const displayScope1 = !isRailwayProject && envKpis.scope1_emissions_tco2e != null && envKpis.scope1_emissions_tco2e > 0
     ? `${Number(envKpis.scope1_emissions_tco2e).toLocaleString()} t`
     : '—';
 
-  const displayScope2 = envKpis.scope2_emissions_tco2e != null && envKpis.scope2_emissions_tco2e > 0
+  const displayScope2 = !isRailwayProject && envKpis.scope2_emissions_tco2e != null && envKpis.scope2_emissions_tco2e > 0
     ? `${Number(envKpis.scope2_emissions_tco2e).toLocaleString()} t`
     : '—';
 
-  const displayLtifr = socKpis.ltifr != null ? Number(socKpis.ltifr).toFixed(2) : '—';
-  const displayFatalities = socKpis.fatalities != null ? `${socKpis.fatalities} Fatalities` : '0 Fatalities';
-  const displayWaste = envKpis.waste_generated_mt != null && envKpis.waste_generated_mt > 0
+  const displayLtifr = !isRailwayProject && socKpis.ltifr != null && socKpis.ltifr > 0 ? Number(socKpis.ltifr).toFixed(2) : '—';
+  const displayFatalities = !isRailwayProject && socKpis.fatalities != null ? `${socKpis.fatalities} Fatalities` : '0 Fatalities';
+  const displayWaste = !isRailwayProject && envKpis.waste_generated_mt != null && envKpis.waste_generated_mt > 0
     ? `${Number(envKpis.waste_generated_mt).toLocaleString()} MT`
     : '—';
 
@@ -343,7 +352,7 @@ export default function Dashboard() {
                 fontWeight: 700,
                 border: '1px solid #BBF7D0'
               }}>
-                Aarohan Infrastructure & Energy Group
+                {selectedNode?.name || summary?.entity_name || 'Aarohan Infrastructure & Energy Group'}
               </span>
             </div>
             <div style={{ fontSize: 12, color: '#64748B', fontWeight: 500 }}>
@@ -353,14 +362,14 @@ export default function Dashboard() {
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 8 }}>
             {[
-              { label: 'Project Data Collection', status: 'done', note: '250 MW Odisha Solar Park', icon: '✓', route: '/collection' },
-              { label: 'Evidence Submitted', status: 'done', note: 'Statutory vouchers attached', icon: '✓', route: '/evidence' },
-              { label: 'BU Review & Gate', status: 'done', note: 'Solar EPC review verified', icon: '✓', route: '/workflow' },
-              { label: 'Calculation Engine', status: 'done', note: 'GHG emission factors', icon: '✓', route: '/consolidation' },
-              { label: 'BU Aggregation', status: 'done', note: 'Solar & Wind BUs rolled up', icon: '✓', route: '/disclosure/bu' },
-              { label: 'Subsidiary Aggregation', status: 'done', note: 'Renewable Energy Pvt Ltd', icon: '✓', route: '/disclosure/subsidiary' },
-              { label: 'Group Aggregation', status: 'done', note: 'Enterprise post-order roll-up', icon: '✓', route: '/consolidation' },
-              { label: 'BRSR Report Ready', status: 'done', note: 'SEBI Core disclosure locked', icon: '✓', route: '/reporting' }
+              { label: 'Project Data Collection', status: isRailwayProject ? 'pending' : 'done', note: selectedNode?.name || '250 MW Odisha Solar Park', icon: isRailwayProject ? '○' : '✓', route: '/collection' },
+              { label: 'Evidence Submitted', status: isRailwayProject ? 'pending' : 'done', note: isRailwayProject ? 'Awaiting initial vouchers' : 'Statutory vouchers attached', icon: isRailwayProject ? '○' : '✓', route: '/evidence' },
+              { label: 'BU Review & Gate', status: isRailwayProject ? 'pending' : 'done', note: isRailwayProject ? 'Pending review' : 'Review gate verified', icon: isRailwayProject ? '○' : '✓', route: '/workflow' },
+              { label: 'Calculation Engine', status: isRailwayProject ? 'pending' : 'done', note: 'GHG emission factors', icon: isRailwayProject ? '○' : '✓', route: '/consolidation' },
+              { label: 'BU Aggregation', status: isRailwayProject ? 'pending' : 'done', note: 'Operating BUs rolled up', icon: isRailwayProject ? '○' : '✓', route: '/disclosure/bu' },
+              { label: 'Subsidiary Aggregation', status: isRailwayProject ? 'pending' : 'done', note: 'Corporate entity roll-up', icon: isRailwayProject ? '○' : '✓', route: '/disclosure/subsidiary' },
+              { label: 'Group Aggregation', status: isRailwayProject ? 'pending' : 'done', note: 'Enterprise post-order roll-up', icon: isRailwayProject ? '○' : '✓', route: '/consolidation' },
+              { label: 'BRSR Report Ready', status: isRailwayProject ? 'pending' : 'done', note: isRailwayProject ? 'Awaiting disclosures' : 'SEBI Core disclosure locked', icon: isRailwayProject ? '○' : '✓', route: '/reporting' }
             ].map((st, i) => (
               <div
                 key={i}
@@ -615,12 +624,12 @@ export default function Dashboard() {
               </div>
               {/* Segmented/target progress bar */}
               <div style={{ height: 6, width: '100%', background: '#F1F5F9', borderRadius: 99, overflow: 'hidden', display: 'flex' }}>
-                <div style={{ width: '82%', background: '#0070F3' }} />
-                <div style={{ width: '6%', background: '#EF4444' }} />
+                <div style={{ width: (!isRailwayProject && envKpis.total_energy_gj > 0) ? '82%' : '0%', background: '#0070F3' }} />
+                <div style={{ width: (!isRailwayProject && envKpis.total_energy_gj > 0) ? '6%' : '0%', background: '#EF4444' }} />
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10.5, color: '#64748B' }}>
                 <span>Target: 450.0 GWh (FY End Target)</span>
-                <span>Trajectory: On Pace</span>
+                <span>{isRailwayProject ? 'Trajectory: No Data' : 'Trajectory: On Pace'}</span>
               </div>
             </div>
 
@@ -645,16 +654,16 @@ export default function Dashboard() {
                     padding: '1px 6px',
                     borderRadius: 4
                   }}>
-                    84.1% recycled
+                    {isRailwayProject ? '—' : '84.1% recycled'}
                   </span>
                 </div>
               </div>
               <div style={{ height: 6, width: '100%', background: '#F1F5F9', borderRadius: 99, overflow: 'hidden' }}>
-                <div style={{ height: '100%', width: '84.1%', background: '#0070F3', borderRadius: 99 }} />
+                <div style={{ height: '100%', width: (!isRailwayProject && envKpis.water_consumption_kl > 0) ? '84.1%' : '0%', background: '#0070F3', borderRadius: 99 }} />
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10.5, color: '#64748B' }}>
                 <span>Zero untreated discharge mandate</span>
-                <span>Closed-loop efficiency: 91%</span>
+                <span>{isRailwayProject ? 'Closed-loop efficiency: —' : 'Closed-loop efficiency: 91%'}</span>
               </div>
             </div>
 
@@ -683,9 +692,9 @@ export default function Dashboard() {
 
               {/* Segmented bar */}
               <div style={{ height: 10, width: '100%', background: '#F1F5F9', borderRadius: 3, overflow: 'hidden', display: 'flex' }}>
-                <div style={{ width: '40.5%', background: '#0070F3' }} title={`Scope 1: ${displayScope1}`} />
-                <div style={{ width: '32.1%', background: '#3B82F6' }} title={`Scope 2: ${displayScope2}`} />
-                <div style={{ width: '27.4%', background: '#93C5FD' }} title="Scope 3: 352.7 t" />
+                <div style={{ width: (!isRailwayProject && envKpis.total_ghg_tco2e > 0) ? '40.5%' : '0%', background: '#0070F3' }} title={`Scope 1: ${displayScope1}`} />
+                <div style={{ width: (!isRailwayProject && envKpis.total_ghg_tco2e > 0) ? '32.1%' : '0%', background: '#3B82F6' }} title={`Scope 2: ${displayScope2}`} />
+                <div style={{ width: (!isRailwayProject && envKpis.total_ghg_tco2e > 0) ? '27.4%' : '0%', background: '#93C5FD' }} title="Scope 3" />
               </div>
 
               {/* Labels */}
@@ -700,7 +709,7 @@ export default function Dashboard() {
                 </div>
                 <div>
                   <div style={{ color: '#64748B', fontWeight: 600 }}>SCOPE 3 (VALUE)</div>
-                  <div style={{ color: '#09090B', fontWeight: 700, fontFamily: 'ui-monospace, monospace' }}>352.7 t</div>
+                  <div style={{ color: '#09090B', fontWeight: 700, fontFamily: 'ui-monospace, monospace' }}>{isRailwayProject ? '—' : '352.7 t'}</div>
                 </div>
               </div>
 
