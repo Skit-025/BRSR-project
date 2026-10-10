@@ -2,7 +2,11 @@ import pytest
 import uuid
 from fastapi.testclient import TestClient
 from app.main import app
-from app.db.session import init_db
+from app.db.session import SessionLocal, init_db
+from app.modules.forms.service import build_scoped_digital_form
+from app.modules.org.applicability.engine import evaluate_applicability_for_node
+from app.modules.org.models import MetricApplicability, OrgNode
+from app.security.rbac import Role
 
 client = TestClient(app)
 
@@ -74,6 +78,27 @@ def test_dynamic_form_generation_and_collection():
     energy_field = next(f for f in all_fields if f["metric_code"] == "ENV-ENERGY-001")
     assert energy_field["base_unit"] == "MWh"
     assert "kWh" in energy_field["allowed_units"]
+
+    # Existing false applicability decisions must be refreshed after a rule change.
+    with SessionLocal() as db:
+        node = db.query(OrgNode).filter(OrgNode.id == site["id"]).first()
+        evaluate_applicability_for_node(node, db, period["id"])
+        fuel_applicability = db.query(MetricApplicability).filter(
+            MetricApplicability.org_node_id == site["id"],
+            MetricApplicability.metric_code == "ENV-ENERGY-002",
+            MetricApplicability.period_id == period["id"],
+        ).first()
+        fuel_applicability.is_applicable = False
+        db.commit()
+
+        scoped_form = build_scoped_digital_form(
+            db, period["id"], Role.PROJECT_ADMIN.value, site["id"]
+        )
+        scoped_fields = [field for section in scoped_form.sections for field in section.fields]
+        scoped_codes = [field.metric_code for field in scoped_fields]
+
+        assert fuel_applicability.is_applicable is True
+        assert scoped_codes.index("ENV-ENERGY-002") == scoped_codes.index("ENV-ENERGY-001") + 1
 
     # 4. Autosave draft numbers with unit normalization (F08)
     save_payload = {

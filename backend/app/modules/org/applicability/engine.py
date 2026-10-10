@@ -12,10 +12,11 @@ APPLICABILITY_RULES = [
     {
         "metric_code": "ENV-ENERGY-002",
         "rule_id": "RULE-ENG-02",
-        "description": "Fuel consumption applies to infrastructure, construction, hydrocarbons, fleet, and site equipment.",
+        "description": "Fuel consumption applies to infrastructure, construction, hydrocarbons, solar operations, fleet, and site equipment.",
         "condition": lambda node: node.project_type in [
             ProjectType.IRRIGATION.value, ProjectType.HYDROCARBON.value,
-            ProjectType.ROAD.value, ProjectType.TUNNEL.value, ProjectType.EV_BUS.value
+            ProjectType.ROAD.value, ProjectType.TUNNEL.value, ProjectType.EV_BUS.value,
+            ProjectType.SOLAR.value, "solar_generation"
         ] or node.type in ["group", "subsidiary", "business_unit"]
     },
     {
@@ -113,9 +114,15 @@ def evaluate_applicability_for_node(
             MetricApplicability.metric_code == metric_code
         )
         if period_id:
-            query = query.filter(MetricApplicability.period_id == period_id)
-        
-        existing = query.first()
+            existing = query.filter(MetricApplicability.period_id == period_id).first()
+            if not existing:
+                existing = query.filter(
+                    MetricApplicability.period_id.is_(None),
+                    MetricApplicability.is_exception.is_(True)
+                ).first()
+        else:
+            existing = query.first()
+
         if existing and existing.is_exception:
             records.append(existing)
             continue

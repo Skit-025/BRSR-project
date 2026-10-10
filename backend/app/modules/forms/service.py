@@ -207,14 +207,32 @@ def build_scoped_digital_form(
     # Dynamic Applicable Metrics for this specific subsidiary/project
     applicable_metric_codes = set()
     if entity:
-        # Run or retrieve applicability rules for this specific entity
+        # Refresh derived decisions so rule changes and changed project facts take effect.
         app_records = db.query(MetricApplicability).filter(
             MetricApplicability.org_node_id == entity.id
         ).all()
 
-        if not app_records:
-            # Dynamically evaluate rules for this node
-            from app.modules.org.applicability.engine import evaluate_applicability_for_node
+        from app.modules.org.applicability.engine import (
+            APPLICABILITY_RULES,
+            evaluate_applicability_for_node,
+        )
+
+        records_by_code = {}
+        for record in app_records:
+            records_by_code.setdefault(record.metric_code, []).append(record)
+
+        needs_refresh = not app_records
+        for rule in APPLICABILITY_RULES:
+            rule_records = records_by_code.get(rule["metric_code"], [])
+            expected = bool(rule["condition"](entity))
+            if not rule_records or any(
+                not record.is_exception and record.is_applicable != expected
+                for record in rule_records
+            ):
+                needs_refresh = True
+                break
+
+        if needs_refresh:
             app_records = evaluate_applicability_for_node(entity, db, period.id if period else None)
 
         applicable_metric_codes = {r.metric_code for r in app_records if r.is_applicable}
