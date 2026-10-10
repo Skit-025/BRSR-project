@@ -202,6 +202,13 @@ def delete_user_by_admin(
     for a in assignments:
         a.is_active = False
 
+    # Also soft-delete and revoke any invitations for this user's email
+    from app.modules.auth.models import UserInvitation
+    user_invs = db.query(UserInvitation).filter(UserInvitation.email.ilike(target_user.email)).all()
+    for inv in user_invs:
+        inv.is_deleted = True
+        inv.status = "REVOKED"
+
     db.commit()
 
     log_admin_audit(
@@ -648,9 +655,17 @@ def create_invitation_by_admin(db: Session, admin_user: User, req) -> "UserInvit
 
 
 def list_invitations_for_admin(db: Session, admin_user: User) -> List["UserInvitation"]:
-    from app.modules.auth.models import UserInvitation
+    from app.modules.auth.models import UserInvitation, User
+    from app.modules.org.models import OrgNode
+
+    # Exclude any invitations whose target email is a deleted user
+    deleted_emails = {
+        u[0].lower() for u in db.query(User.email).filter(User.is_deleted == True).all() if u[0]
+    }
+
     if admin_user.role == "system_admin":
-        return db.query(UserInvitation).filter(UserInvitation.is_deleted == False).order_by(UserInvitation.created_at.desc()).all()
+        invs = db.query(UserInvitation).filter(UserInvitation.is_deleted == False).order_by(UserInvitation.created_at.desc()).all()
+        return [i for i in invs if i.email.lower() not in deleted_emails]
 
     target_role = None
     if admin_user.role == "group_admin":
@@ -664,10 +679,12 @@ def list_invitations_for_admin(db: Session, admin_user: User) -> List["UserInvit
 
     q = db.query(UserInvitation).filter(UserInvitation.is_deleted == False, UserInvitation.role == target_role)
     if admin_user.org_node_id:
-        from app.modules.org.models import OrgNode
         invs = q.order_by(UserInvitation.created_at.desc()).all()
-        return [i for i in invs if not i.org_node_id or is_node_descendant(db, str(admin_user.org_node_id), str(i.org_node_id))]
-    return q.filter(UserInvitation.invited_by_id == admin_user.id).all()
+        return [
+            i for i in invs
+            if i.email.lower() not in deleted_emails and (not i.org_node_id or is_node_descendant(db, str(admin_user.org_node_id), str(i.org_node_id)))
+        ]
+    return [i for i in q.filter(UserInvitation.invited_by_id == admin_user.id).all() if i.email.lower() not in deleted_emails]
 
 
 def resend_invitation(db: Session, admin_user: User, invitation_id: str) -> "UserInvitation":

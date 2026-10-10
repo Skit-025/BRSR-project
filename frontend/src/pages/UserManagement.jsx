@@ -122,7 +122,9 @@ export default function UserManagement() {
   // Fetch Scoped Users
   const { data: users = [], isLoading: usersLoading, refetch: refetchUsers } = useQuery({
     queryKey: ['admin-scoped-users', currentUser?.id],
-    staleTime: 30_000,
+    staleTime: 3_000,
+    refetchInterval: 4_000,
+    refetchOnWindowFocus: true,
     queryFn: async () => {
       if (localStorage.getItem('brsr_mock_mode') === 'true') return MOCK_USERS;
       try {
@@ -143,7 +145,9 @@ export default function UserManagement() {
   // Fetch Pending Invitations
   const { data: invitations = [], isLoading: invLoading, refetch: refetchInvitations } = useQuery({
     queryKey: ['admin-invitations', currentUser?.id],
-    staleTime: 30_000,
+    staleTime: 3_000,
+    refetchInterval: 4_000,
+    refetchOnWindowFocus: true,
     queryFn: async () => {
       if (localStorage.getItem('brsr_mock_mode') === 'true') return [];
       try {
@@ -158,7 +162,9 @@ export default function UserManagement() {
   // Fetch User Creation Requests (PENDING requests from subsidiaries)
   const { data: userRequests = [], isLoading: userReqLoading, refetch: refetchUserRequests } = useQuery({
     queryKey: ['user-creation-requests', currentUser?.id],
-    staleTime: 30_000,
+    staleTime: 3_000,
+    refetchInterval: 4_000,
+    refetchOnWindowFocus: true,
     queryFn: async () => {
       if (localStorage.getItem('brsr_mock_mode') === 'true') return [];
       try {
@@ -176,7 +182,9 @@ export default function UserManagement() {
   const { data: auditLogs = [], isLoading: auditLoading, refetch: refetchAudit } = useQuery({
     queryKey: ['admin-audit-log', currentUser?.id],
     enabled: activeTab === 'audit',
-    staleTime: 60_000,
+    staleTime: 5_000,
+    refetchInterval: 6_000,
+    refetchOnWindowFocus: true,
     queryFn: async () => {
       if (localStorage.getItem('brsr_mock_mode') === 'true') return [];
       try {
@@ -410,6 +418,7 @@ export default function UserManagement() {
     mutationFn: async ({ id, reason, admin_password }) => authApi.deactivateUser(id, reason, admin_password),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['admin-scoped-users'] });
+      qc.invalidateQueries({ queryKey: ['admin-invitations'] });
       qc.invalidateQueries({ queryKey: ['admin-audit-log'] });
       const name = deactivateTarget?.full_name || deactivateTarget?.email;
       setNotice({
@@ -429,6 +438,7 @@ export default function UserManagement() {
     mutationFn: async (id) => authApi.activateUser(id),
     onSuccess: (res, id) => {
       qc.invalidateQueries({ queryKey: ['admin-scoped-users'] });
+      qc.invalidateQueries({ queryKey: ['admin-invitations'] });
       qc.invalidateQueries({ queryKey: ['admin-audit-log'] });
       setNotice({ type: 'success', text: 'User account reactivated successfully.' });
     },
@@ -442,6 +452,7 @@ export default function UserManagement() {
     mutationFn: async ({ id, admin_password, reason }) => authApi.deleteUser(id, admin_password, reason),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['admin-scoped-users'] });
+      qc.invalidateQueries({ queryKey: ['admin-invitations'] });
       qc.invalidateQueries({ queryKey: ['admin-audit-log'] });
       const name = deleteTarget?.full_name || deleteTarget?.email;
       setNotice({
@@ -561,9 +572,26 @@ export default function UserManagement() {
     return parent ? `${node.name} (${parent.name})` : node.name;
   };
 
-  const activeUsersCount = users.filter(u => u.is_active !== false).length;
-  const pendingInvitesCount = invitations.filter(i => ['PENDING', 'SENT'].includes(i.status)).length;
-  const suspendedUsersCount = users.filter(u => u.is_active === false).length;
+  // Set of lowercase emails of active users currently in the DB
+  const activeUserEmailSet = useMemo(() => {
+    return new Set(users.filter(u => !u.is_deleted).map(u => (u.email || '').toLowerCase().trim()));
+  }, [users]);
+
+  // Exclude deleted user invitations and ensure accepted invitations strictly map to active DB users
+  const visibleInvitations = useMemo(() => {
+    return invitations.filter(inv => {
+      if (inv.is_deleted) return false;
+      const email = (inv.email || '').toLowerCase().trim();
+      if (inv.status === 'ACCEPTED') {
+        return activeUserEmailSet.has(email);
+      }
+      return true;
+    });
+  }, [invitations, activeUserEmailSet]);
+
+  const activeUsersCount = users.filter(u => u.is_active !== false && !u.is_deleted).length;
+  const pendingInvitesCount = visibleInvitations.filter(i => ['PENDING', 'SENT'].includes(i.status)).length;
+  const suspendedUsersCount = users.filter(u => u.is_active === false && !u.is_deleted).length;
 
   // Whether current user is a subsidiary_admin (request workflow) or approver
   const isSubsidiaryAdmin = currentRole === 'subsidiary_admin';
@@ -1043,14 +1071,14 @@ export default function UserManagement() {
                       Checking pending invitations...
                     </td>
                   </tr>
-                ) : invitations.length === 0 ? (
+                ) : visibleInvitations.length === 0 ? (
                   <tr>
                     <td colSpan={6} style={{ textAlign: 'center', padding: '32px', color: 'var(--text-muted)' }}>
                       No pending invitations currently active.
                     </td>
                   </tr>
                 ) : (
-                  invitations.map((inv) => {
+                  visibleInvitations.map((inv) => {
                     const roleDef = ROLE_DEFINITIONS[inv.role] || { label: inv.role, badge: 'badge-gray' };
                     return (
                       <tr key={inv.id}>
