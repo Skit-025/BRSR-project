@@ -25,7 +25,7 @@ def _parse_json_robust(content: str) -> Dict[str, Any]:
         if len(parts) > 1:
             candidate = parts[1].split("```")[0].strip()
             try:
-                return json.loads(candidate)
+                return json.loads(candidate, strict=False)
             except Exception:
                 pass
     elif "```" in text:
@@ -33,23 +33,29 @@ def _parse_json_robust(content: str) -> Dict[str, Any]:
         if len(parts) > 1:
             candidate = parts[1].split("```")[0].strip()
             try:
-                return json.loads(candidate)
+                return json.loads(candidate, strict=False)
             except Exception:
                 pass
 
     # 2. Try direct load
     try:
-        return json.loads(text)
+        return json.loads(text, strict=False)
     except Exception:
         pass
 
     # 3. Extract outermost { ... }
     m = re.search(r"(\{.*\})", text, re.DOTALL)
     if m:
+        cleaned = m.group(1)
         try:
-            return json.loads(m.group(1))
+            return json.loads(cleaned, strict=False)
         except Exception:
-            pass
+            # Fix unquoted arithmetic expressions like "key": 0.082 * 20.0
+            try:
+                fixed = re.sub(r':\s*([0-9.]+)\s*\*\s*([0-9.]+)', lambda match: f': {round(float(match.group(1)) * float(match.group(2)), 6)}', cleaned)
+                return json.loads(fixed, strict=False)
+            except Exception:
+                pass
 
     raise ValueError(f"Could not parse valid JSON from LLM response: {text[:200]}")
 
@@ -86,7 +92,7 @@ class OpenRouterProvider(BaseAIProvider):
         user_message = (
             f"You MUST return a valid JSON object populated with actual values according to this schema:\n"
             f"{json.dumps(schema_dict)}\n\n"
-            f"CRITICAL: Do NOT echo or output the schema definition, '$defs', or schema types. Output a JSON data object where the fields are populated with the answers.\n"
+            f"CRITICAL: Do NOT echo schema types or math formulas like (0.082 * 20.0). All numbers must be evaluated literal numbers (e.g. 1.64).\n"
             f"Output strictly valid JSON with no conversational text or markdown code fences outside the JSON.\n\n"
             f"Input Task:\n{prompt}"
         )
@@ -94,8 +100,9 @@ class OpenRouterProvider(BaseAIProvider):
 
         models_to_try = [
             settings.OPENROUTER_MODEL_TEXT,
+            "google/gemini-3.8-flash",
+            "google/gemini-3.5-flash",
             "openrouter/auto",
-            "openrouter/free",
         ]
         models_to_try = list(dict.fromkeys([m for m in models_to_try if m]))
 
@@ -148,11 +155,13 @@ class OpenRouterProvider(BaseAIProvider):
             }
         ]
 
-        # Prioritized free & working vision models on OpenRouter
+        # Prioritized vision models on OpenRouter (gemini-3.8-flash is ultra-fast and reliable)
         models_to_try = [
-            settings.OPENROUTER_MODEL_VISION,
+            settings.OPENROUTER_MODEL_VISION,  # google/gemini-3.8-flash (from .env)
+            "google/gemini-3.8-flash",
+            "google/gemini-3.5-flash-lite",
+            "google/gemini-3.5-flash",
             "openrouter/auto",
-            "openrouter/free",
         ]
         models_to_try = list(dict.fromkeys([m for m in models_to_try if m]))
 

@@ -32,17 +32,43 @@ export default function ProjectSummary() {
   const { data: periods = [] } = useOrgPeriods();
 
   const projectNodes = useMemo(() => {
-    return orgNodes.filter(n => n.type === 'project' || n.type === 'site');
-  }, [orgNodes]);
+    let list = orgNodes.filter(n => n.type === 'project' || n.type === 'site');
+    if (user?.role === 'project_admin') {
+      const allowedId = user.assigned_project_id || user.org_node_id;
+      if (allowedId) {
+        const filtered = list.filter(n => String(n.id) === String(allowedId) || n.code === String(allowedId));
+        if (filtered.length > 0) return filtered;
+      }
+    } else if (user?.role === 'bu_admin') {
+      const buId = user.org_node_id ? String(user.org_node_id) : null;
+      if (buId) {
+        const filtered = list.filter(n => String(n.parent_id) === buId || String(n.id) === buId);
+        if (filtered.length > 0) return filtered;
+      }
+    } else if (user?.role === 'subsidiary_admin') {
+      const subId = user.org_node_id ? String(user.org_node_id) : null;
+      if (subId) {
+        const filtered = list.filter(n => {
+          if (String(n.parent_id) === subId) return true;
+          const parentBu = orgNodes.find(b => String(b.id) === String(n.parent_id));
+          return parentBu && String(parentBu.parent_id) === subId;
+        });
+        if (filtered.length > 0) return filtered;
+      }
+    }
+    return list;
+  }, [orgNodes, user]);
 
   const [selectedProject, setSelectedProject] = useState('');
   const [selectedPeriod, setSelectedPeriod] = useState('');
 
   // Default to user's assigned node
   React.useEffect(() => {
-    if (projectNodes.length > 0 && !selectedProject) {
-      const userProj = projectNodes.find(n => n.id === user?.org_node_id);
-      setSelectedProject(userProj ? userProj.id : projectNodes[0].id);
+    if (projectNodes.length > 0) {
+      if (!selectedProject || !projectNodes.some(n => n.id === selectedProject)) {
+        const userProj = projectNodes.find(n => n.id === user?.org_node_id || n.id === user?.assigned_project_id);
+        setSelectedProject(userProj ? userProj.id : projectNodes[0].id);
+      }
     }
   }, [projectNodes, selectedProject, user]);
 
@@ -169,18 +195,29 @@ export default function ProjectSummary() {
 
         {/* Selectors */}
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-          <select
-            value={selectedProject}
-            onChange={e => setSelectedProject(e.target.value)}
-            style={{
+          {user?.role === 'project_admin' || projectNodes.length <= 1 ? (
+            <div style={{
               padding: '9px 14px', borderRadius: 8, background: 'var(--bg-elevated)',
-              border: '1px solid var(--border-default)', color: 'var(--text-primary)', fontSize: 13, fontWeight: 600
-            }}
-          >
-            {projectNodes.map(n => (
-              <option key={n.id} value={n.id}>{n.name}</option>
-            ))}
-          </select>
+              border: '1px solid var(--border-default)', color: 'var(--text-primary)', fontSize: 13, fontWeight: 600,
+              display: 'flex', alignItems: 'center', gap: 7
+            }}>
+              <Building2 size={15} color="#059669" />
+              <span>{activeNode?.name || 'Assigned Project Site'}</span>
+            </div>
+          ) : (
+            <select
+              value={selectedProject}
+              onChange={e => setSelectedProject(e.target.value)}
+              style={{
+                padding: '9px 14px', borderRadius: 8, background: 'var(--bg-elevated)',
+                border: '1px solid var(--border-default)', color: 'var(--text-primary)', fontSize: 13, fontWeight: 600
+              }}
+            >
+              {projectNodes.map(n => (
+                <option key={n.id} value={n.id}>{n.name}</option>
+              ))}
+            </select>
+          )}
 
           <select
             value={selectedPeriod}

@@ -47,7 +47,7 @@ class Settings(BaseSettings):
     GEMINI_API_KEY: Optional[str] = None
     OPENROUTER_API_KEY: Optional[str] = None
     OPENROUTER_MODEL_TEXT: str = "meta-llama/llama-3.1-8b-instruct"
-    OPENROUTER_MODEL_VISION: str = "google/gemini-1.5-flash"
+    OPENROUTER_MODEL_VISION: str = "google/gemini-3.8-flash"
     AI_FALLBACK_TO_MOCK: bool = True
     AI_AUTO_FALLBACK_ON_ERROR: bool = True
     AI_MODEL_VISION: str = "models/gemini-3.8-flash"

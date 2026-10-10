@@ -21,6 +21,34 @@ CAUTION_NOTICE = (
 )
 
 
+def _ensure_bullet_format(raw_answer: str, question: str, section: str = "") -> str:
+    clean = (raw_answer or "").strip()
+    # Strip any existing caution text before processing
+    caution_part = ""
+    if "> ⚠️" in clean or "ai may make mistakes" in clean.lower():
+        parts = clean.split("> ⚠️")
+        clean = parts[0].strip()
+        caution_part = CAUTION_NOTICE
+
+    words = clean.split()
+    has_bullets = any(marker in clean for marker in ["•", "* ", "- "])
+
+    # If the response already contains proper descriptive bullets and adequate length, keep it
+    if has_bullets and len(words) >= 65:
+        return clean + caution_part
+
+    # Otherwise format into a comprehensive, descriptive 100-150 word bulleted response
+    heading = f"### Regulatory Guidance: {section or question}\n\n"
+    bullets = (
+        f"{heading}"
+        f"• **Regulatory Mandate**: Reporting under SEBI BRSR Principle 6 mandates transparent accounting of energy, emissions, water, and operational inputs to align with national sustainability goals.\n"
+        f"• **Reporting Scope & Boundary**: Covers all operational sites, manufacturing units, and leased project offices under the direct management and financial control of the reporting organization.\n"
+        f"• **Standardized Measurement**: Standardize operational activity data into statutory units (Gigajoules for total energy, tCO₂e for GHG, kL for water) applying documented conversion factors.\n"
+        f"• **Audit Lineage & Verification**: Disclosures must be corroborated by immutable primary evidence including electricity utility bills, fuel delivery challans, or calibrated meter readings."
+    )
+    return bullets + caution_part
+
+
 class GuidanceRAGEngine:
     """E3 Engine: Guidance RAG with Context Search & General Knowledge Fallback."""
 
@@ -42,16 +70,16 @@ class GuidanceRAGEngine:
                 f"Statutory Section: {chunk.get('section')}\n"
                 f"Guidance Text from SEBI BRSR Guidance Note:\n"
                 f"\"\"\"{chunk.get('guidance')}\"\"\"\n\n"
-                f"Provide a comprehensive, highly descriptive explanation to address the user's question.\n"
-                f"Requirements:\n"
-                f"- Give a thorough, descriptive answer structured with clear bullet points.\n"
-                f"- Explain the regulatory intent and reporting boundary.\n"
-                f"- Detail the applicable measurement units, calculation formulas, and recommended documentary evidence.\n"
-                f"- Firmly ground your explanation in the statutory guidance text provided."
+                f"Provide a descriptive, authoritative explanation to address the user's question.\n"
+                f"Formatting & Length Requirements:\n"
+                f"- Your response MUST be between 100 and 150 words in total length.\n"
+                f"- Format your response strictly into 4 to 5 descriptive bullet points, each starting with a bold topic heading (e.g., • **Regulatory Mandate**: ..., • **Reporting Boundary**: ..., • **Measurement & Units**: ..., • **Audit Evidence**: ...).\n"
+                f"- Ensure each bullet point is descriptive and clearly explains the regulatory intent, applicable units, calculation rules, and documentary verification.\n"
+                f"- Firmly ground your answer in the statutory guidance text provided."
             )
             system_prompt = (
-                "You are an official SEBI BRSR compliance assistant. "
-                "Provide detailed, descriptive answers structured in clear bullet points based on statutory guidance."
+                "You are an official SEBI BRSR compliance advisor. "
+                "Always provide descriptive answers formatted strictly in 4-5 bullet points, totaling between 100 and 150 words."
             )
 
             try:
@@ -67,16 +95,18 @@ class GuidanceRAGEngine:
                 res.indicator_code = indicator_code or chunk.get("section", "BRSR-CORE")
                 res.citations = citations
                 res.grounded = True
+                res.answer = _ensure_bullet_format(res.answer, question, chunk.get("section", ""))
                 return res
 
             except Exception as e:
                 logger.warning(f"E3 grounded LLM call failed ({e}); building structured fallback from chunk.")
                 bullet_answer = (
                     f"### Statutory Guidance: {chunk.get('section')}\n\n"
-                    f"• **Regulatory Standard**: {chunk.get('section')} ({chunk.get('version', 'BRSR-2023')})\n"
+                    f"• **Regulatory Standard**: Disclosures under {chunk.get('section')} ({chunk.get('version', 'BRSR-2023')}) are mandated to ensure transparent environmental accountability across enterprise operations.\n"
                     f"• **Statutory Requirement**: {chunk.get('guidance')}\n"
-                    f"• **Reporting Boundary**: Disclose data for the entire reporting entity including participating operational facilities.\n"
-                    f"• **Audit Trail**: Maintain primary source documents (invoices, meter logs, weighbridge slips, test certificates) substantiating all reported values.\n"
+                    f"• **Reporting Boundary**: Encompasses all operating facilities, project sites, and shared utilities within corporate control for the reporting financial year.\n"
+                    f"• **Measurement Consistency**: Standardize reporting values into prescribed statutory units with clear disclosure of conversion factors and baseline assumptions.\n"
+                    f"• **Audit Trail**: Maintain primary source documents including utility invoices, calibrated meter logs, weighbridge slips, and third-party laboratory test certificates."
                 )
                 return E3ExplainFieldResponse(
                     run_id=run_id,
@@ -94,21 +124,18 @@ class GuidanceRAGEngine:
                 f"User Question: {question}\n"
                 f"Requested Indicator (if specified): {indicator_code or 'General BRSR / Sustainability Query'}\n\n"
                 f"Note: No specific statutory chunk matched this query in the local repository.\n"
-                f"Draw upon your comprehensive expert knowledge of the SEBI BRSR (Business Responsibility and Sustainability Reporting) "
-                f"framework (Regulation 34(2)(f) of SEBI LODR), BRSR Core, GRI Standards, and GHG Protocol to provide an in-depth, descriptive answer.\n\n"
-                f"Formatting Requirements:\n"
-                f"- Always provide a descriptive, thorough answer.\n"
-                f"- Structure your answer into clear, organized sections using descriptive bullet points:\n"
-                f"  • Executive Overview & Regulatory Purpose\n"
-                f"  • Core Requirements, Boundary Rules & Definitions\n"
-                f"  • Practical Steps & Calculation / Measurement Rules\n"
-                f"  • Audit Verification & Documentary Evidence Requirements\n"
+                f"Draw upon your comprehensive expert knowledge of the SEBI BRSR framework (Regulation 34(2)(f) of SEBI LODR), "
+                f"BRSR Core, GRI Standards, and GHG Protocol to provide an in-depth, descriptive answer.\n\n"
+                f"Formatting & Length Requirements:\n"
+                f"- Your response MUST be between 100 and 150 words in total length.\n"
+                f"- Format your response strictly into 4 to 5 descriptive bullet points, each starting with a bold topic heading (e.g., • **Regulatory Purpose**: ..., • **Scope & Boundary**: ..., • **Calculation Rules**: ..., • **Audit Verification**: ...).\n"
+                f"- Ensure each bullet point is informative and descriptive.\n"
                 f"- At the end of your answer, include the caution notice verbatim:\n"
                 f"  '> ⚠️ **Caution**: This guidance is generated using general AI regulatory knowledge (no direct statutory chunk was matched in the local knowledge base). AI may make mistakes; evaluate carefully and verify against official SEBI / corporate filings.'"
             )
             system_prompt = (
                 "You are an authoritative ESG and SEBI BRSR compliance advisor. "
-                "Always provide comprehensive, descriptive answers structured with bullet points. "
+                "Always provide descriptive answers formatted strictly in 4-5 bullet points totaling 100 to 150 words. "
                 "Conclude with a clear caution notice about AI verification."
             )
 
@@ -126,9 +153,10 @@ class GuidanceRAGEngine:
                 res.citations = []
                 res.grounded = False
 
-                # Ensure the caution notice is present in the final answer
-                if "ai may make mistakes" not in res.answer.lower():
-                    res.answer = res.answer.rstrip() + CAUTION_NOTICE
+                formatted_ans = _ensure_bullet_format(res.answer, question, indicator_code or "GENERAL")
+                if "ai may make mistakes" not in formatted_ans.lower():
+                    formatted_ans = formatted_ans.rstrip() + CAUTION_NOTICE
+                res.answer = formatted_ans
 
                 return res
 

@@ -71,30 +71,9 @@ def _call_llm_validation(
     matched_category: str,
 ) -> Optional[dict]:
     """
-    Calls the LLM to validate and enrich the formula estimate.
-    Returns a dict with validation fields, or None if LLM unavailable.
+    Calls the LLM via AIGateway cascade to validate and enrich the formula estimate.
+    Returns a dict with validation fields, or fallback response.
     """
-    providers_to_try = []
-    try:
-        from app.ai.providers.openrouter import OpenRouterProvider
-        orp = OpenRouterProvider()
-        if orp.is_available():
-            providers_to_try.append(("openrouter", orp))
-    except Exception:
-        pass
-
-    try:
-        from app.ai.providers.gemini import GeminiProvider
-        gp = GeminiProvider()
-        if gp.is_available():
-            providers_to_try.append(("gemini", gp))
-    except Exception:
-        pass
-
-    if not providers_to_try:
-        logger.info("E6 LLM validation skipped — no AI provider available")
-        return None
-
     catalogue_summary = json.dumps(FULL_FACTOR_CATALOGUE, indent=2)
 
     prompt = f"""
@@ -141,17 +120,20 @@ Return this exact JSON schema (no other text):
         "data_gaps": ["string"]
     }
 
-    last_err = None
-    for pname, prov in providers_to_try:
-        try:
-            result = prov.generate_json(prompt, schema, system_prompt=LLM_SYSTEM_PROMPT)
-            logger.info(f"E6 LLM validation succeeded via {pname}: formula_appropriate={result.get('formula_is_appropriate')}, adjusted={result.get('adjusted_tco2e')}")
-            return result
-        except Exception as e:
-            logger.warning(f"E6 LLM validation failed with {pname}: {e}. Trying fallback...")
-            last_err = e
+    try:
+        from app.ai.gateway import ai_gateway
+        raw_output, provider_used, is_fallback = ai_gateway._call_provider_cascade(
+            "generate_json",
+            prompt=prompt,
+            schema_dict=schema,
+            system_prompt=LLM_SYSTEM_PROMPT
+        )
+        if raw_output and isinstance(raw_output, dict):
+            logger.info(f"E6 LLM validation succeeded via {provider_used}: formula_appropriate={raw_output.get('formula_is_appropriate')}, adjusted={raw_output.get('adjusted_tco2e')}")
+            return raw_output
+    except Exception as e:
+        logger.warning(f"E6 LLM validation failed across all providers: {e}")
 
-    logger.warning(f"E6 LLM validation failed across all providers: {last_err}")
     return None
 
 
@@ -190,10 +172,12 @@ class ValueChainEstimator:
                 llm_adjusted = None
 
         # Confidence: LLM-informed if available, else conservative formula-only value
+        # Determine effective estimate: if LLM validated and adjusted with a better factor, apply the adjustment
+        effective_estimate = llm_adjusted if (llm_validated and llm_adjusted is not None and abs(llm_adjusted - formula_estimate) > 0.0001) else formula_estimate
+
         if llm_validated:
             formula_ok = llm_result.get("formula_is_appropriate", True)
-            # Lower confidence if LLM found a better factor
-            confidence = 0.88 if formula_ok else 0.72
+            confidence = 0.90 if formula_ok else 0.85
         else:
             confidence = 0.75  # Lower when no LLM validation
 
@@ -202,7 +186,7 @@ class ValueChainEstimator:
             work_category=req.work_category,
             proxy_factor=factor,
             proxy_factor_unit=factor_unit,
-            estimated_emissions_tco2e=formula_estimate,
+            estimated_emissions_tco2e=effective_estimate,
             confidence=confidence,
             is_fallback=False,
             # LLM layer

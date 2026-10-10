@@ -47,6 +47,23 @@ class MockFallbackProvider(BaseAIProvider):
                 ],
                 "completeness_score": 0.85
             }
+        elif "scope 3" in prompt.lower() or "value chain" in prompt.lower() or "proxy" in prompt.lower() or "validation" in prompt.lower():
+            return {
+                "validated": True,
+                "formula_is_appropriate": True,
+                "adjusted_tco2e": 0.15,
+                "adjusted_factor": 0.0150,
+                "adjusted_factor_unit": "tCO₂e/INR Lakh",
+                "suggested_method": "spend-based",
+                "confidence_note": "Spend-based proxy factor aligned with India GHG Program and SEBI BRSR Core guidelines.",
+                "reasoning": "The classified activity matches standard infrastructure supply chain expenditure. The spend-based proxy factor from India GHG Program is appropriate in the absence of supplier-specific primary activity data. Standard Scope 3 Category 1 (Purchased Goods and Services) guidance applies.",
+                "brsr_reference": "SEBI BRSR Principle 6 (Essential Indicator 1) & GHG Protocol Corporate Value Chain (Scope 3) Standard Category 1",
+                "data_gaps": [
+                    "Supplier-specific primary electricity/fuel activity data",
+                    "Physical material quantities (cement/steel tonnage) for hybrid activity-based calculation",
+                    "Tier-1 vendor ESG audit certificates"
+                ]
+            }
         elif "narrative" in prompt.lower():
             return {
                 "draft": "In FY 2025-26, our total Scope 1 emissions were 18,650 tCO2e, with zero reported high-severity environmental infractions. All data reflects verified meter reads across participating business units.",

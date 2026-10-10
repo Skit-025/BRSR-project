@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Trash2, FileText, Calendar, User, Search, RefreshCw, AlertCircle,
-  RotateCcw, Shield, Check, Clock, CheckCircle2, X, Building2, Layers
+  RotateCcw, Shield, Check, Clock, CheckCircle2, X, Building2, Layers, Eye
 } from 'lucide-react';
 import { evidenceApi, orgApi } from '../api/client';
 import { useAuth } from '../context/AuthContext';
@@ -17,6 +17,7 @@ export default function Trash() {
   const [restoreTarget, setRestoreTarget] = useState(null);
   const [restoreReason, setRestoreReason] = useState('Restoration to active ESG ledger');
   const [orgRestoreTarget, setOrgRestoreTarget] = useState(null);
+  const [selectedEvidence, setSelectedEvidence] = useState(null);
   const [notice, setNotice] = useState(null);
 
   // System Admin Clean Trash State
@@ -382,10 +383,22 @@ export default function Trash() {
             </thead>
             <tbody>
               {filteredItems.map(item => (
-                <tr key={item.id} style={{ borderBottom: '1px solid #F1F5F9', transition: 'background 0.15s' }}>
+                <tr
+                  key={item.id}
+                  onClick={() => setSelectedEvidence(item)}
+                  style={{
+                    borderBottom: '1px solid #F1F5F9',
+                    transition: 'background 0.15s',
+                    cursor: 'pointer'
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.backgroundColor = '#F8FAFC'}
+                  onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+                >
                   {/* Evidence Display ID */}
                   <td style={{ padding: '12px 16px', fontFamily: 'monospace', color: '#2563eb', fontWeight: 600, fontSize: 12 }}>
-                    {item.evidence_display_id || item.id.substring(0, 8)}
+                    <span style={{ textDecoration: 'underline', textUnderlineOffset: 3 }} title="Click to view full details">
+                      {item.evidence_display_id || item.id.substring(0, 8)}
+                    </span>
                   </td>
 
                   {/* Document Name */}
@@ -444,12 +457,13 @@ export default function Trash() {
                     </div>
                   </td>
 
-                  {/* Reason */}
-                  <td style={{ padding: '12px 16px', maxWidth: 220 }}>
+                  {/* Reason - scrollable container */}
+                  <td style={{ padding: '12px 16px', maxWidth: 240, verticalAlign: 'top' }}>
                     <div
                       style={{
-                        color: '#334155', fontSize: 12, lineHeight: 1.4,
-                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'
+                        color: '#334155', fontSize: 12, lineHeight: 1.45,
+                        maxHeight: 68, overflowY: 'auto', paddingRight: 4,
+                        wordBreak: 'break-word', whiteSpace: 'normal'
                       }}
                       title={item.deletion_reason}
                     >
@@ -465,15 +479,33 @@ export default function Trash() {
                     </div>
                   </td>
 
-                  {/* Action: Restore */}
+                  {/* Action: Details & Restore */}
                   <td style={{ padding: '12px 16px', textAlign: 'right', whiteSpace: 'nowrap' }}>
                     <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      style={{
+                        color: '#2563eb', borderColor: 'rgba(37, 99, 235, 0.3)',
+                        display: 'inline-flex', alignItems: 'center', gap: 5, padding: '4px 9px', fontSize: 12, marginRight: 6
+                      }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedEvidence(item);
+                      }}
+                      title="Inspect full evidence details"
+                    >
+                      <Eye size={12} />
+                      Details
+                    </button>
+                    <button
+                      type="button"
                       className="btn btn-secondary btn-sm"
                       style={{
                         color: '#059669', borderColor: 'rgba(5, 150, 105, 0.3)',
                         display: 'inline-flex', alignItems: 'center', gap: 5, padding: '4px 10px', fontSize: 12
                       }}
-                      onClick={() => {
+                      onClick={(e) => {
+                        e.stopPropagation();
                         setRestoreTarget(item);
                         setRestoreReason('Restoration to active ESG ledger');
                       }}
@@ -760,6 +792,154 @@ export default function Trash() {
               </button>
             </div>
           </form>
+        </Modal>
+      )}
+
+      {/* ── Inspection Modal: Deleted Evidence Details ── */}
+      {selectedEvidence && (
+        <Modal
+          isOpen={Boolean(selectedEvidence)}
+          onClose={() => setSelectedEvidence(null)}
+          maxWidth="680px"
+        >
+          <div className="modal-header">
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div className="modal-header-icon" style={{ background: 'rgba(239, 68, 68, 0.12)' }}>
+                <Trash2 size={18} color="#ef4444" />
+              </div>
+              <div>
+                <h3 style={{ fontSize: 16, color: '#fff', margin: 0 }}>Deleted Evidence Details</h3>
+                <p style={{ fontSize: 12, color: 'var(--text-secondary)', margin: '2px 0 0 0' }}>
+                  Lineage audit information &amp; deletion justification
+                </p>
+              </div>
+            </div>
+            <button className="icon-btn" onClick={() => setSelectedEvidence(null)}>
+              <X size={18} />
+            </button>
+          </div>
+
+          <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            {/* Top Identity banner */}
+            <div style={{ padding: '12px 16px', background: '#F8FAFC', borderRadius: 8, border: '1px solid #E2E8F0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
+              <div>
+                <div style={{ fontSize: 11, color: '#64748B', fontWeight: 600, textTransform: 'uppercase' }}>Evidence Display ID</div>
+                <div style={{ fontFamily: 'monospace', fontSize: 14, fontWeight: 700, color: '#2563eb', marginTop: 2 }}>
+                  {selectedEvidence.evidence_display_id || selectedEvidence.id}
+                </div>
+              </div>
+              <div>
+                <div style={{ fontSize: 11, color: '#64748B', fontWeight: 600, textTransform: 'uppercase' }}>Category / Type</div>
+                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: '#EEF2FF', color: '#4F46E5', fontWeight: 700, fontSize: 12, padding: '3px 8px', borderRadius: 4, marginTop: 2 }}>
+                  <FileText size={12} />
+                  {selectedEvidence.bill_type || selectedEvidence.doc_type || 'OTHER'}
+                </div>
+              </div>
+              <div>
+                <div style={{ fontSize: 11, color: '#64748B', fontWeight: 600, textTransform: 'uppercase' }}>Status</div>
+                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: '#FEE2E2', color: '#EF4444', fontWeight: 700, fontSize: 12, padding: '3px 8px', borderRadius: 4, marginTop: 2 }}>
+                  <Trash2 size={12} />
+                  Soft Deleted
+                </div>
+              </div>
+            </div>
+
+            {/* Document metadata table/grid */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <div style={{ padding: '10px 14px', borderRadius: 8, background: '#FFF', border: '1px solid #E2E8F0' }}>
+                <div style={{ fontSize: 11, color: '#94A3B8', fontWeight: 600, textTransform: 'uppercase' }}>Document Name</div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: '#0F172A', marginTop: 3, wordBreak: 'break-word' }}>
+                  {selectedEvidence.original_name}
+                </div>
+              </div>
+              <div style={{ padding: '10px 14px', borderRadius: 8, background: '#FFF', border: '1px solid #E2E8F0' }}>
+                <div style={{ fontSize: 11, color: '#94A3B8', fontWeight: 600, textTransform: 'uppercase' }}>Assigned Project / Site</div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: '#0F172A', marginTop: 3 }}>
+                  {selectedEvidence.project_name || selectedEvidence.project_id || 'Group-Wide'}
+                </div>
+              </div>
+              <div style={{ padding: '10px 14px', borderRadius: 8, background: '#FFF', border: '1px solid #E2E8F0' }}>
+                <div style={{ fontSize: 11, color: '#94A3B8', fontWeight: 600, textTransform: 'uppercase' }}>Subsidiary / BU</div>
+                <div style={{ fontSize: 13, fontWeight: 500, color: '#334155', marginTop: 3 }}>
+                  {selectedEvidence.subsidiary_name || selectedEvidence.bu_name || 'MEIL Enterprise'}
+                </div>
+              </div>
+              <div style={{ padding: '10px 14px', borderRadius: 8, background: '#FFF', border: '1px solid #E2E8F0' }}>
+                <div style={{ fontSize: 11, color: '#94A3B8', fontWeight: 600, textTransform: 'uppercase' }}>SHA256 Fingerprint</div>
+                <div style={{ fontFamily: 'monospace', fontSize: 11, color: '#64748B', marginTop: 3, wordBreak: 'break-all' }}>
+                  {selectedEvidence.sha256 || '—'}
+                </div>
+              </div>
+            </div>
+
+            {/* Deletion Lineage Box - with scrollable full reason! */}
+            <div style={{ padding: '14px 16px', borderRadius: 8, background: '#FEF2F2', border: '1px solid #FECACA' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700, fontSize: 13, color: '#991B1B' }}>
+                  <AlertCircle size={15} color="#DC2626" />
+                  Deletion Justification &amp; Audit Lineage
+                </div>
+                <div style={{ fontSize: 11, color: '#B91C1C' }}>
+                  {selectedEvidence.deleted_at ? new Date(selectedEvidence.deleted_at).toLocaleString() : '—'}
+                </div>
+              </div>
+              <div style={{
+                maxHeight: 140, overflowY: 'auto', background: '#FFFFFF', padding: '10px 12px',
+                borderRadius: 6, border: '1px solid #FCA5A5', fontSize: 13, color: '#334155',
+                lineHeight: 1.5, wordBreak: 'break-word', whiteSpace: 'pre-wrap'
+              }}>
+                {selectedEvidence.deletion_reason || 'No deletion reason recorded.'}
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8, fontSize: 12, color: '#7F1D1D' }}>
+                <span>Deleted by:</span>
+                <strong>{selectedEvidence.deleted_by_name || 'Administrator'}</strong>
+                <span style={{ textTransform: 'uppercase', fontSize: 10, background: '#FEE2E2', padding: '1px 6px', borderRadius: 4, fontWeight: 700 }}>
+                  {selectedEvidence.deleted_by_role || 'User'}
+                </span>
+              </div>
+            </div>
+
+            {/* Extracted Metadata if present */}
+            {selectedEvidence.extracted_data && Object.keys(selectedEvidence.extracted_data).length > 0 && (
+              <div style={{ padding: '12px 14px', borderRadius: 8, background: '#F8FAFC', border: '1px solid #E2E8F0' }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: '#0F172A', marginBottom: 8 }}>
+                  Extracted Audit Values
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 8 }}>
+                  {Object.entries(selectedEvidence.extracted_data).map(([k, v]) => (
+                    <div key={k} style={{ padding: '6px 10px', background: '#FFF', borderRadius: 6, border: '1px solid #E2E8F0' }}>
+                      <div style={{ fontSize: 10, color: '#64748B', textTransform: 'uppercase' }}>{k.replace(/_/g, ' ')}</div>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: '#0F172A' }}>{String(v)}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="modal-actions" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 6 }}>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => setSelectedEvidence(null)}
+              >
+                Close
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                style={{ background: '#059669', borderColor: '#059669', display: 'flex', alignItems: 'center', gap: 6 }}
+                onClick={() => {
+                  const ev = selectedEvidence;
+                  setSelectedEvidence(null);
+                  setRestoreTarget(ev);
+                  setRestoreReason('Restoration to active ESG ledger');
+                }}
+              >
+                <RotateCcw size={14} />
+                Restore This Document
+              </button>
+            </div>
+          </div>
         </Modal>
       )}
     </div>

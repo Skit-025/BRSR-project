@@ -103,7 +103,7 @@ class E3ExplainFieldRequest(BaseModel):
 class E3ExplainFieldResponse(BaseModel):
     run_id: str = ""
     indicator_code: str = ""
-    answer: str
+    answer: str = Field(..., description="Comprehensive descriptive explanation of 100 to 150 words structured into 4 to 5 bullet points starting with bold headers (• **Header**: details)")
     citations: List[Citation] = Field(default_factory=list)
     grounded: bool = True
     is_fallback: bool = False
