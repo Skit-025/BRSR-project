@@ -272,9 +272,14 @@ export const evidenceApi = {
   delete: (id, password, reason) => api.delete(`/evidence/${id}`, { data: { password, reason } }),
   cleanTrash: (adminPassword) => api.post('/evidence/trash/clean', { admin_password: adminPassword }),
   link: (data) => api.post('/evidence/link', data),
-  extract: (id, docTypeHint) =>
+  extract: (id, docTypeHint, targetMetric, targetUnit, metricName) =>
     api.post(`/evidence/${id}/extract`, null, {
-      params: docTypeHint ? { doc_type_hint: docTypeHint } : {},
+      params: {
+        ...(docTypeHint ? { doc_type_hint: docTypeHint } : {}),
+        ...(targetMetric ? { target_metric: targetMetric } : {}),
+        ...(targetUnit ? { target_unit: targetUnit } : {}),
+        ...(metricName ? { metric_name: metricName } : {}),
+      },
     }),
 };
 

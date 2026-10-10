@@ -192,7 +192,10 @@ function EvidenceAttachPanel({
     try {
       const res = await evidenceApi.extract(
         pendingEvidence.id,
-        (stickyDocType || "Bill") === "Bill" ? pendingEvidence.billType : "LAB_REPORT"
+        (stickyDocType || "Bill") === "Bill" ? pendingEvidence.billType : "LAB_REPORT",
+        metricCode,
+        unit,
+        metricName
       );
 
       if ((stickyDocType || "Bill") === "Report") {
@@ -205,7 +208,7 @@ function EvidenceAttachPanel({
           setExtractedField(matched);
           setEditedValue(String(matched.value));
         } else {
-          setConfirmedSuccess("✓ Document stored. No numeric values detected — please enter value manually.");
+          setConfirmedSuccess("✓ Document stored. No numeric values detected for this field — please enter value manually.");
           setPendingEvidence(null);
         }
       }
@@ -227,7 +230,10 @@ function EvidenceAttachPanel({
     const finalVal = isEditingValue ? editedValue : extractedField?.value;
     if (finalVal !== undefined && finalVal !== null && finalVal !== "") {
       onValueConfirmed?.(finalVal);
-      setConfirmedSuccess(`✓ Inserted ${finalVal} ${extractedField?.unit || unit || ""} into ESG field from ${pendingEvidence?.displayId}`);
+      const conversionNote = extractedField?.metadata?.converted_by_llm
+        ? ` (converted from ${extractedField.metadata.original_value} ${extractedField.metadata.original_unit} via chat model)`
+        : "";
+      setConfirmedSuccess(`✓ Inserted ${finalVal} ${extractedField?.unit || unit || ""} into ESG field from ${pendingEvidence?.displayId}${conversionNote}`);
     }
     setPendingEvidence(null);
     setExtractedField(null);
@@ -477,6 +483,29 @@ function EvidenceAttachPanel({
               </span>
             )}
           </div>
+
+          {/* Unit verification / conversion indicator */}
+          {extractedField.metadata?.converted_by_llm ? (
+            <div style={{ background: "#fef3c7", border: "1px solid #fde68a", padding: "6px 10px", borderRadius: 6, fontSize: 11, color: "#92400e", marginBottom: 8 }}>
+              <div style={{ fontWeight: 700, display: "flex", alignItems: "center", gap: 4 }}>
+                <Sparkles size={12} color="#d97706" />
+                Unit Converted via Chat Model
+              </div>
+              <div style={{ marginTop: 2 }}>
+                Extracted: {extractedField.metadata.original_value} {extractedField.metadata.original_unit} ➔ Converted to: {extractedField.value} {extractedField.unit}
+              </div>
+              {extractedField.metadata.conversion_formula && (
+                <div style={{ fontStyle: "italic", fontSize: 10.5, color: "#b45309", marginTop: 2 }}>
+                  Formula: {extractedField.metadata.conversion_formula}
+                </div>
+              )}
+            </div>
+          ) : (
+            <div style={{ background: "#ecfdf5", border: "1px solid #a7f3d0", padding: "4px 8px", borderRadius: 6, fontSize: 11, color: "#065f46", marginBottom: 8, display: "flex", alignItems: "center", gap: 5 }}>
+              <CheckCircle2 size={12} color="#059669" />
+              <span>Original E1 Engine verified — unit matches required field ({extractedField.unit || unit}).</span>
+            </div>
+          )}
 
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
             {!isEditingValue ? (

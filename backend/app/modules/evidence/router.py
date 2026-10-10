@@ -1,4 +1,4 @@
-from typing import Optional, List
+from typing import Optional, List, Tuple
 import logging
 from pydantic import BaseModel
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, status, Response
@@ -285,14 +285,127 @@ def get_evidence_metadata(
 
     return evidence
 
+def are_units_equivalent(u1: Optional[str], u2: Optional[str]) -> bool:
+    """Checks whether two unit strings are equivalent or synonyms."""
+    if not u1 or not u2:
+        return True
+    n1 = u1.strip().lower().replace(" ", "").replace("_", "")
+    n2 = u2.strip().lower().replace(" ", "").replace("_", "")
+    if n1 == n2:
+        return True
+    SYNONYM_GROUPS = [
+        {"kwh", "units", "unit", "kilowatthour", "kilowatthours"},
+        {"mwh", "megawatthour", "megawatthours"},
+        {"gj", "gigajoule", "gigajoules"},
+        {"l", "litre", "litres", "liter", "liters"},
+        {"kl", "kilolitre", "kilolitres", "kiloliter", "kiloliters", "m3", "cum", "cubicmeter", "cubicmeters"},
+        {"mt", "t", "tonne", "tonnes", "ton", "tons", "metrictonne", "metrictonnes"},
+        {"kg", "kilogram", "kilograms"},
+        {"inr", "rs", "rupees", "inr."},
+    ]
+    for group in SYNONYM_GROUPS:
+        if n1 in group and n2 in group:
+            return True
+    return False
+
+
+def get_esg_field_category(code: str, name: str) -> str:
+    """Intelligently classifies what ESG field the OCR is being performed for."""
+    combined = (str(code or "") + " " + str(name or "")).lower()
+    if any(k in combined for k in ["energy-001", "electr", "power", "grid", "discom", "kwh", "mwh"]):
+        return "electricity"
+    if any(k in combined for k in ["energy-002", "energy-003", "fuel", "diesel", "petrol", "hsd", "coal", "gasoline", "lpg"]):
+        return "fuel"
+    if any(k in combined for k in ["water", "jal", "sewerage", "h2o", "kl", "m3"]):
+        return "water"
+    if any(k in combined for k in ["waste", "scrap", "spcb", "manifest", "disposal"]):
+        return "waste"
+    if any(k in combined for k in ["safe", "injury", "lti", "incident", "man-hour"]):
+        return "safety"
+    if any(k in combined for k in ["gas", "png", "natural gas", "scm"]):
+        return "gas"
+    return "other"
+
+
+def convert_unit_via_chat_model(value: float, from_unit: str, to_unit: str, metric_name: str = "") -> Tuple[float, str, str]:
+    """
+    Calls the text LLM / chat model to convert between units when the OCR extracted unit does not match the required unit.
+    Falls back to deterministic conversion in app.modules.calc.units if the chat model is unreachable.
+    Returns: (converted_value, formula_or_explanation, provider_name)
+    """
+    from decimal import Decimal
+    from app.ai.gateway import ai_gateway
+
+    prompt = (
+        f"You are an expert scientific and ESG unit conversion specialist.\n"
+        f"Convert the following measured quantity:\n"
+        f"- Value: {value}\n"
+        f"- Source Unit: {from_unit}\n"
+        f"- Required Target Unit: {to_unit}\n"
+        f"- Metric Context: {metric_name or 'ESG Parameter'}\n\n"
+        f"Calculate the exact converted value in {to_unit}.\n"
+        f"Return ONLY valid JSON matching this schema:\n"
+        f"{{\n"
+        f'  "converted_value": <float>,\n'
+        f'  "conversion_factor": "<string or float>",\n'
+        f'  "formula": "<concise description of conversion factor/equation>",\n'
+        f'  "explanation": "<1 short sentence explanation>"\n'
+        f"}}"
+    )
+
+    schema = {
+        "type": "object",
+        "properties": {
+            "converted_value": {"type": "number"},
+            "conversion_factor": {"type": "string"},
+            "formula": {"type": "string"},
+            "explanation": {"type": "string"}
+        },
+        "required": ["converted_value"]
+    }
+
+    try:
+        raw_result, provider_used, is_mock = ai_gateway._call_provider_cascade(
+            "generate_json",
+            prompt=prompt,
+            schema_dict=schema
+        )
+        if not is_mock and raw_result and raw_result.get("converted_value") is not None:
+            cval = float(raw_result["converted_value"])
+            formula = raw_result.get("formula") or f"{value} {from_unit} = {cval} {to_unit}"
+            return cval, formula, f"chat_llm ({provider_used})"
+    except Exception as exc:
+        logger.warning(f"Chat model unit conversion failed ({exc}), falling back to deterministic calculation.")
+
+    # Deterministic fallback conversion
+    try:
+        from app.modules.calc.units import convert_unit
+        c_dec = convert_unit(Decimal(str(value)), from_unit, to_unit)
+        cval = float(c_dec)
+        formula = f"{value} {from_unit} -> {cval} {to_unit} (standard conversion factor)"
+        return cval, formula, "deterministic_calc"
+    except Exception as exc2:
+        logger.warning(f"Deterministic unit conversion fallback failed: {exc2}")
+        return value, f"Unchanged: conversion from {from_unit} to {to_unit} not supported", "none"
+
+
 @router.post("/{evidence_id}/extract", response_model=List[ExtractedFieldSuggestion])
 def extract_from_existing_evidence(
     evidence_id: str,
     doc_type_hint: Optional[str] = None,
+    target_metric: Optional[str] = None,
+    target_unit: Optional[str] = None,
+    metric_name: Optional[str] = None,
     current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db)
 ):
-    """Re-runs or inspects AI Engine E1 OCR on an existing evidence document."""
+    """
+    Re-runs AI Engine E1 OCR on an existing evidence document.
+    - Uses the original E1 engine for OCR and field extraction.
+    - Intelligently analyzes what field OCR is running on.
+    - Verifies what data is required and rejects random/unrelated collected data.
+    - Verifies the required unit: only calls the text LLM / chat model if units do not match.
+    """
     from app.ai.e1_extract.extractor import e1_engine
     from app.ai.schemas import E1ExtractRequest
     evidence = db.query(EvidenceFile).filter(EvidenceFile.id == evidence_id, EvidenceFile.is_deleted == False).first()
@@ -306,7 +419,26 @@ def extract_from_existing_evidence(
     file_bytes = storage_service.get_file_bytes(evidence.storage_key)
     if not file_bytes:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File content not found in storage vault.")
+
+    # Intelligently analyze what field the OCR is running for
+    active_target_metric = (target_metric or evidence.esg_indicator or "").strip()
+    active_metric_name = (metric_name or "").strip()
+    req_unit = (target_unit or "").strip()
+    required_category = get_esg_field_category(active_target_metric, active_metric_name)
+
     effective_hint = doc_type_hint or (evidence.bill_type if evidence.doc_category == "Bill" else evidence.doc_type)
+    if not effective_hint and required_category != "other":
+        CATEGORY_TO_HINT = {
+            "electricity": "electricity_bill",
+            "fuel": "fuel_receipt",
+            "water": "water_manifest",
+            "waste": "waste_manifest",
+            "safety": "safety_log",
+            "gas": "gas_bill",
+        }
+        effective_hint = CATEGORY_TO_HINT.get(required_category, effective_hint)
+
+    # 1. Use the original E1 engine
     req = E1ExtractRequest(
         evidence_id=evidence.id,
         file_bytes=file_bytes,
@@ -320,22 +452,85 @@ def extract_from_existing_evidence(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=e1_res.rejection_reason or "Document is not relevant to this ESG field."
         )
+
+    # 2. Verify what data is required — do not fill random collected data
+    candidate_fields = e1_res.fields or []
+    matched_field = None
+
+    if active_target_metric or (active_metric_name and required_category != "other"):
+        # Match by exact metric code first
+        for f in candidate_fields:
+            if f.metric and active_target_metric and f.metric.upper() == active_target_metric.upper():
+                matched_field = f
+                break
+
+        # If not exact match, match by ESG category compatibility
+        if not matched_field and required_category != "other":
+            for f in candidate_fields:
+                f_cat = get_esg_field_category(f.metric, f.unit)
+                # Check if field or document aligns with the required category
+                if f_cat == required_category or (e1_res.doc_type and required_category in e1_res.doc_type):
+                    matched_field = f
+                    break
+
+        if not matched_field:
+            # Document did not yield data for the required field; do NOT fill random data
+            field_label = active_metric_name or active_target_metric or "this ESG parameter"
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"This document does not contain verifiable consumption figures for '{field_label}'. Please upload a relevant supporting document or enter value manually."
+            )
+    else:
+        # Generic extraction without field scope (e.g. Evidence Vault list inspection)
+        if candidate_fields:
+            matched_field = candidate_fields[0]
+
     suggestions = []
-    for f in e1_res.fields:
+    fields_to_process = [matched_field] if matched_field else candidate_fields
+
+    for f in fields_to_process:
         val = float(f.value) if isinstance(f.value, (int, float)) else 0.0
+        field_unit = f.unit or ""
+        meta = dict(f.metadata or {})
+
+        # 3. Check unit: only call text LLM / chat model if unit does NOT match
+        if req_unit and not are_units_equivalent(field_unit, req_unit):
+            logger.info(
+                f"E1 unit mismatch: extracted '{field_unit}' vs required '{req_unit}' for '{active_target_metric}'. "
+                f"Invoking chat model for conversion..."
+            )
+            converted_val, formula, provider = convert_unit_via_chat_model(
+                val, field_unit, req_unit, active_metric_name or active_target_metric
+            )
+            meta["converted_by_llm"] = True
+            meta["original_value"] = val
+            meta["original_unit"] = field_unit
+            meta["conversion_formula"] = formula
+            meta["conversion_provider"] = provider
+            meta["unit_verified"] = True
+            val = converted_val
+            field_unit = req_unit
+        else:
+            # Unit matches required unit — DO NOT call text LLM!
+            meta["converted_by_llm"] = False
+            meta["unit_verified"] = True
+            if req_unit:
+                field_unit = req_unit
+
         suggestions.append(
             ExtractedFieldSuggestion(
-                metric=f.metric,
+                metric=active_target_metric or f.metric,
                 value=val,
-                unit=f.unit,
+                unit=field_unit,
                 confidence=f.confidence,
                 page=f.page,
                 bounding_box=f.bbox,
-                metadata=f.metadata or {},
+                metadata=meta,
                 doc_type=e1_res.doc_type,
                 run_id=e1_res.run_id
             )
         )
+
     return suggestions
 
 @router.get("/{evidence_id}/download")
