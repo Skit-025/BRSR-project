@@ -18,5 +18,5 @@ def test_aarohan_catalog_masks_to_role_permissions():
     bu = get_aarohan_engine_catalog("bu_admin")
 
     assert {item["engine"] for item in system} == {"E1", "E2", "E3", "E4", "E5", "E6", "E7"}
-    assert {item["engine"] for item in project} == {"E1", "E2", "E6"}
+    assert {item["engine"] for item in project} == {"E1", "E2", "E3", "E6"}
     assert {item["engine"] for item in bu} == {"E1", "E2", "E3", "E6", "E7"}

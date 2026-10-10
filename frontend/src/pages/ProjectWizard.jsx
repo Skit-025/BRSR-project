@@ -8,6 +8,7 @@ import {
 import { useOrgNodes, useOrgPeriods } from '../hooks/useApi';
 import { orgApi } from '../api/client';
 import { useAuth } from '../context/AuthContext';
+import { useQueryClient } from '@tanstack/react-query';
 
 
 /* ── Steps config ── */
@@ -98,6 +99,7 @@ function StepBar({ currentStep }) {
 
 export default function ProjectWizard() {
   const navigate = useNavigate();
+  const qc = useQueryClient();
   const { data: nodes = [] } = useOrgNodes();
   const { data: periods = [] } = useOrgPeriods();
   const [step, setStep] = useState(1);
@@ -187,6 +189,11 @@ export default function ProjectWizard() {
         enabled_activity_categories: form.applicability || []
       });
       const newId = res?.data?.id;
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ['org-nodes'] }),
+        qc.invalidateQueries({ queryKey: ['dashboard-summary'] }),
+        qc.invalidateQueries({ queryKey: ['bu-drilldown'] })
+      ]);
       navigate(newId ? `/projects/${newId}` : '/projects');
     } catch (err) {
       const detail = err?.response?.data?.detail;

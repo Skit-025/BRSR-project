@@ -194,30 +194,35 @@ def delete_user_by_admin(
     else:
         raise PermissionError(f"Role '{admin_user.role}' is not authorized to delete users.")
 
-    target_user.is_deleted = True
-    target_user.is_active = False
+    # Store attributes before deletion
+    target_user_id = target_user.id
+    target_name = target_user.full_name
+    target_role = target_user.role
+    target_org = target_user.org_node_id
+    target_email = target_user.email
 
-    # Deactivate role assignments
-    assignments = db.query(UserRoleAssignment).filter(UserRoleAssignment.user_id == user_id).all()
-    for a in assignments:
-        a.is_active = False
-
-    # Also soft-delete and revoke any invitations for this user's email
+    # Also hard-delete any invitations for this user's email
     from app.modules.auth.models import UserInvitation
-    user_invs = db.query(UserInvitation).filter(UserInvitation.email.ilike(target_user.email)).all()
-    for inv in user_invs:
-        inv.is_deleted = True
-        inv.status = "REVOKED"
+    db.query(UserInvitation).filter(UserInvitation.email.ilike(target_email)).delete(synchronize_session=False)
 
+    # Delete the user from the database completely
+    db.delete(target_user)
     db.commit()
 
     log_admin_audit(
         db, actor=admin_user, action="USER_DELETED",
-        target_user_id=str(target_user.id), target_name=target_user.full_name,
-        target_role=target_user.role, target_scope_id=str(target_user.org_node_id) if target_user.org_node_id else None,
-        details={"reason": reason.strip(), "soft_deleted": True}
+        target_user_id=str(target_user_id), target_name=target_name,
+        target_role=target_role, target_scope_id=str(target_org) if target_org else None,
+        details={"reason": reason.strip(), "hard_deleted": True}
     )
-    return target_user
+    
+    # Return a simple mock object so the router can still access .id and .full_name
+    class DeletedUserResult:
+        def __init__(self, id, full_name):
+            self.id = id
+            self.full_name = full_name
+            
+    return DeletedUserResult(target_user_id, target_name)
 
 
 def verify_admin_password_check(admin_user: User, admin_password: Optional[str]) -> bool:

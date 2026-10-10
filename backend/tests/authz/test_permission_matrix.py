@@ -96,20 +96,14 @@ def test_manageable_roles_hierarchy():
     # system_admin manages all
     assert len(MANAGEABLE_ROLES_BY_ROLE["system_admin"]) == 5
 
-    # group_admin can manage group_admin, subsidiary_admin, bu_admin, project_admin
-    assert set(MANAGEABLE_ROLES_BY_ROLE["group_admin"]) == {
-        "group_admin", "subsidiary_admin", "bu_admin", "project_admin"
-    }
+    # group_admin can only manage subsidiary_admin (1-level down)
+    assert set(MANAGEABLE_ROLES_BY_ROLE["group_admin"]) == {"subsidiary_admin"}
 
-    # subsidiary_admin can manage subsidiary_admin, bu_admin, project_admin
-    assert set(MANAGEABLE_ROLES_BY_ROLE["subsidiary_admin"]) == {
-        "subsidiary_admin", "bu_admin", "project_admin"
-    }
+    # subsidiary_admin can only manage bu_admin (1-level down)
+    assert set(MANAGEABLE_ROLES_BY_ROLE["subsidiary_admin"]) == {"bu_admin"}
 
-    # bu_admin can manage bu_admin, project_admin
-    assert set(MANAGEABLE_ROLES_BY_ROLE["bu_admin"]) == {
-        "bu_admin", "project_admin"
-    }
+    # bu_admin can only manage project_admin (1-level down)
+    assert set(MANAGEABLE_ROLES_BY_ROLE["bu_admin"]) == {"project_admin"}
 
     # project_admin cannot manage/create any roles
     assert MANAGEABLE_ROLES_BY_ROLE["project_admin"] == []

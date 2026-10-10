@@ -75,6 +75,7 @@ export default function UserManagement() {
   const [reqError, setReqError] = useState('');
   const [lastApproved, setLastApproved] = useState(null);
   const [copiedPwd, setCopiedPwd] = useState(false);
+  const [reqStatusFilter, setReqStatusFilter] = useState('ALL');
 
   // Reject Request Modal state
   const [rejectTarget, setRejectTarget] = useState(null);
@@ -588,6 +589,12 @@ export default function UserManagement() {
       return true;
     });
   }, [invitations, activeUserEmailSet]);
+
+  // Filter user creation requests by status filter
+  const filteredRequests = useMemo(() => {
+    if (reqStatusFilter === 'ALL') return userRequests;
+    return userRequests.filter(r => r.status === reqStatusFilter);
+  }, [userRequests, reqStatusFilter]);
 
   const activeUsersCount = users.filter(u => u.is_active !== false && !u.is_deleted).length;
   const pendingInvitesCount = visibleInvitations.filter(i => ['PENDING', 'SENT'].includes(i.status)).length;
@@ -1137,6 +1144,183 @@ export default function UserManagement() {
                                 Revoke
                               </button>
                             </>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* TAB: PENDING REQUESTS (Subsidiary Admin -> Group/System Admin Approval Workflow) */}
+      {activeTab === 'requests' && (
+        <div className="card">
+          <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <FileQuestion size={16} color="#6366f1" />
+              <h3 className="card-title">User Creation Requests &amp; Approval Queue</h3>
+            </div>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', gap: 4, background: 'rgba(255,255,255,0.04)', padding: '3px', borderRadius: 6, fontSize: 12 }}>
+                {['ALL', 'PENDING', 'APPROVED', 'REJECTED'].map((st) => (
+                  <button
+                    key={st}
+                    className={`btn btn-sm ${reqStatusFilter === st ? 'btn-primary' : 'btn-secondary'}`}
+                    style={{ padding: '3px 10px', fontSize: 11, borderRadius: 4 }}
+                    onClick={() => setReqStatusFilter(st)}
+                  >
+                    {st === 'ALL' ? `All (${userRequests.length})` : 
+                     st === 'PENDING' ? `Pending (${userRequests.filter(r => r.status === 'PENDING').length})` :
+                     st === 'APPROVED' ? `Approved (${userRequests.filter(r => r.status === 'APPROVED').length})` :
+                     `Rejected (${userRequests.filter(r => r.status === 'REJECTED').length})`}
+                  </button>
+                ))}
+              </div>
+              {isSubsidiaryAdmin && (
+                <button className="btn btn-primary btn-sm" onClick={handleOpenUserReqModal}>
+                  <FilePlus size={13} />
+                  <span>+ Submit Creation Request</span>
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className="table-wrap">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Request # &amp; Candidate</th>
+                  <th>Requested Role</th>
+                  <th>Assigned Scope</th>
+                  <th>Submitted By</th>
+                  <th>Status</th>
+                  <th style={{ textAlign: 'right' }}>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {userReqLoading ? (
+                  <tr>
+                    <td colSpan={6} style={{ textAlign: 'center', padding: '32px' }}>
+                      Loading user creation requests...
+                    </td>
+                  </tr>
+                ) : filteredRequests.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} style={{ textAlign: 'center', padding: '32px', color: 'var(--text-muted)' }}>
+                      No {reqStatusFilter !== 'ALL' ? reqStatusFilter.toLowerCase() : ''} user requests found.
+                    </td>
+                  </tr>
+                ) : (
+                  filteredRequests.map((req) => {
+                    const roleDef = ROLE_DEFINITIONS[req.requested_role] || { label: req.requested_role, badge: 'badge-gray' };
+                    return (
+                      <tr key={req.id}>
+                        <td>
+                          <div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                              <span style={{ fontFamily: 'monospace', fontSize: 11, fontWeight: 700, color: 'var(--brand-400)', background: 'rgba(99,102,241,0.1)', padding: '1px 6px', borderRadius: 4 }}>
+                                {req.request_number}
+                              </span>
+                            </div>
+                            <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{req.full_name}</div>
+                            <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>{req.email}</div>
+                            {req.employee_id && (
+                              <div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Emp ID: {req.employee_id}</div>
+                            )}
+                          </div>
+                        </td>
+                        <td>
+                          <span className={`badge ${roleDef.badge}`}>
+                            {roleDef.label.toUpperCase()}
+                          </span>
+                        </td>
+                        <td>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '12px' }}>
+                            <Building2 size={13} color="var(--text-muted)" />
+                            <span>{getNodeDisplay(req.org_node_id)}</span>
+                          </div>
+                          {req.reason && (
+                            <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: 2, fontStyle: 'italic', maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={req.reason}>
+                              "{req.reason}"
+                            </div>
+                          )}
+                        </td>
+                        <td style={{ fontSize: '12px' }}>
+                          <div style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{req.requested_by_name}</div>
+                          <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>{req.requested_by_role}</div>
+                          <div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>
+                            {new Date(req.created_at || Date.now()).toLocaleDateString()}
+                          </div>
+                        </td>
+                        <td>
+                          {req.status === 'PENDING' ? (
+                            <span className="badge badge-amber" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                              <Clock size={11} /> Pending Approval
+                            </span>
+                          ) : req.status === 'APPROVED' ? (
+                            <div>
+                              <span className="badge badge-green" style={{ background: '#dcfce7', color: '#15803d', border: '1px solid #bbf7d0', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                                <CheckCircle size={11} /> Approved
+                              </span>
+                              {req.approved_by_name && (
+                                <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginTop: 2 }}>
+                                  by {req.approved_by_name}
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            <div>
+                              <span className="badge badge-rose" style={{ background: '#fee2e2', color: '#b91c1c', border: '1px solid #fecaca', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                                <Ban size={11} /> Rejected
+                              </span>
+                              {req.rejection_reason && (
+                                <div style={{ fontSize: '10px', color: '#b91c1c', marginTop: 2, maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={req.rejection_reason}>
+                                  {req.rejection_reason}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </td>
+                        <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+                          {req.status === 'PENDING' && canApproveRequests ? (
+                            <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                              <button
+                                className="btn btn-primary btn-sm"
+                                style={{ background: '#16a34a', borderColor: '#16a34a', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                                onClick={() => approveUserReqMutation.mutate(req.id)}
+                                disabled={approveUserReqMutation.isPending}
+                                title="Approve and generate credentials"
+                              >
+                                <ThumbsUp size={12} />
+                                <span>{approveUserReqMutation.isPending ? 'Approving...' : 'Approve'}</span>
+                              </button>
+                              <button
+                                className="btn btn-secondary btn-sm"
+                                style={{ color: 'var(--rose-400)', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                                onClick={() => {
+                                  setRejectError('');
+                                  setRejectReason('');
+                                  setRejectTarget(req);
+                                }}
+                                disabled={rejectUserReqMutation.isPending}
+                                title="Reject request"
+                              >
+                                <ThumbsDown size={12} />
+                                <span>Reject</span>
+                              </button>
+                            </div>
+                          ) : req.status === 'PENDING' ? (
+                            <span style={{ fontSize: 12, color: 'var(--amber-400)', fontStyle: 'italic' }}>
+                              Awaiting Approval
+                            </span>
+                          ) : (
+                            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                              Processed
+                            </span>
                           )}
                         </td>
                       </tr>

@@ -119,7 +119,8 @@ export default function Dashboard() {
     const subNodes = nodes.filter(n => n.parent_id === activeEntityId);
     if (subNodes.length > 0) {
       return subNodes.map((node, idx) => {
-        const pct = summary?.submission_progress?.overall_progress_pct != null ? summary.submission_progress.overall_progress_pct : 0;
+        const isProj = node.type?.toLowerCase() === 'project' || node.type?.toLowerCase() === 'site';
+        const pct = isProj ? 0 : (summary?.submission_progress?.overall_progress_pct != null ? summary.submission_progress.overall_progress_pct : 0);
         return {
           icon: icons[idx % icons.length],
           name: node.name,
@@ -127,8 +128,8 @@ export default function Dashboard() {
           coverage: `${pct}%`,
           coveragePct: Number(pct),
           evidence: summary?.submission_progress ? `${summary.submission_progress.approved}/${summary.submission_progress.total_entities || 1}` : '0/0',
-          status: summary?.submission_progress?.in_review > 0 ? 'In Review' : (summary?.submission_progress?.approved > 0 ? 'Ready' : 'Draft'),
-          statusType: summary?.submission_progress?.in_review > 0 ? 'neutral' : (summary?.submission_progress?.approved > 0 ? 'success' : 'neutral'),
+          status: isProj ? 'Awaiting Submission' : (summary?.submission_progress?.in_review > 0 ? 'In Review' : (summary?.submission_progress?.approved > 0 ? 'Ready' : 'Draft')),
+          statusType: isProj ? 'warning' : (summary?.submission_progress?.in_review > 0 ? 'neutral' : (summary?.submission_progress?.approved > 0 ? 'success' : 'neutral')),
           action: 'Inspect ›',
           route: node.type?.toLowerCase() === 'project' ? `/projects/${node.id}` : `/disclosure/bu?nodeId=${node.id}`
         };

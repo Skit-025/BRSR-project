@@ -10,38 +10,26 @@ from app.modules.collection.models import Submission, DataPoint, SubmissionStatu
 # Seed/demo entity code prefixes — these keep curated mock data when no real data exists.
 # ONLY list very specific well-known seeded demo entities, NOT broad prefixes like "MEIL-" or "GRP-"
 # which would catch newly-created real entities.
+import re
+
 _SEED_EXACT_CODES = {
     # Well-known demo hierarchy from KNOWN_ENTITY_MOCKS
     "PRJ-ZOJILA-P7",
     "PRJ-HWY-001",
     "PRJ-ODISHA-SOLAR",
-    "BU-TRANS",
-    "MEIL-GROUP",
-    # Original Aarohan / MEIL demo hierarchy created during onboarding seed
-    "MEIL-HYDRO",         # MEIL Hydrocarbons original
-    "MEIL-GROUP",
-}
-
-# Prefix-based: Only match codes that start with these specific patterns
-# (all of these are auto-generated seeded data from seed scripts, not user-created)
-_SEED_CODE_PREFIXES = (
-    "PRJ-ZOJILA",
-    "PRJ-HWY-001",
-    "PRJ-ODISHA-SOLAR",
-    "GRP-",               # auto-generated group codes from seed script (GRP-XXXXXX pattern)
-    "SITE-RPT-",
-    "SITE-LOCK-",
-    "SITE-TEST-",
-    "PRJ-A-",             # highway project A units from seed
-    "PRJ-B-JV-",          # tunnel JV projects from seed
-    "PRJ-FLOW-",          # flow project codes from seed
-    "PRJ-LNG-",           # LNG projects from seed
-    "SUB-A-",             # auto-generated subsidiary A from seed
-    "SUB-B-",             # auto-generated subsidiary B from seed
-    "BU-A1-",             # auto-generated BU from seed
+    "PRJ-RAJ-SOLAR",
+    "PRJ-KUTCH-WIND",
+    "PRJ-PURI-HWY",
     "BU-TRANS",
     "MEIL-GROUP",
     "MEIL-HYDRO",
+    "AAROHAN-GROUP",
+}
+
+# Auto-generated test seed pattern: test scripts generate 6-hex-char suffixes like GRP-4757A1 or PRJ-A-05B272
+_TEST_SEED_REGEX = re.compile(
+    r"^(GRP|SUB-[AB]|BU-A1|PRJ-A1-1|PRJ-B1-1|PRJ-A|PRJ-B-JV|PRJ-FLOW|PRJ-LNG|SITE-(?:RPT|LOCK|TEST))-[0-9A-F]{6}$",
+    re.IGNORECASE
 )
 
 
@@ -50,26 +38,28 @@ def is_seed_demo_entity(node: OrgNode) -> bool:
     Returns True if this node is a pre-seeded demo entity that should keep
     curated mock data when no real data has been entered yet.
 
-    Returns False for all newly-created real entities (e.g. subsidiaries
-    created by the group admin after the initial seed), which must show
-    strictly zero/null until real data is submitted.
-
-    Decision matrix:
-    - MEIL-GROUP, BU-TRANS, PRJ-ZOJILA-P7 etc. (in _SEED_EXACT_CODES) -> True
-    - GRP-XXXXXX, SITE-RPT-XXXXXX, PRJ-A-XXXXXX etc. (seed script generated) -> True
-    - MEIL-BUSINESS-UNIT-001, AAROHAN-CONSTRUCTION-02 (user-created) -> False
-    - PRJ-CHARMINAR-TERMI-9324 (user-created project) -> False
+    Returns False for all newly-created real entities (e.g. subsidiaries or projects
+    created by users via wizard or org hierarchy), which must show
+    strictly zero/null until real data is submitted and grow dynamically with actual data.
     """
     if not node:
         return False
-    code = (node.code or "").upper()
-    # First check exact codes
+    code = (node.code or "").upper().strip()
+    if not code:
+        return False
+
+    # Check exact well-known demo entity codes
     if code in {c.upper() for c in _SEED_EXACT_CODES}:
         return True
-    # Then check prefixes
-    for prefix in _SEED_CODE_PREFIXES:
-        if code.startswith(prefix.upper()):
-            return True
+
+    # User-created projects (from wizard or UI) end in -\d{4} or have custom slugs: NEVER seed demo
+    if re.search(r"-\d{4}$", code) or "HIGHWAY-CONST" in code or "GODAVARI" in code:
+        return False
+
+    # Check auto-generated test script codes (strict 6-hex-digit suffix)
+    if _TEST_SEED_REGEX.match(code):
+        return True
+
     return False
 
 
