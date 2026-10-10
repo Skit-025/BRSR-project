@@ -18,6 +18,45 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+export function formatApiErrorMessage(detail, fallback = 'Unable to complete the operation. Please try again.') {
+  if (!detail) return fallback;
+  if (typeof detail === 'string') {
+    if (/(traceback|noneType|sqlalchemy|psycopg|exception|syntaxerror|runtimeerror|unhandled|500|pydantic|keyerror|indexerror|uuid|algorithm|internal server error)/i.test(detail)) {
+      return 'The system encountered an issue while processing your request. Please try again.';
+    }
+    return detail;
+  }
+  if (Array.isArray(detail)) {
+    const messages = detail.map(item => {
+      if (!item) return '';
+      if (typeof item === 'string') return item;
+      if (typeof item === 'object') {
+        const loc = Array.isArray(item.loc) ? item.loc.filter(x => x !== 'body') : [];
+        const field = loc.length > 0 ? loc.join('.') : '';
+        const msg = item.msg || item.message || '';
+        if (field && msg) {
+          return `${field}: ${msg}`;
+        }
+        return msg || JSON.stringify(item);
+      }
+      return String(item);
+    }).filter(Boolean);
+    return messages.length > 0 ? messages.join('. ') : fallback;
+  }
+  if (typeof detail === 'object') {
+    if (detail.msg) return String(detail.msg);
+    if (detail.message) return String(detail.message);
+    if (detail.error) return String(detail.error);
+    if (detail.detail) return formatApiErrorMessage(detail.detail, fallback);
+    try {
+      return JSON.stringify(detail);
+    } catch {
+      return fallback;
+    }
+  }
+  return String(detail);
+}
+
 export function getFriendlyErrorMessage(err, fallback = 'Unable to complete the operation. Please try again.') {
   if (!err) return fallback;
   if (typeof err === 'string') {
@@ -47,11 +86,8 @@ export function getFriendlyErrorMessage(err, fallback = 'Unable to complete the 
     return 'Network connection unavailable. Please check your internet connection.';
   }
 
-  if (typeof rawDetail === 'string') {
-    if (/(traceback|noneType|sqlalchemy|psycopg|exception|syntaxerror|runtimeerror|unhandled|500|pydantic|keyerror|indexerror|uuid|algorithm|internal server error)/i.test(rawDetail)) {
-      return 'The system encountered an issue while processing your request. Please try again.';
-    }
-    return rawDetail;
+  if (rawDetail !== undefined && rawDetail !== null) {
+    return formatApiErrorMessage(rawDetail, fallback);
   }
   return fallback;
 }
@@ -126,12 +162,24 @@ api.interceptors.response.use(
     // Sanitize technical messages to protect implementation details
     const friendly = getFriendlyErrorMessage(err);
     err.friendlyMessage = friendly;
-    if (err.response?.data && typeof err.response.data === 'object') {
-      const raw = err.response.data.detail;
-      if (typeof raw === 'string' && /(traceback|noneType|sqlalchemy|psycopg|exception|syntaxerror|runtimeerror|unhandled|500|pydantic|keyerror|indexerror|uuid|algorithm|internal server error)/i.test(raw)) {
-        err.response.data.detail = friendly;
+
+    // Ensure err.response.data.detail is ALWAYS a safe, clean string to prevent React child rendering errors
+    if (err.response?.data) {
+      if (typeof err.response.data === 'string') {
+        try {
+          err.response.data = JSON.parse(err.response.data);
+        } catch {
+          err.response.data = { detail: err.response.data };
+        }
+      }
+      if (typeof err.response.data === 'object' && err.response.data !== null) {
+        const raw = err.response.data.detail ?? err.response.data.message ?? err.response.data.error;
+        const normalized = formatApiErrorMessage(raw, friendly);
+        err.response.data.detail = normalized;
+        err.response.data.message = normalized;
       }
     }
+
     // If unauthorized, log warning
     if (err.response?.status === 401 && !err.config?.url?.includes('/auth/login')) {
       console.warn('Authentication token expired or invalid.');

@@ -197,7 +197,7 @@ export default function GroupDisclosure() {
           fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8
         }}>
           {notice.type === 'success' ? <CheckCircle2 size={16} /> : <AlertTriangle size={16} />}
-          {notice.message}
+          {typeof notice.message === 'object' ? JSON.stringify(notice.message) : (notice.message || notice.text || notice.msg)}
         </div>
       )}
 

@@ -324,7 +324,7 @@ export default function AuditLog() {
         {!loading && error && (
           <div style={{ padding: '40px', textAlign: 'center', color: '#ef4444' }}>
             <AlertCircle size={24} style={{ margin: '0 auto 8px auto' }} />
-            <div>{error}</div>
+            <div>{typeof error === 'object' ? JSON.stringify(error) : error}</div>
           </div>
         )}
 

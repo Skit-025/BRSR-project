@@ -716,7 +716,7 @@ function E1Form({ onRun, loading }) {
               {resolving ? <><SpinIcon /> Loading…</> : 'Load Image →'}
             </button>
           </div>
-          {resolveError && <div style={{ background: C.redLt, border: '1px solid #FECACA', borderRadius: 7, padding: '9px 13px', fontSize: 12, color: C.red }}>⚠️ {resolveError}</div>}
+          {resolveError && <div style={{ background: C.redLt, border: '1px solid #FECACA', borderRadius: 7, padding: '9px 13px', fontSize: 12, color: C.red }}>⚠️ {typeof resolveError === 'string' ? resolveError : JSON.stringify(resolveError)}</div>}
           {resolvedDoc && (
             <div style={{ background: C.greenLt, border: `1px solid ${C.greenBdr}`, borderRadius: 8, padding: '12px 14px', fontSize: 12 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>

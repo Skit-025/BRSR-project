@@ -258,7 +258,7 @@ export default function Workflow() {
           display: 'flex', justifyContent: 'space-between', alignItems: 'center',
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <span>{notice.text}</span>
+            <span>{typeof notice.text === 'object' ? JSON.stringify(notice.text) : (notice.text || notice.message || notice.msg)}</span>
             {notice.action === 'APPROVE' && (
               <button
                 onClick={() => navigate('/consolidation')}

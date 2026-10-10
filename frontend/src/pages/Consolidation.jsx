@@ -239,7 +239,7 @@ export default function Consolidation() {
           border: `1px solid ${notice.type === 'success' ? '#bbf7d0' : '#fca5a5'}`,
           display: 'flex', justifyContent: 'space-between', alignItems: 'center',
         }}>
-          <span>{notice.text}</span>
+          <span>{typeof notice.text === 'object' ? JSON.stringify(notice.text) : (notice.text || notice.message || notice.msg)}</span>
           <button onClick={() => setNotice(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'inherit', fontSize: '16px' }}>×</button>
         </div>
       )}

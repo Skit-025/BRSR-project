@@ -200,11 +200,20 @@ export default function OrgHierarchy() {
     }
 
     try {
+      let parentId = nodeForm.parent_id;
+      if (!parentId) {
+        if (user?.role === 'subsidiary_admin') {
+          parentId = user?.org_node_id || null;
+        } else if (user?.role === 'group_admin') {
+          parentId = user?.org_node_id || (nodeList.find(n => n.type === 'group')?.id || null);
+        }
+      }
+
       await createNode.mutateAsync({
         code: nodeForm.code.trim().toUpperCase(),
         name: nodeForm.name.trim(),
         type: nodeForm.type,
-        parent_id: nodeForm.parent_id || null,
+        parent_id: parentId || null,
         ownership_pct: parseFloat(nodeForm.ownership_pct) || 100.0,
         control_type: nodeForm.control_type,
         boundary: Boolean(nodeForm.boundary),
@@ -218,18 +227,19 @@ export default function OrgHierarchy() {
       setNodeForm({
         code: '',
         name: '',
-        type: 'subsidiary',
+        type: user?.role === 'subsidiary_admin' ? 'business_unit' : 'subsidiary',
         parent_id: '',
         ownership_pct: 100.0,
         control_type: 'operational_control',
         boundary: true,
-        project_type: 'corporate',
+        project_type: user?.role === 'group_admin' ? 'water_irrigation' : 'irrigation',
         location_state: '',
         location_country: 'India',
       });
       refetchNodes();
     } catch (err) {
-      setErrorMsg(err.response?.data?.detail || err.message || 'Failed to create organization node.');
+      const msg = err.response?.data?.detail || err.friendlyMessage || err.message || 'Failed to create organization node.';
+      setErrorMsg(typeof msg === 'string' ? msg : JSON.stringify(msg));
     }
   };
 
@@ -267,7 +277,8 @@ export default function OrgHierarchy() {
       });
       refetchPeriods();
     } catch (err) {
-      setErrorMsg(err.response?.data?.detail || err.message || 'Failed to create reporting period.');
+      const msg = err.response?.data?.detail || err.friendlyMessage || err.message || 'Failed to create reporting period.';
+      setErrorMsg(typeof msg === 'string' ? msg : JSON.stringify(msg));
     }
   };
 
@@ -308,7 +319,8 @@ export default function OrgHierarchy() {
       }
       refetchNodes();
     } catch (err) {
-      setNodeUpdateError(err.response?.data?.detail || err.message || 'Failed to update unit.');
+      const msg = err.response?.data?.detail || err.friendlyMessage || err.message || 'Failed to update unit.';
+      setNodeUpdateError(typeof msg === 'string' ? msg : JSON.stringify(msg));
     } finally {
       setUpdatingNodePending(false);
     }
@@ -327,7 +339,8 @@ export default function OrgHierarchy() {
       }
       refetchPeriods();
     } catch (err) {
-      setErrorMsg(err.response?.data?.detail || err.message || 'Failed to update period.');
+      const msg = err.response?.data?.detail || err.friendlyMessage || err.message || 'Failed to update period.';
+      setErrorMsg(typeof msg === 'string' ? msg : JSON.stringify(msg));
     }
   };
 
@@ -386,7 +399,8 @@ export default function OrgHierarchy() {
       setDeleteAdminPassword('');
       refetchNodes();
     } catch (err) {
-      setDeleteError(err.response?.data?.detail || err.message || 'Failed to delete unit.');
+      const msg = err.response?.data?.detail || err.friendlyMessage || err.message || 'Failed to delete unit.';
+      setDeleteError(typeof msg === 'string' ? msg : JSON.stringify(msg));
     } finally {
       setIsDeletingPending(false);
     }
@@ -525,7 +539,7 @@ export default function OrgHierarchy() {
           alignItems: 'center',
           justifyContent: 'space-between'
         }}>
-          <span>{notice.text}</span>
+          <span>{typeof notice.text === 'object' ? JSON.stringify(notice.text) : (notice.text || notice.message || notice.msg)}</span>
           <button className="icon-btn" onClick={() => setNotice(null)} style={{ width: 24, height: 24 }}>
             <X size={14} />
           </button>
@@ -900,7 +914,7 @@ export default function OrgHierarchy() {
             {errorMsg && (
               <div className="login-error-banner" style={{ margin: '16px 24px 0' }}>
                 <AlertCircle size={16} />
-                <span>{errorMsg}</span>
+                <span>{typeof errorMsg === 'string' ? errorMsg : JSON.stringify(errorMsg)}</span>
               </div>
             )}
 
@@ -1139,7 +1153,7 @@ export default function OrgHierarchy() {
             {errorMsg && (
               <div className="login-error-banner" style={{ margin: '16px 24px 0' }}>
                 <AlertCircle size={16} />
-                <span>{errorMsg}</span>
+                <span>{typeof errorMsg === 'string' ? errorMsg : JSON.stringify(errorMsg)}</span>
               </div>
             )}
 
@@ -1574,7 +1588,7 @@ export default function OrgHierarchy() {
           {nodeUpdateError && (
             <div className="login-error-banner" style={{ margin: '16px 24px 0' }}>
               <AlertCircle size={16} />
-              <span>{nodeUpdateError}</span>
+              <span>{typeof nodeUpdateError === 'string' ? nodeUpdateError : JSON.stringify(nodeUpdateError)}</span>
             </div>
           )}
 
@@ -1761,7 +1775,7 @@ export default function OrgHierarchy() {
             {deleteError && (
               <div className="login-error-banner">
                 <AlertCircle size={15} />
-                <span>{deleteError}</span>
+                <span>{typeof deleteError === 'string' ? deleteError : JSON.stringify(deleteError)}</span>
               </div>
             )}
 

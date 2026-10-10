@@ -586,7 +586,7 @@ function EvidenceAttachPanel({
       {error && (
         <div style={{ marginTop: 6, fontSize: 11.5, color: "#ef4444", fontWeight: 500, display: "flex", alignItems: "center", gap: 5 }}>
           <AlertCircle size={13} />
-          {error}
+          {typeof error === 'object' ? JSON.stringify(error) : error}
         </div>
       )}
 
@@ -738,7 +738,7 @@ function EvidenceAttachPanel({
             {deleteError && (
               <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 6, padding: "8px 10px", fontSize: 12, color: "#dc2626", display: "flex", alignItems: "center", gap: 6 }}>
                 <AlertCircle size={14} />
-                <span>{deleteError}</span>
+                <span>{typeof deleteError === 'string' ? deleteError : JSON.stringify(deleteError)}</span>
               </div>
             )}
 
@@ -1214,7 +1214,7 @@ function ParameterField({ field, value, onChange, readOnly, submissionStatus, on
       {localError && (
         <div style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 6, color: "#ef4444", fontSize: 12 }}>
           <AlertTriangle size={12} />
-          {localError}
+          {typeof localError === 'object' ? JSON.stringify(localError) : localError}
         </div>
       )}
 
@@ -1908,7 +1908,7 @@ export default function DataEntry() {
             fontSize: 13, fontWeight: 600, display: "flex", alignItems: "center", gap: 8
           }}>
             {notice.type === "success" ? <CheckCircle2 size={15} /> : <AlertTriangle size={15} />}
-            {notice.msg}
+            {typeof notice.msg === 'object' ? JSON.stringify(notice.msg) : (notice.msg || notice.message || notice.text)}
           </div>
         )}
 

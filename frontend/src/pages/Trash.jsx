@@ -225,7 +225,7 @@ export default function Trash() {
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             {notice.type === 'success' ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}
-            <span>{notice.text}</span>
+            <span>{typeof notice.text === 'object' ? JSON.stringify(notice.text) : (notice.text || notice.message || notice.msg)}</span>
           </div>
           <button
             onClick={() => setNotice(null)}
@@ -354,7 +354,7 @@ export default function Trash() {
       ) : error ? (
         <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', padding: 16, borderRadius: 8, color: '#DC2626', display: 'flex', alignItems: 'center', gap: 12 }}>
           <AlertCircle size={20} />
-          <span>Failed to load Trash Can records. {error.response?.data?.detail || error.message}</span>
+          <span>Failed to load Trash Can records. {typeof (error.response?.data?.detail || error.message) === 'object' ? JSON.stringify(error.response?.data?.detail || error.message) : (error.response?.data?.detail || error.message)}</span>
         </div>
       ) : filteredItems.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '80px 0', border: '1px dashed #E2E8F0', borderRadius: 12, background: '#F8FAFC' }}>
@@ -770,7 +770,7 @@ export default function Trash() {
             {cleanError && (
               <div className="login-error-banner" style={{ margin: 0 }}>
                 <AlertCircle size={15} />
-                <span>{cleanError}</span>
+                <span>{typeof cleanError === 'string' ? cleanError : JSON.stringify(cleanError)}</span>
               </div>
             )}
 

@@ -1521,7 +1521,7 @@ function ReviewsTab({ project, navigate, refetchSubmission, user }) {
         {errorMsg && (
           <div style={{ padding: '12px 14px', borderRadius: 'var(--r-md)', background: 'var(--danger-subtle)', border: '1px solid var(--danger-border)', fontSize: 13, color: 'var(--danger)', display: 'flex', alignItems: 'flex-start', gap: 10 }}>
             <AlertTriangle size={16} style={{ flexShrink: 0, marginTop: 2 }} />
-            <div style={{ flex: 1, lineHeight: 1.5 }}>{errorMsg}</div>
+            <div style={{ flex: 1, lineHeight: 1.5 }}>{typeof errorMsg === 'string' ? errorMsg : JSON.stringify(errorMsg)}</div>
           </div>
         )}
 

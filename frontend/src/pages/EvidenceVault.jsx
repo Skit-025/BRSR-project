@@ -748,7 +748,7 @@ export default function EvidenceVault() {
       {/* Notice */}
       {notice && (
         <div style={{ padding: '10px 16px', borderRadius: 8, marginBottom: 16, fontSize: 13, fontWeight: 600, background: notice.type === 'success' ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)', color: notice.type === 'success' ? '#10b981' : '#ef4444', border: `1px solid ${notice.type === 'success' ? '#10b981' : '#ef4444'}` }}>
-          {notice.text}
+          {typeof notice.text === 'object' ? JSON.stringify(notice.text) : (notice.text || notice.message || notice.msg)}
         </div>
       )}
 
@@ -969,7 +969,7 @@ export default function EvidenceVault() {
               ) : extractionError ? (
                 <div style={{ padding: '12px 16px', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)', borderRadius: 8, fontSize: 13, color: '#ef4444', marginBottom: 12 }}>
                   <AlertCircle size={14} style={{ verticalAlign: 'middle', marginRight: 6 }} />
-                  {extractionError}
+                  {typeof extractionError === 'object' ? JSON.stringify(extractionError) : extractionError}
                   <button onClick={() => { setManualEntryEvidence(selected); setManualEntryOpen(true); setReviewModalOpen(false); }}
                     style={{ marginLeft: 12, padding: '3px 10px', borderRadius: 5, border: '1px solid rgba(239,68,68,0.4)', background: 'transparent', color: '#ef4444', fontSize: 11, cursor: 'pointer', fontWeight: 600 }}>
                     Enter Manually
@@ -1275,7 +1275,7 @@ export default function EvidenceVault() {
 
             {deleteError && (
               <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 6, padding: '9px 12px', fontSize: 12, color: '#ef4444', display: 'flex', alignItems: 'center', gap: 7 }}>
-                <AlertCircle size={13} /> {deleteError}
+                <AlertCircle size={13} /> {typeof deleteError === 'object' ? JSON.stringify(deleteError) : deleteError}
               </div>
             )}
 

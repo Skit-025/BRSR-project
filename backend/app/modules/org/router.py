@@ -101,6 +101,9 @@ def create_node(
             detail=error_msg
         )
 
+    if node_in.parent_id == "":
+        node_in.parent_id = None
+
     # 1. Strict Project-Creation Matrix
     node_type_val = node_in.type.value if hasattr(node_in.type, "value") else str(node_in.type)
     if node_type_val in ("project", "site"):
@@ -121,15 +124,16 @@ def create_node(
                     "solar_generation": {"solar", "renewable_energy", "solar_generation", "solar_power", "corporate"},
                     "wind_power": {"solar", "wind_generation", "renewable_energy", "corporate"},
                     "wind_generation": {"solar", "wind_generation", "renewable_energy", "corporate"},
-                    "road":       {"road", "tunnel", "corporate"},
-                    "highway":    {"road", "tunnel", "corporate"},
-                    "tunnel":     {"tunnel", "road", "corporate"},
-                    "irrigation": {"irrigation", "corporate"},
-                    "hydrocarbon": {"hydrocarbon", "corporate"},
-                    "ev_bus":     {"ev_bus", "corporate"},
+                    "road":       {"road", "tunnel", "transport_infra", "corporate"},
+                    "highway":    {"road", "tunnel", "transport_infra", "corporate"},
+                    "tunnel":     {"tunnel", "road", "transport_infra", "corporate"},
+                    "irrigation": {"irrigation", "water_irrigation", "corporate"},
+                    "hydrocarbon": {"hydrocarbon", "hydrocarbon_cgd", "corporate"},
+                    "ev_bus":     {"ev_bus", "ev_mobility", "corporate"},
+                    "telecom":    {"telecom", "telecom_defence", "corporate"},
                     "corporate":  None,   # None = any project_type allowed
-                    "infrastructure": {"road", "tunnel", "irrigation", "corporate"},
-                    "civil_infrastructure": {"road", "tunnel", "irrigation", "corporate"},
+                    "infrastructure": {"road", "tunnel", "irrigation", "transport_infra", "water_irrigation", "corporate"},
+                    "civil_infrastructure": {"road", "tunnel", "irrigation", "transport_infra", "water_irrigation", "corporate"},
                     "renewable_energy": {"solar", "wind_generation", "renewable_energy", "solar_generation", "wind_power", "corporate"},
                 }
 
@@ -152,15 +156,20 @@ def create_node(
         elif role == Role.SUBSIDIARY_ADMIN.value:
             if node_type_val not in ("business_unit", "bu"):
                 raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Subsidiary Admins may only create BUs within their subsidiary.")
+            if not node_in.parent_id and current_user.org_node_id:
+                node_in.parent_id = str(current_user.org_node_id)
             if current_user.org_node_id and node_in.parent_id:
                 if not is_node_descendant(db, str(current_user.org_node_id), str(node_in.parent_id)):
                     raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Parent node is outside your authorized subsidiary scope.")
         elif role == Role.GROUP_ADMIN.value:
             if node_type_val not in ("subsidiary", "company"):
                 raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Group Admins may only create Subsidiaries within their group.")
+            if not node_in.parent_id and current_user.org_node_id:
+                node_in.parent_id = str(current_user.org_node_id)
             if current_user.org_node_id and node_in.parent_id:
                 if not is_node_descendant(db, str(current_user.org_node_id), str(node_in.parent_id)):
                     raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Parent node is outside your authorized group scope.")
+
 
     service = OrgService(db)
     try:

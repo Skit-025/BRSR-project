@@ -412,7 +412,7 @@ export default function Login() {
                   marginBottom: 16
                 }}>
                   <AlertCircle size={16} />
-                  <span>{error}</span>
+                  <span>{typeof error === 'string' ? error : JSON.stringify(error)}</span>
                 </div>
               )}
 

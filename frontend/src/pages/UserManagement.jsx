@@ -655,7 +655,7 @@ export default function UserManagement() {
           justifyContent: 'space-between',
           marginBottom: '20px'
         }}>
-          <span>{notice.text}</span>
+          <span>{typeof notice.text === 'object' ? JSON.stringify(notice.text) : (notice.text || notice.message || notice.msg)}</span>
           <button className="icon-btn" onClick={() => setNotice(null)} style={{ width: 24, height: 24 }}>
             <X size={14} />
           </button>
@@ -1313,7 +1313,7 @@ export default function UserManagement() {
         {inviteError && (
           <div className="login-error-banner" style={{ margin: '16px 20px 0' }}>
             <AlertCircle size={16} />
-            <span>{inviteError}</span>
+            <span>{typeof inviteError === 'string' ? inviteError : JSON.stringify(inviteError)}</span>
           </div>
         )}
 
@@ -1486,7 +1486,7 @@ export default function UserManagement() {
         {deactivateError && (
           <div className="login-error-banner" style={{ margin: '16px 20px 0' }}>
             <AlertCircle size={16} />
-            <span>{deactivateError}</span>
+            <span>{typeof deactivateError === 'string' ? deactivateError : JSON.stringify(deactivateError)}</span>
           </div>
         )}
 
@@ -1584,7 +1584,7 @@ export default function UserManagement() {
         {deleteError && (
           <div className="login-error-banner" style={{ margin: '16px 20px 0' }}>
             <AlertCircle size={16} />
-            <span>{deleteError}</span>
+            <span>{typeof deleteError === 'string' ? deleteError : JSON.stringify(deleteError)}</span>
           </div>
         )}
 
@@ -1681,7 +1681,7 @@ export default function UserManagement() {
         {reqError && (
           <div className="login-error-banner" style={{ margin: '16px 20px 0' }}>
             <AlertCircle size={16} />
-            <span>{reqError}</span>
+            <span>{typeof reqError === 'string' ? reqError : JSON.stringify(reqError)}</span>
           </div>
         )}
 
@@ -1833,7 +1833,7 @@ export default function UserManagement() {
         {rejectError && (
           <div className="login-error-banner" style={{ margin: '16px 20px 0' }}>
             <AlertCircle size={16} />
-            <span>{rejectError}</span>
+            <span>{typeof rejectError === 'string' ? rejectError : JSON.stringify(rejectError)}</span>
           </div>
         )}
 

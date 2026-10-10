@@ -51,6 +51,18 @@ class ProjectType(str, enum.Enum):
     EV_BUS = "ev_bus"
     CORPORATE = "corporate"
 
+    # MEIL Subsidiary & Sector Portfolio Extensions
+    EV_MOBILITY = "ev_mobility"
+    HYDROCARBON_CGD = "hydrocarbon_cgd"
+    WATER_IRRIGATION = "water_irrigation"
+    RENEWABLE_ENERGY = "renewable_energy"
+    TRANSPORT_INFRA = "transport_infra"
+    TELECOM_DEFENCE = "telecom_defence"
+    TELECOM = "telecom"
+    HEAVY_ENGINEERING = "heavy_engineering"
+    CORPORATE_HOLDING = "corporate_holding"
+
+
 
 class PeriodType(str, enum.Enum):
     FINANCIAL_YEAR = "financial_year"
