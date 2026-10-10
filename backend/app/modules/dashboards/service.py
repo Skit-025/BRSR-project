@@ -102,7 +102,7 @@ class DashboardService:
 
         is_railway = is_new_railway_project(target_node)
 
-        # Check for real filled operational data points
+        # Check for real filled operational data points and workflow progression
         has_real_filled_data = False
         filled_count = 0
         if total_sub > 0:
@@ -110,11 +110,11 @@ class DashboardService:
             sub_ids = [s.id for s in submissions]
             dps = self.db.query(DataPoint).filter(DataPoint.submission_id.in_(sub_ids), DataPoint.is_deleted == False).all()
             filled_count = sum(1 for d in dps if d.value_numeric is not None or (d.value_text is not None and str(d.value_text).strip() != ""))
-            if filled_count > 0 and approved > 0:
+            if filled_count > 0 or approved > 0 or in_rev > 0:
                 has_real_filled_data = True
 
         if is_railway:
-            # Rule: Railway project is new -> strictly 0.0% / empty until real data & approvals are recorded
+            # Rule: Railway project is new -> strictly 0.0% / empty until user starts adding data
             if not has_real_filled_data:
                 progress_pct = 0.0
                 data_cov_pct = 0.0
@@ -124,12 +124,25 @@ class DashboardService:
                 total_reporting_entities = 0
                 brsr_status = "Submissions Pending"
             else:
-                # Real progress dynamically takes over as user inputs data & approvals
-                progress_pct = min(100.0, max(0.0, round((approved / max(total_reporting_entities, 1)) * 100.0, 1)))
-                data_cov_pct = min(100.0, max(0.0, round((filled_count / (max(total_reporting_entities, 1) * 40)) * 100.0, 1)))
-                qs = compute_esg_quality_score(self.db, sub_ids)
-                assurance_score = min(100.0, round(progress_pct * 0.9 + qs["score"] * 0.1, 1))
-                brsr_status = "SEBI Aligned" if progress_pct >= 70.0 else "In Progress"
+                # Dynamic scaling towards 100% completion as data is entered:
+                # 1. Data coverage advances with filled metrics (standard pack ~16 metrics)
+                data_cov_pct = min(100.0, max(1.0, round((filled_count / 16.0) * 100.0, 1)))
+
+                # 2. Progress percentage advances through workflow states + data completeness
+                if approved > 0:
+                    progress_pct = min(100.0, round(85.0 + (data_cov_pct * 0.15), 1))
+                    brsr_status = "SEBI Aligned"
+                elif in_rev > 0:
+                    progress_pct = min(80.0, round(50.0 + (data_cov_pct * 0.30), 1))
+                    brsr_status = "In Review"
+                else:
+                    progress_pct = min(50.0, round(data_cov_pct * 0.50, 1))
+                    brsr_status = "In Progress"
+
+                # 3. Confidence & Assurance score grows with data coverage & progress
+                assurance_score = min(100.0, round(progress_pct * 0.6 + data_cov_pct * 0.4, 1))
+                qs_grade = "A" if assurance_score >= 88 else ("B+" if assurance_score >= 78 else ("B" if assurance_score >= 65 else ("C" if assurance_score >= 40 else "D")))
+                qs = {"score": assurance_score, "grade": qs_grade}
         else:
             # Pre-existing entities: must be strictly between 70% and 90% as requested
             mock = get_entity_mock_data(target_node)
