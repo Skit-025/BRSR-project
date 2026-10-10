@@ -83,7 +83,9 @@ def create_node(
     from app.modules.audit.schemas import AuditLogCreate
 
     current_user = None
+    token_was_provided = False
     if credentials and credentials.credentials:
+        token_was_provided = True
         payload = decode_access_token(credentials.credentials)
         if payload and payload.get("sub"):
             current_user = db.query(User).filter(User.id == payload["sub"], User.is_deleted == False).first()
@@ -93,9 +95,10 @@ def create_node(
         current_user = db.query(User).filter(User.role == Role.SYSTEM_ADMIN.value, User.is_active == True, User.is_deleted == False).first()
 
     if not current_user:
+        error_msg = "Your session has expired. Please log in again to continue." if token_was_provided else "Authentication required to create organizational entities."
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Authentication required to create organizational entities."
+            detail=error_msg
         )
 
     # 1. Strict Project-Creation Matrix
@@ -125,6 +128,7 @@ def create_node(
                     "hydrocarbon": {"hydrocarbon", "corporate"},
                     "ev_bus":     {"ev_bus", "corporate"},
                     "corporate":  None,   # None = any project_type allowed
+                    "infrastructure": {"road", "tunnel", "irrigation", "corporate"},
                     "civil_infrastructure": {"road", "tunnel", "irrigation", "corporate"},
                     "renewable_energy": {"solar", "wind_generation", "renewable_energy", "solar_generation", "wind_power", "corporate"},
                 }

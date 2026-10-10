@@ -141,10 +141,13 @@ export function AuthProvider({ children }) {
       email: cleanId,
       password: cleanPwd
     });
-    const { access_token, user: loggedUser } = res.data;
+    const { access_token, refresh_token, user: loggedUser } = res.data;
     setToken(access_token);
     setUser(loggedUser);
     localStorage.setItem('brsr_token', access_token);
+    if (refresh_token) {
+      localStorage.setItem('brsr_refresh_token', refresh_token);
+    }
     localStorage.setItem('brsr_user', JSON.stringify(loggedUser));
     return loggedUser;
   };
@@ -178,6 +181,7 @@ export function AuthProvider({ children }) {
     setUser(null);
     setMockMode(false);
     localStorage.removeItem('brsr_token');
+    localStorage.removeItem('brsr_refresh_token');
     localStorage.removeItem('brsr_user');
     localStorage.removeItem('brsr_mock_mode');
   };

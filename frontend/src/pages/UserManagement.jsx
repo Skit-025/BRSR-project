@@ -87,6 +87,7 @@ export default function UserManagement() {
   // Fetch Org Nodes
   const { data: nodes = [] } = useQuery({
     queryKey: ['org-nodes-list'],
+    staleTime: 60_000,
     queryFn: async () => {
       if (localStorage.getItem('brsr_mock_mode') === 'true') return MOCK_ORG_NODES;
       try {
@@ -121,6 +122,7 @@ export default function UserManagement() {
   // Fetch Scoped Users
   const { data: users = [], isLoading: usersLoading, refetch: refetchUsers } = useQuery({
     queryKey: ['admin-scoped-users', currentUser?.id],
+    staleTime: 30_000,
     queryFn: async () => {
       if (localStorage.getItem('brsr_mock_mode') === 'true') return MOCK_USERS;
       try {
@@ -141,6 +143,7 @@ export default function UserManagement() {
   // Fetch Pending Invitations
   const { data: invitations = [], isLoading: invLoading, refetch: refetchInvitations } = useQuery({
     queryKey: ['admin-invitations', currentUser?.id],
+    staleTime: 30_000,
     queryFn: async () => {
       if (localStorage.getItem('brsr_mock_mode') === 'true') return [];
       try {
@@ -155,6 +158,7 @@ export default function UserManagement() {
   // Fetch User Creation Requests (PENDING requests from subsidiaries)
   const { data: userRequests = [], isLoading: userReqLoading, refetch: refetchUserRequests } = useQuery({
     queryKey: ['user-creation-requests', currentUser?.id],
+    staleTime: 30_000,
     queryFn: async () => {
       if (localStorage.getItem('brsr_mock_mode') === 'true') return [];
       try {
@@ -168,9 +172,11 @@ export default function UserManagement() {
 
   const pendingUserRequestsCount = userRequests.filter(r => r.status === 'PENDING').length;
 
-  // Fetch Admin Audit Log
+  // Fetch Admin Audit Log (lazy-loaded on demand when audit tab is visited)
   const { data: auditLogs = [], isLoading: auditLoading, refetch: refetchAudit } = useQuery({
     queryKey: ['admin-audit-log', currentUser?.id],
+    enabled: activeTab === 'audit',
+    staleTime: 60_000,
     queryFn: async () => {
       if (localStorage.getItem('brsr_mock_mode') === 'true') return [];
       try {

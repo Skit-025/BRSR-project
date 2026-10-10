@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 // The backend FastAPI exposes API routes under /api/v1
-export const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
+export const API_BASE = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000/api/v1';
 
 export const api = axios.create({
   baseURL: API_BASE,
@@ -56,10 +56,73 @@ export function getFriendlyErrorMessage(err, fallback = 'Unable to complete the 
   return fallback;
 }
 
-// ── Global Error Interceptor ──
+let isRefreshing = false;
+let failedQueue = [];
+
+const processQueue = (error, token = null) => {
+  failedQueue.forEach(prom => {
+    if (error) {
+      prom.reject(error);
+    } else {
+      prom.resolve(token);
+    }
+  });
+  failedQueue = [];
+};
+
+// ── Global Error & Token Refresh Interceptor ──
 api.interceptors.response.use(
   (res) => res,
-  (err) => {
+  async (err) => {
+    const originalRequest = err.config;
+
+    // Auto-refresh token if 401 received and refresh token is available
+    if (
+      err.response?.status === 401 &&
+      originalRequest &&
+      !originalRequest._retry &&
+      !originalRequest.url?.includes('/auth/login') &&
+      !originalRequest.url?.includes('/auth/refresh')
+    ) {
+      const refreshToken = localStorage.getItem('brsr_refresh_token');
+      if (refreshToken) {
+        if (isRefreshing) {
+          return new Promise((resolve, reject) => {
+            failedQueue.push({ resolve, reject });
+          })
+            .then((token) => {
+              originalRequest.headers.Authorization = `Bearer ${token}`;
+              return api(originalRequest);
+            })
+            .catch((refreshErr) => Promise.reject(refreshErr));
+        }
+
+        originalRequest._retry = true;
+        isRefreshing = true;
+
+        try {
+          const { data } = await axios.post(`${API_BASE}/auth/refresh`, {
+            refresh_token: refreshToken,
+          });
+          const newToken = data.access_token;
+          localStorage.setItem('brsr_token', newToken);
+          if (data.refresh_token) {
+            localStorage.setItem('brsr_refresh_token', data.refresh_token);
+          }
+          api.defaults.headers.common.Authorization = `Bearer ${newToken}`;
+          originalRequest.headers.Authorization = `Bearer ${newToken}`;
+          processQueue(null, newToken);
+          return api(originalRequest);
+        } catch (refreshErr) {
+          processQueue(refreshErr, null);
+          localStorage.removeItem('brsr_token');
+          localStorage.removeItem('brsr_refresh_token');
+        } finally {
+          isRefreshing = false;
+        }
+      }
+    }
+
     // Sanitize technical messages to protect implementation details
     const friendly = getFriendlyErrorMessage(err);
     err.friendlyMessage = friendly;
@@ -69,7 +132,7 @@ api.interceptors.response.use(
         err.response.data.detail = friendly;
       }
     }
-    // If unauthorized, clear token only on protected paths
+    // If unauthorized, log warning
     if (err.response?.status === 401 && !err.config?.url?.includes('/auth/login')) {
       console.warn('Authentication token expired or invalid.');
     }

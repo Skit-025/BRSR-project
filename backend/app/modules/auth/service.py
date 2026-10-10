@@ -396,23 +396,24 @@ def get_descendant_node_ids(db: Session, ancestor_id: str) -> set:
     if not ancestor_id:
         return set()
     from app.modules.org.models import OrgNode
-    all_nodes = db.query(OrgNode).all()
+    all_nodes = db.query(OrgNode.id, OrgNode.parent_id, OrgNode.code).filter(OrgNode.is_deleted == False).all()
     children_map = {}
-    node_map = {}
-    for n in all_nodes:
-        nid = str(n.id)
-        node_map[nid] = n
-        pid = str(n.parent_id) if n.parent_id else None
-        children_map.setdefault(pid, []).append(nid)
+    code_map = {}
+    for nid, pid, code in all_nodes:
+        s_nid = str(nid)
+        s_pid = str(pid) if pid else None
+        children_map.setdefault(s_pid, []).append(s_nid)
+        if code:
+            code_map[s_nid] = code
 
     descendants = set()
     queue = [str(ancestor_id)]
     while queue:
         curr = queue.pop()
         descendants.add(curr)
-        n_obj = node_map.get(curr)
-        if n_obj and n_obj.code:
-            descendants.add(n_obj.code)
+        c = code_map.get(curr)
+        if c:
+            descendants.add(c)
         for child in children_map.get(curr, []):
             if child not in descendants:
                 queue.append(child)
@@ -850,28 +851,21 @@ def list_users_for_admin_scoped(db: Session, admin_user: User) -> List[User]:
     if admin_user.role == "system_admin":
         return db.query(User).filter(User.is_deleted == False).order_by(User.created_at.desc()).all()
 
-    if admin_user.role == "group_admin":
-        q = db.query(User).filter(User.is_deleted == False, User.role == "subsidiary_admin")
-        if admin_user.org_node_id:
-            all_u = q.order_by(User.created_at.desc()).all()
-            return [u for u in all_u if not u.org_node_id or is_node_descendant(db, str(admin_user.org_node_id), str(u.org_node_id))]
-        return q.order_by(User.created_at.desc()).all()
+    target_role_map = {
+        "group_admin": "subsidiary_admin",
+        "subsidiary_admin": "bu_admin",
+        "bu_admin": "project_admin",
+    }
+    target_role = target_role_map.get(admin_user.role)
+    if not target_role:
+        return []
 
-    if admin_user.role == "subsidiary_admin":
-        q = db.query(User).filter(User.is_deleted == False, User.role == "bu_admin")
-        if admin_user.org_node_id:
-            all_u = q.order_by(User.created_at.desc()).all()
-            return [u for u in all_u if not u.org_node_id or is_node_descendant(db, str(admin_user.org_node_id), str(u.org_node_id))]
-        return q.order_by(User.created_at.desc()).all()
-
-    if admin_user.role == "bu_admin":
-        q = db.query(User).filter(User.is_deleted == False, User.role == "project_admin")
-        if admin_user.org_node_id:
-            all_u = q.order_by(User.created_at.desc()).all()
-            return [u for u in all_u if not u.org_node_id or is_node_descendant(db, str(admin_user.org_node_id), str(u.org_node_id))]
-        return q.order_by(User.created_at.desc()).all()
-
-    return []
+    q = db.query(User).filter(User.is_deleted == False, User.role == target_role)
+    if admin_user.org_node_id:
+        descendant_ids = get_descendant_node_ids(db, str(admin_user.org_node_id))
+        all_u = q.order_by(User.created_at.desc()).all()
+        return [u for u in all_u if not u.org_node_id or str(u.org_node_id) in descendant_ids]
+    return q.order_by(User.created_at.desc()).all()
 
 
 def get_admin_audit_log(db: Session, admin_user: User, limit: int = 50):
@@ -885,7 +879,6 @@ def get_admin_audit_log(db: Session, admin_user: User, limit: int = 50):
     - Evidence deletion details respect evidence scope and never leak across boundaries.
     """
     from app.modules.auth.models import AdminAuditEntry
-    from app.modules.org.models import OrgNode
     q = db.query(AdminAuditEntry)
     if admin_user.role == "system_admin":
         return q.order_by(AdminAuditEntry.created_at.desc()).limit(limit).all()
@@ -895,12 +888,7 @@ def get_admin_audit_log(db: Session, admin_user: User, limit: int = 50):
 
     descendant_nodes = set()
     if admin_user.org_node_id:
-        descendant_nodes.add(str(admin_user.org_node_id))
-        for n in db.query(OrgNode).all():
-            if is_node_descendant(db, str(admin_user.org_node_id), str(n.id)):
-                descendant_nodes.add(str(n.id))
-                if n.code:
-                    descendant_nodes.add(n.code)
+        descendant_nodes = get_descendant_node_ids(db, str(admin_user.org_node_id))
 
     if admin_user.role == "group_admin" and not admin_user.org_node_id:
         # Group Admin without bound node has enterprise group-wide visibility
@@ -908,9 +896,10 @@ def get_admin_audit_log(db: Session, admin_user: User, limit: int = 50):
 
     subordinate_user_ids = set()
     if descendant_nodes:
-        for u in db.query(User).all():
-            if u.org_node_id and (str(u.org_node_id) in descendant_nodes):
-                subordinate_user_ids.add(str(u.id))
+        users = db.query(User.id, User.org_node_id).filter(User.org_node_id.isnot(None), User.is_deleted == False).all()
+        for u_id, u_node in users:
+            if str(u_node) in descendant_nodes:
+                subordinate_user_ids.add(str(u_id))
 
     all_entries = q.order_by(AdminAuditEntry.created_at.desc()).limit(limit * 3).all()
     filtered = []

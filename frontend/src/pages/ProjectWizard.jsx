@@ -552,8 +552,8 @@ export default function ProjectWizard() {
                   <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                     {[
                       { label: 'Project Name', value: form.name },
-                      { label: 'Business Unit', value: BUS.find(b => b.id === form.bu)?.name || '-' },
-                      { label: 'Type', value: form.type },
+                      { label: 'Business Unit', value: assignedBuNode?.name || availableBUs.find(b => b.id === form.bu)?.name || nodes.find(b => b.id === form.bu)?.name || '-' },
+                      { label: 'Type', value: PROJECT_TYPES.find(t => t.value === form.type)?.label || form.type },
                       { label: 'Location', value: form.location },
                       { label: 'Stage', value: form.stage },
                       { label: 'Period', value: form.period },
@@ -619,8 +619,22 @@ export default function ProjectWizard() {
               marginTop: 16, padding: '12px 16px', borderRadius: 8,
               background: '#fef2f2', border: '1px solid #fca5a5',
               color: '#991b1b', fontSize: 13, fontWeight: 600,
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10
             }}>
-              ❌ {createError}
+              <span>❌ {createError}</span>
+              {(createError.toLowerCase().includes('session') || createError.toLowerCase().includes('authentication') || createError.toLowerCase().includes('token')) && (
+                <button
+                  type="button"
+                  onClick={() => navigate('/login')}
+                  style={{
+                    background: '#991b1b', color: '#fff', border: 'none',
+                    padding: '5px 12px', borderRadius: 6, fontSize: 12,
+                    fontWeight: 600, cursor: 'pointer'
+                  }}
+                >
+                  Log in again
+                </button>
+              )}
             </div>
           )}
 
