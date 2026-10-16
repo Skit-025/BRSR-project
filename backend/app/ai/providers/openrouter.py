@@ -100,9 +100,9 @@ class OpenRouterProvider(BaseAIProvider):
 
         models_to_try = [
             settings.OPENROUTER_MODEL_TEXT,
-            "google/gemini-3.8-flash",
-            "google/gemini-3.5-flash",
-            "openrouter/auto",
+            "meta-llama/llama-3.3-70b-instruct:free",  # was: google/gemini-3.8-flash (402 - paid model, no credits)
+            "mistralai/mistral-7b-instruct:free",       # was: google/gemini-3.5-flash (402 - paid model, no credits)
+            "openrouter/auto",                          # was: openrouter/auto (kept - last resort)
         ]
         models_to_try = list(dict.fromkeys([m for m in models_to_try if m]))
 
@@ -112,7 +112,7 @@ class OpenRouterProvider(BaseAIProvider):
                 "model": model,
                 "messages": messages,
                 "temperature": 0.1,
-                "max_tokens": 1500
+                "max_tokens": 4096
             }
             try:
                 with httpx.Client(timeout=90.0) as client:
@@ -155,13 +155,13 @@ class OpenRouterProvider(BaseAIProvider):
             }
         ]
 
-        # Prioritized vision models on OpenRouter (gemini-3.8-flash is ultra-fast and reliable)
+        # Prioritized vision models on OpenRouter (confirmed active free-tier, queried 2026-10-16)
         models_to_try = [
-            settings.OPENROUTER_MODEL_VISION,  # google/gemini-3.8-flash (from .env)
-            "google/gemini-3.8-flash",
-            "google/gemini-3.5-flash-lite",
-            "google/gemini-3.5-flash",
-            "openrouter/auto",
+            settings.OPENROUTER_MODEL_VISION,                    # from .env
+            "google/gemma-4-31b-it:free",                        # was: google/gemini-2.0-flash-exp:free (404 - model retired)
+            "google/gemma-4-26b-a4b-it:free",                   # was: meta-llama/llama-3.2-11b-vision-instruct:free (404 - model retired)
+            "nvidia/nemotron-3.5-super-vl:free",                 # new addition: image+video capable
+            "openrouter/auto",                                   # last resort
         ]
         models_to_try = list(dict.fromkeys([m for m in models_to_try if m]))
 
@@ -171,7 +171,7 @@ class OpenRouterProvider(BaseAIProvider):
                 "model": model,
                 "messages": messages,
                 "temperature": 0.1,
-                "max_tokens": 1500
+                "max_tokens": 4096  # was: 1500 (too low, caused JSON truncation mid-response)
             }
             try:
                 logger.info(f"Calling OpenRouter vision model '{model}'...")
