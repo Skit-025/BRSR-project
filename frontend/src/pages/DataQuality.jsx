@@ -13,6 +13,7 @@ import {
   useValidationExceptions,
   useResolveException
 } from '../hooks/useApi';
+import PageHelpButton from '../components/PageHelpButton';
 
 // Illustrative reference anomaly types for demonstration / reference
 const EXAMPLE_ANOMALY_TYPES = [
@@ -164,7 +165,8 @@ export default function DataQuality() {
             Monitor real-time ESG data coverage and inspect statutory validation rules before compiling assurance packs.
           </p>
         </div>
-        <div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <PageHelpButton title="Data Quality Guide" route="/data-quality" />
           <button
             onClick={handleRefresh}
             disabled={isRefreshing}

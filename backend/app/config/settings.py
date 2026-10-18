@@ -43,15 +43,15 @@ class Settings(BaseSettings):
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
 
     # AI Gateway Settings
-    AI_PROVIDER: str = "openrouter"  # "gemini", "openrouter", "mock"
+    AI_PROVIDER: str = "gemini"  # "gemini" (primary), "openrouter" (backup), "mock"
     GEMINI_API_KEY: Optional[str] = None
     OPENROUTER_API_KEY: Optional[str] = None
-    OPENROUTER_MODEL_TEXT: str = "meta-llama/llama-3.1-8b-instruct"
-    OPENROUTER_MODEL_VISION: str = "google/gemini-3.8-flash"
+    OPENROUTER_MODEL_TEXT: str = "nvidia/nemotron-3.5-lightning:free"
+    OPENROUTER_MODEL_VISION: str = "nvidia/nemotron-3.5-super-vl:free"
     AI_FALLBACK_TO_MOCK: bool = True
     AI_AUTO_FALLBACK_ON_ERROR: bool = True
-    AI_MODEL_VISION: str = "models/gemini-3.8-flash"
-    AI_MODEL_TEXT: str = "models/gemini-3.8-flash"
+    AI_MODEL_VISION: str = "gemini-3.8-flash"
+    AI_MODEL_TEXT: str = "gemini-3.8-flash"
     AI_EMBEDDING_MODEL: str = "models/text-embedding-004"
 
     # SMTP Email Configuration (Google Mail / Gmail Provider)

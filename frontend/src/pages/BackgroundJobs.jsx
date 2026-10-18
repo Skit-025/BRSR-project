@@ -4,6 +4,7 @@ import {
   Layers, Database, Cpu, Activity, AlertCircle, Search, Filter
 } from 'lucide-react';
 import { useBackgroundJobs } from '../hooks/useApi';
+import PageHelpButton from '../components/PageHelpButton';
 
 export default function BackgroundJobs() {
   const [statusFilter, setStatusFilter] = useState('');
@@ -92,14 +93,17 @@ export default function BackgroundJobs() {
           </div>
         </div>
 
-        <button
-          onClick={() => refetch()}
-          className="btn btn-secondary"
-          style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}
-        >
-          <RefreshCw size={14} className={isLoading ? 'spin' : ''} />
-          Auto-Refreshing (10s)
-        </button>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+          <PageHelpButton title="Jobs & Pipeline Guide" route="/consolidation" />
+          <button
+            onClick={() => refetch()}
+            className="btn btn-secondary"
+            style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}
+          >
+            <RefreshCw size={14} className={isLoading ? 'spin' : ''} />
+            Auto-Refreshing (10s)
+          </button>
+        </div>
       </div>
 
       {/* KPI Cards */}

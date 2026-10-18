@@ -117,7 +117,7 @@ def compile_brsr_report(
     if node.type == "group" or node.is_root:
         corporate_name = "Megha Engineering & Infrastructures Ltd (MEIL)"
     else:
-        corporate_name = "Aarohan Infrastructure & Energy Group"
+        corporate_name = node.name
 
     section_a = SectionAData(
         corporate_name=corporate_name,

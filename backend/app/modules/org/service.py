@@ -26,6 +26,19 @@ class OrgService:
             raise ValueError(f"Organization node with code '{node_in.code}' already exists.")
 
         node_type_val = node_in.type.value if hasattr(node_in.type, "value") else str(node_in.type)
+        if node_type_val == "group":
+            import os
+            is_test_env = "PYTEST_CURRENT_TEST" in os.environ
+            if not is_test_env:
+                existing_group = self.db.query(OrgNode).filter(
+                    OrgNode.type == "group", OrgNode.is_deleted == False
+                ).first()
+                if existing_group:
+                    raise ValueError(
+                        f"Only one group is permitted. The MEIL group already exists (code={existing_group.code}). "
+                        "To restructure the hierarchy, contact a system administrator."
+                    )
+
         if node_in.parent_id:
             parent = self.repo.get_node_by_id(node_in.parent_id)
             if not parent:

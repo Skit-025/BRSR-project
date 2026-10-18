@@ -7,6 +7,7 @@ import {
 import { useOrgNodes, useOrgPeriods } from '../hooks/useApi';
 import { useAuth } from '../context/AuthContext';
 import { disclosuresApi } from '../api/client';
+import PageHelpButton from '../components/PageHelpButton';
 
 const SUB_TABS = [
   { id: 'section_a_org', label: 'Section A: General Details', icon: Building, desc: 'Corporate identity, facilities, employee demographics & CSR' },
@@ -16,17 +17,17 @@ const SUB_TABS = [
 
 const getInitialFormData = (subNode) => {
   const code = subNode?.code || '';
-  const isSeed = code === 'AAROHAN-GROUP' || code.startsWith('SUB-A-') || code.startsWith('SUB-B-') || code === 'SUB-HYDRO-01';
+  const isSeed = code.startsWith('SUB-') || code === 'MEGHA-ROAD-TRANS';
 
   if (isSeed) {
     return {
       section_a_org: {
-        corporate_name: subNode?.name || 'Aarohan Renewable Energy Pvt. Ltd.',
-        cin_number: 'U40106MH2018PTC312456',
-        registered_office_address: 'Aarohan Towers, Plot 14, BKC, Bandra East, Mumbai - 400051',
+        corporate_name: subNode?.name || 'Olectra Greentech Limited',
+        cin_number: 'L34100TG2000PLC035451',
+        registered_office_address: 'S-22, 3rd Floor, Technocrat Indl Estate, Balanagar, Hyderabad - 500037, Telangana',
         contact_person: 'Corporate Sustainability Officer',
-        contact_email: 'esg.compliance@aarohan-energy.in',
-        website: 'https://aarohan-energy.in',
+        contact_email: 'esg.compliance@meghaengineering.com',
+        website: 'https://meghaengineering.com',
         reporting_boundary: 'Standalone entity and operational sites',
         total_employees_permanent: '14250',
         total_workers_permanent: '28400',
@@ -42,7 +43,7 @@ const getInitialFormData = (subNode) => {
         has_environment_policy: true,
         has_stakeholder_policy: true,
         board_committee_responsible: 'CSR & Sustainability Committee of the Board',
-        policy_weblink: 'https://aarohan-energy.in/sustainability/policies',
+        policy_weblink: 'https://meghaengineering.com/sustainability/policies',
         review_frequency_months: '12',
         independent_directors_oversight: true,
         stakeholder_grievance_redressal_in_place: true
@@ -250,6 +251,7 @@ export default function SubsidiaryDisclosure() {
 
         {/* Selectors */}
         <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+          <PageHelpButton title="Reporting Guide" route="/reporting" />
           <select
             value={selectedSub}
             onChange={e => setSelectedSub(e.target.value)}

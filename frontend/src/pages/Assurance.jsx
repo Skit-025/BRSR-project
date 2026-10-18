@@ -15,6 +15,7 @@ import {
 } from '../hooks/useApi';
 import { assuranceApi } from '../api/client';
 import { useAuth } from '../context/AuthContext';
+import PageHelpButton from '../components/PageHelpButton';
 
 export default function Assurance() {
   const { user } = useAuth();
@@ -175,7 +176,8 @@ export default function Assurance() {
           </div>
         </div>
 
-        <div style={{ display: 'flex', gap: 10 }}>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+          <PageHelpButton title="Assurance Guide" route="/assurance" />
           <button
             onClick={() => refetch()}
             className="btn btn-secondary"

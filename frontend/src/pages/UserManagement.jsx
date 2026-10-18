@@ -10,6 +10,8 @@ import {
 import { authApi, orgApi } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import Modal from '../components/Modal';
+import PageHelpButton from '../components/PageHelpButton';
+import { MOCK_ORG_NODES, MOCK_USERS } from '../mock/mockData';
 
 // All standard roles with display metadata (Five-Role Architecture)
 export const ROLE_DEFINITIONS = {
@@ -642,7 +644,8 @@ export default function UserManagement() {
             Enforces strict 4-level delegation: administrators can only delegate roles within their authorized organizational branch.
           </p>
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <PageHelpButton title="User Governance Guide" route="/admin/users" />
           <button
             className="btn btn-secondary"
             style={{ borderRadius: 6, border: '1px solid #e2e8f0', background: '#fff', color: '#09090b', fontWeight: 600 }}

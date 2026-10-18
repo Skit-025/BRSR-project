@@ -51,8 +51,16 @@ def validate_submission(
             db.add(err)
             results.append(err)
 
-        # 2. Evidence Rule: Mandatory evidence check
-        if metric and metric.evidence_rule == EvidenceRule.MANDATORY.value:
+        # 2. Evidence Rule: Mandatory evidence check (exempt auto-calculated metrics)
+        is_calculated_metric = bool(
+            metric and (
+                metric.calc_formula_code
+                or metric.entry_level == "calculated"
+                or (metric.code.startswith("ENV-GHG") and "FUEL" not in metric.code)
+                or "INTENSITY" in metric.code
+            )
+        )
+        if metric and metric.evidence_rule == EvidenceRule.MANDATORY.value and not is_calculated_metric:
             has_link = db.query(EvidenceLink).filter(EvidenceLink.data_point_id == dp.id).first()
             if not has_link:
                 err = ValidationResult(

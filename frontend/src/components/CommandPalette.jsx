@@ -26,9 +26,9 @@ const PALETTE_ITEMS = [
 
   // Hierarchy Nodes
   { id: 'node-aarohan', type: 'Hierarchy Scope', title: 'Aarohan Infrastructure & Energy Group', subtitle: 'Level 1: Enterprise Group Root', url: '/', icon: Building2 },
-  { id: 'node-renew', type: 'Hierarchy Scope', title: 'Aarohan Renewable Energy Pvt. Ltd.', subtitle: 'Level 2: Subsidiary Entity', url: '/disclosure/subsidiary', icon: Building2 },
-  { id: 'node-solar-bu', type: 'Hierarchy Scope', title: 'Solar EPC Business Unit', subtitle: 'Level 3: Divisional Business Unit', url: '/disclosure/bu', icon: Building2 },
-  { id: 'node-odisha-site', type: 'Hierarchy Scope', title: 'Odisha Solar Park - Site 01', subtitle: 'Level 4: Major Infrastructure Project', url: '/collection', icon: Building2 },
+  { id: 'node-road-trans', type: 'Hierarchy Scope', title: 'Megha Road and Transport Ltd', subtitle: 'Level 2: Subsidiary Entity', url: '/disclosure/subsidiary', icon: Building2 },
+  { id: 'node-trans-bu', type: 'Hierarchy Scope', title: 'Transportation & Tunneling Business Unit', subtitle: 'Level 3: Divisional Business Unit', url: '/disclosure/bu', icon: Building2 },
+  { id: 'node-tunnel-site', type: 'Hierarchy Scope', title: 'Tunnel Project P7 (Zojila Tunnel)', subtitle: 'Level 4: Major Infrastructure Project', url: '/projects', icon: Building2 },
 ];
 
 export default function CommandPalette({ isOpen, onClose }) {

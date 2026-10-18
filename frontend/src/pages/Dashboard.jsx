@@ -11,17 +11,13 @@ import { useAuth } from '../context/AuthContext';
 import { useOrgPeriods, useOrgNodes, useDashboardSummary } from '../hooks/useApi';
 import DataLineageDrawer from '../components/DataLineageDrawer';
 import ProjectSummary from './ProjectSummary';
+import PageHelpButton from '../components/PageHelpButton';
 
-export default function Dashboard() {
+function EnterpriseDashboard() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { data: periods = [] } = useOrgPeriods();
   const { data: nodes = [] } = useOrgNodes();
-
-  // Phase 11: Project Admin sees project BRSR disclosure as their Overview
-  if (user?.role === 'project_admin') {
-    return <ProjectSummary />;
-  }
 
   const [selectedPeriodId, setSelectedPeriodId] = useState('');
   const [selectedEntityId, setSelectedEntityId] = useState('');
@@ -33,7 +29,7 @@ export default function Dashboard() {
       const userNode = nodes.find(n => n.id === user.org_node_id);
       if (userNode) return userNode;
     }
-    return nodes.find(n => n.code === 'AAROHAN-GROUP') || nodes.find(n => n.type === 'group' || n.is_root) || nodes[0];
+    return nodes.find(n => n.code === 'MEIL-GROUP') || nodes.find(n => n.type === 'group' || n.is_root) || nodes[0];
   }, [nodes, user?.org_node_id]);
 
   const activePeriodId = selectedPeriodId || periods.find(p => p.code === 'FY2025-26-M03')?.id || periods[0]?.id;
@@ -193,6 +189,7 @@ export default function Dashboard() {
 
           {/* Action controls */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <PageHelpButton title="Dashboard Guide" route="/dashboard" />
             {/* FY selector */}
             <div style={{
               display: 'flex',
@@ -967,13 +964,13 @@ export default function Dashboard() {
                   },
                   {
                     time: '12m ago',
-                    title: 'BU Manager Vikram approved',
-                    desc: 'Project P-98 Solar Plant generation figures'
+                    title: 'BU Manager Rajesh approved',
+                    desc: 'Tunnel Project P7 machinery figures'
                   },
                   {
                     time: '31m ago',
                     title: 'Calculation run completed',
-                    desc: 'Odisha BU consolidated (Methodology v2.1)'
+                    desc: 'Transportation BU consolidated (Methodology v2.1)'
                   },
                   {
                     time: '1h ago',
@@ -1215,4 +1212,15 @@ export default function Dashboard() {
       />
     </div>
   );
+}
+
+export default function Dashboard() {
+  const { user } = useAuth();
+
+  // Phase 11: Project Admin sees project BRSR disclosure as their Overview
+  if (user?.role === 'project_admin') {
+    return <ProjectSummary key={user?.id || 'project_admin'} />;
+  }
+
+  return <EnterpriseDashboard key={user?.id || 'enterprise_dashboard'} />;
 }

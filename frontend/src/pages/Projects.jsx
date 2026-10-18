@@ -8,13 +8,12 @@ import {
 } from 'lucide-react';
 import { useOrgNodes, useOrgPeriods } from '../hooks/useApi';
 import { useAuth } from '../context/AuthContext';
+import PageHelpButton from '../components/PageHelpButton';
 
-/* ── Seeded project data for Aarohan Infrastructure & Energy Group ── */
+/* ── Seeded project data for Transportation & Tunneling Group ── */
 const MOCK_PROJECTS = [
-  { id: 'PRJ-ODISHA-SOLAR', name: '250 MW Odisha Solar Park', bu: 'Solar EPC & Operations', subsidiary: 'Aarohan Renewable Energy Pvt. Ltd.', status: 'IN_REVIEW', coverage: 92, period: 'FY 2025–26', type: 'Solar Power Generation', location: 'Odisha, India', lastActivity: '10m ago' },
-  { id: 'PRJ-RAJ-SOLAR', name: '50 MW Rajasthan Solar Expansion', bu: 'Solar EPC & Operations', subsidiary: 'Aarohan Renewable Energy Pvt. Ltd.', status: 'APPROVED', coverage: 100, period: 'FY 2025–26', type: 'Solar Power Generation', location: 'Rajasthan, India', lastActivity: '1h ago' },
-  { id: 'PRJ-KUTCH-WIND', name: 'Kutch Wind Farm', bu: 'Wind Energy Operations', subsidiary: 'Aarohan Renewable Energy Pvt. Ltd.', status: 'CALCULATED', coverage: 100, period: 'FY 2025–26', type: 'Wind Power Generation', location: 'Gujarat, India', lastActivity: '3h ago' },
-  { id: 'PRJ-PURI-HWY', name: 'Bhubaneswar–Puri Road Expansion', bu: 'Highway Development', subsidiary: 'Aarohan Infrastructure Projects Pvt. Ltd.', status: 'SUBMITTED', coverage: 85, period: 'FY 2025–26', type: 'Highway Construction', location: 'Odisha, India', lastActivity: '5h ago' },
+  { id: 'PRJ-ZOJILA-P7', name: 'Tunnel Project P7 (Zojila Tunnel)', bu: 'Transportation & Tunneling Business Unit', subsidiary: 'Megha Road and Transport Ltd', status: 'IN_REVIEW', coverage: 88, period: 'FY 2025–26', type: 'Tunneling', location: 'Ladakh, India', lastActivity: '10m ago' },
+  { id: 'PRJ-HWY-001', name: 'Highway Construction P-001 (Odisha Expressway)', bu: 'Transportation & Tunneling Business Unit', subsidiary: 'Megha Road and Transport Ltd', status: 'APPROVED', coverage: 100, period: 'FY 2025–26', type: 'Highway Construction', location: 'Odisha, India', lastActivity: '1h ago' },
 ];
 
 const STATUS_CONFIG = {
@@ -64,12 +63,10 @@ export default function Projects() {
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 8;
 
-  // Known Aarohan demo project status from seed data
-  const AAROHAN_STATUS_MAP = {
-    'PRJ-ODISHA-SOLAR': { status: 'IN_REVIEW', coverage: 92, lastActivity: '10m ago' },
-    'PRJ-RAJ-SOLAR':    { status: 'APPROVED',  coverage: 100, lastActivity: '1h ago' },
-    'PRJ-KUTCH-WIND':   { status: 'CALCULATED', coverage: 100, lastActivity: '3h ago' },
-    'PRJ-PURI-HWY':     { status: 'SUBMITTED',  coverage: 85, lastActivity: '5h ago' },
+  // Known project status from seed data
+  const MEIL_STATUS_MAP = {
+    'PRJ-ZOJILA-P7': { status: 'IN_REVIEW', coverage: 88, lastActivity: '10m ago' },
+    'PRJ-HWY-001':   { status: 'APPROVED',  coverage: 100, lastActivity: '1h ago' },
   };
 
   const projectsList = useMemo(() => {
@@ -102,13 +99,13 @@ export default function Projects() {
     return projectNodes.map(n => {
       const parentBu = nodes.find(b => b.id === n.parent_id);
       const parentSub = parentBu ? nodes.find(s => s.id === parentBu.parent_id) : null;
-      const knownStatus = AAROHAN_STATUS_MAP[n.code] || {};
+      const knownStatus = MEIL_STATUS_MAP[n.code] || {};
       return {
         id: n.id,
         name: n.name,
         code: n.code,
         bu: parentBu?.name || 'Assigned BU',
-        subsidiary: parentSub?.name || 'Aarohan Group',
+        subsidiary: parentSub?.name || 'MEIL',
         status: knownStatus.status || 'DRAFT',
         coverage: knownStatus.coverage || 0,
         period: 'FY 2025–26',
@@ -196,7 +193,8 @@ export default function Projects() {
             Manage ESG data collection, activity logging, and attestation status across all sites.
           </p>
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <PageHelpButton title="Projects Guide" route="/projects" />
           <button className="btn btn-secondary" style={{ borderRadius: 6, border: '1px solid #e2e8f0', background: '#fff', color: '#09090b', fontWeight: 600 }}>
             <Download size={14} /> Export CSV
           </button>

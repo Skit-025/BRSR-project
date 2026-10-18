@@ -10,82 +10,97 @@ import {
 
 /* ── Shared project data ── */
 const PROJECTS_DATA = {
-  'PRJ-ODISHA-SOLAR': {
-    id: 'PRJ-ODISHA-SOLAR', name: '250 MW Odisha Solar Park',
-    code: 'PRJ-ODISHA-SOLAR', period: 'FY 2025–26',
-    status: 'IN_REVIEW', coverage: 92, evidenceCount: '18 / 20',
-    bu: 'Solar EPC & Operations', subsidiary: 'Aarohan Renewable Energy Pvt. Ltd.',
-    type: 'Solar Power Generation', location: 'Odisha, India', stage: 'Operations',
-    description: 'Utility-scale 250 MW grid-connected solar photovoltaic installation in Odisha delivering clean energy to state discoms. Equipped with central inverters, automated bifacial tracking, dedicated 220kV evacuation substation, and continuous environmental monitoring.',
+  'PRJ-ZOJILA-P7': {
+    id: 'PRJ-ZOJILA-P7',
+    name: 'Tunnel Project P7 (Zojila Tunnel)',
+    code: 'PRJ-ZOJILA-P7',
+    period: 'FY 2025–26',
+    status: 'IN_REVIEW',
+    coverage: 88,
+    evidenceCount: '14 / 16',
+    bu: 'Transportation & Tunneling Business Unit',
+    subsidiary: 'Megha Road and Transport Ltd',
+    type: 'Tunneling & Underground Infrastructure',
+    location: 'Ladakh, India',
+    stage: 'Construction & Tunnelling',
+    description: 'Construction of 14.15 km bi-directional all-weather highway tunnel under the Zojila pass connecting Ladakh and Kashmir valleys. Equipped with high-altitude electrical substation, underground ventilation, heavy excavation machinery, concrete lining, and continuous environmental monitoring.',
     activities: [
-      'Solar photovoltaic power generation',
-      'Substation & grid transmission operations',
-      'Automated robotic panel dry cleaning',
-      'Site environmental & vegetation management',
-      'Workforce EHS safety monitoring',
+      'Civil underground excavation & heading/benching tunneling',
+      'Ventilation shaft operations & high-volume airflow blowers',
+      'Continuous heavy earthmoving machinery & auxiliary diesel operations',
+      'Shotcrete, structural concrete batching & rock bolting',
+      'Mountain slope stabilization, spoil runoff & sediment mitigation',
+      'Workforce cold-climate occupational health & safety monitoring',
     ],
-    template: 'Renewable Solar Utility Operations v1',
+    template: 'Heavy Civil & Tunnelling ESG Protocol v1',
     lastUpdated: 'Mar 28, 2026 · 17:30',
-    submittedBy: 'Aditya Sharma (Project User)',
+    submittedBy: 'Ravi Kumar (Site Engineer - Zojila Tunnel P7)',
     esgSections: [
-      { id: 'energy', label: 'Energy & Fuel', items: ['Solar Generation (38,450 MWh)', 'Auxiliary Diesel (12,450 L)'], status: 'DONE', pct: 100 },
-      { id: 'water',  label: 'Water Stewardship', items: ['Robotic Cleaning (1,240 kL)', 'Domestic Water (380 kL)'], status: 'DONE', pct: 100 },
-      { id: 'waste',  label: 'Waste & Circularity', items: ['E-Waste Modules (0.4 MT)', 'Packaging Waste (3.2 MT)'], status: 'PARTIAL', pct: 85 },
-      { id: 'social', label: 'Workforce & Safety', items: ['184,000 Safe Hours', 'Zero LTIs', '100% PPE Audits'], status: 'DONE', pct: 100 },
-      { id: 'env',    label: 'Biodiversity & Land', items: ['Topsoil Preservation', 'Greenbelt Flora Survey'], status: 'PARTIAL', pct: 75 },
+      { id: 'energy', label: 'Energy & Heavy Fuel', items: ['Underground Grid Power (52,000 kWh)', 'Auxiliary DG & Fleet Diesel (46,000 L)'], status: 'DONE', pct: 100 },
+      { id: 'water',  label: 'Water Management', items: ['Dust Suppression Water (8,420 kL)', 'Domestic & Camp Water (1,240 kL)'], status: 'DONE', pct: 100 },
+      { id: 'waste',  label: 'Muck & Spoil Circularity', items: ['Tunnel Rock Muck (1.6 MT)', 'Hazardous Hydraulic Oil (0.3 MT)'], status: 'DONE', pct: 100 },
+      { id: 'social', label: 'High-Altitude Safety', items: ['248,000 Safe Work Hours', 'Zero Fatalities', '100% Extreme Weather PPE Audits'], status: 'DONE', pct: 100 },
+      { id: 'env',    label: 'Sediment & Air Quality', items: ['Spoil Runoff Sedimentation Basins', 'Tunnel Portal Exhaust Scrubbing'], status: 'PARTIAL', pct: 85 },
     ],
     evidence: [
-      { id: 'e1', name: 'GRID-INVOICE-ODISHA-MAR2026.pdf', type: 'PDF', size: '2.4 MB', uploaded: 'Mar 28, 2026', field: 'Solar Grid Export & Auxiliary Energy' },
-      { id: 'e2', name: 'DIESEL-LOGBOOK-IOCL-MAR2026.pdf', type: 'PDF', size: '1.8 MB', uploaded: 'Mar 27, 2026', field: 'Diesel Generator Meter Records (12,450 L)' },
-      { id: 'e3', name: 'WATER-ROBOTIC-CLEAN-MAR2026.pdf', type: 'PDF', size: '0.9 MB', uploaded: 'Mar 27, 2026', field: 'Water Consumption & Robotic Dry-Cleaning' },
-      { id: 'e4', name: 'LABOUR-SAFETY-AUDIT-Q4.pdf', type: 'PDF', size: '1.2 MB', uploaded: 'Mar 26, 2026', field: 'Workforce Safety & Zero-Incident Log' },
+      { id: 'e1', name: 'DISCOM-UTILITY-BILL-ZOJILA-TSS04.pdf', type: 'PDF', size: '2.8 MB', uploaded: 'Mar 28, 2026', field: 'Underground Grid Power & Substation Draw' },
+      { id: 'e2', name: 'IOCL-DIESEL-CHALLANS-HEAVY-FLEET.pdf', type: 'PDF', size: '3.4 MB', uploaded: 'Mar 27, 2026', field: 'Excavation Machinery & DG Fuel Records (46,000 L)' },
+      { id: 'e3', name: 'TUNNEL-DUST-WATER-METER-LOGS.pdf', type: 'PDF', size: '1.2 MB', uploaded: 'Mar 27, 2026', field: 'Slurry & Dust Suppression Water (8,420 kL)' },
+      { id: 'e4', name: 'HIGH-ALTITUDE-SAFETY-AUDIT-Q4.pdf', type: 'PDF', size: '1.9 MB', uploaded: 'Mar 26, 2026', field: 'Workforce Cold-Climate Safety & Zero-Incident Attestation' },
     ],
     metrics: [
-      { label: 'Clean Power Export', value: '38,450', unit: 'MWh', icon: Zap, trend: -14 },
-      { label: 'Auxiliary Diesel', value: '12,450', unit: 'L', icon: Flame, trend: -8 },
-      { label: 'Water Consumed', value: '1,620', unit: 'kL', icon: Droplets, trend: -22 },
-      { label: 'Workers On-site', value: '184', unit: 'persons', icon: Users, trend: 4 },
+      { label: 'Underground Grid Power', value: '52,000', unit: 'kWh', icon: Zap, trend: -6 },
+      { label: 'Auxiliary & Fleet Diesel', value: '46,000', unit: 'L', icon: Flame, trend: -4 },
+      { label: 'Water Consumed', value: '8,420', unit: 'kL', icon: Droplets, trend: -12 },
+      { label: 'Workers On-site', value: '312', unit: 'persons', icon: Users, trend: 8 },
     ],
     reviews: [
-      { id: 'r1', reviewer: 'Rajesh Sen (BU Admin)', action: 'IN_REVIEW', comment: 'Reviewing auxiliary diesel logbooks and dry-cleaning water records against IOCL delivery vouchers for March 2026. All primary evidence files validated.', date: 'Mar 28, 2026 18:15', level: 'BU' },
+      { id: 'r1', reviewer: 'Rajesh V. (BU Admin)', action: 'IN_REVIEW', comment: 'Reviewing underground excavation fuel registers, TSS-04 grid utility invoices, and cold-climate safety audit logs for March 2026. All primary evidence validated.', date: 'Mar 28, 2026 18:15', level: 'BU' },
     ],
     pipeline: [
       { label: 'Project Data Submitted', status: 'done', time: 'Mar 28, 2026 · 17:30' },
       { label: 'BU Admin Review', status: 'active', time: 'In progress (Under BU Review)' },
       { label: 'Project Emission Calculation', status: 'pending', time: 'Pending BU Approval' },
-      { label: 'Solar BU Aggregation', status: 'pending', time: 'Pending' },
-      { label: 'Aarohan Renewable Consolidation', status: 'pending', time: 'Pending' },
+      { label: 'Transportation BU Aggregation', status: 'pending', time: 'Pending' },
+      { label: 'Megha Road Consolidation', status: 'pending', time: 'Pending' },
       { label: 'Group ESG Report Ready', status: 'pending', time: 'Pending' },
     ],
   },
-  'PRJ-RAJ-SOLAR': {
-    id: 'PRJ-RAJ-SOLAR', name: '50 MW Rajasthan Solar Expansion',
-    code: 'PRJ-RAJ-SOLAR', period: 'FY 2025–26',
-    status: 'APPROVED', coverage: 100, evidenceCount: '15 / 15',
-    bu: 'Solar EPC & Operations', subsidiary: 'Aarohan Renewable Energy Pvt. Ltd.',
-    type: 'Solar Power Generation', location: 'Rajasthan, India', stage: 'Operations',
-    description: 'Bifacial solar installation in Thar desert region operating with zero liquid discharge protocol.',
-    activities: ['Solar PV Generation', 'Desert Dust Mitigation', 'Transmission Feed'],
-    template: 'Renewable Solar Utility Operations v1',
+  'PRJ-HWY-001': {
+    id: 'PRJ-HWY-001',
+    name: 'Highway Construction P-001 (Odisha Expressway)',
+    code: 'PRJ-HWY-001',
+    period: 'FY 2025–26',
+    status: 'APPROVED',
+    coverage: 100,
+    evidenceCount: '12 / 12',
+    bu: 'Transportation & Tunneling Business Unit',
+    subsidiary: 'Megha Road and Transport Ltd',
+    type: 'Highway Construction',
+    location: 'Odisha, India',
+    stage: 'Earthworks & Paving',
+    description: '50 km 4-lane Greenfield highway corridor construction including earthwork, concrete batching, and bituminous paving.',
+    activities: ['Earthworks & Grading', 'Bituminous Paving', 'Stormwater Drainage', 'Road Safety Monitoring'],
+    template: 'Linear Transport & Highway Infrastructure v1',
     lastUpdated: 'Mar 26, 2026 · 14:00',
     submittedBy: 'Karan Mehra',
     esgSections: [
-      { id: 'energy', label: 'Energy', items: ['Solar Feed', 'Inverter Losses'], status: 'DONE', pct: 100 },
-      { id: 'water', label: 'Water', items: ['Cleaning Water'], status: 'DONE', pct: 100 },
+      { id: 'energy', label: 'Energy & Fuel', items: ['Paver & Roller Diesel', 'Batching Plant Power'], status: 'DONE', pct: 100 },
+      { id: 'water', label: 'Water Stewardship', items: ['Dust Suppression Water'], status: 'DONE', pct: 100 },
     ],
     evidence: [],
-    metrics: [{ label: 'Clean Power', value: '7,800', unit: 'MWh', icon: Zap, trend: 0 }],
+    metrics: [{ label: 'Batching Power', value: '18,500', unit: 'kWh', icon: Zap, trend: 0 }],
     reviews: [],
     pipeline: [],
   },
 };
 
 // Aliases
-PROJECTS_DATA['prj-odisha-solar'] = PROJECTS_DATA['PRJ-ODISHA-SOLAR'];
-PROJECTS_DATA['prj-best'] = PROJECTS_DATA['PRJ-ODISHA-SOLAR'];
-PROJECTS_DATA['prj-hwy-od'] = PROJECTS_DATA['PRJ-ODISHA-SOLAR'];
+PROJECTS_DATA['prj-zojila-p7'] = PROJECTS_DATA['PRJ-ZOJILA-P7'];
+PROJECTS_DATA['zojila'] = PROJECTS_DATA['PRJ-ZOJILA-P7'];
+PROJECTS_DATA['prj-hwy-001'] = PROJECTS_DATA['PRJ-HWY-001'];
 
-const FALLBACK_PROJECT = PROJECTS_DATA['PRJ-ODISHA-SOLAR'];
+const FALLBACK_PROJECT = PROJECTS_DATA['PRJ-ZOJILA-P7'];
 
 const STATUS_CONFIG = {
   APPROVED:          { label: 'Approved',          badgeClass: 'badge-green', dot: 'green' },
@@ -212,16 +227,16 @@ export default function ProjectDetail() {
     const derivedStatus = subStatus ? (SUB_STATUS_MAP[subStatus] || 'DRAFT') : (dbNode.is_active ? 'APPROVED' : 'DRAFT');
     const dataPoints = submissionPack?.data_points || [];
 
-    const isSeededOdisha = dbNode.code === 'PRJ-ODISHA-SOLAR';
-    const hero = PROJECTS_DATA['PRJ-ODISHA-SOLAR'];
+    const isSeededZojila = dbNode.code === 'PRJ-ZOJILA-P7' || (dbNode.name && dbNode.name.toLowerCase().includes('zojila'));
+    const hero = PROJECTS_DATA['PRJ-ZOJILA-P7'];
 
     // Real dynamic coverage: strictly 0% if no data entered yet!
     const totalRequiredFields = 8;
     const filledCount = dataPoints.filter(d => (d.value_numeric !== null && d.value_numeric !== undefined) || (d.value_text !== null && d.value_text !== undefined && d.value_text !== '')).length;
-    const coverage = isSeededOdisha && dataPoints.length === 0 ? 92 : (filledCount > 0 ? Math.min(100, Math.round((filledCount / totalRequiredFields) * 100)) : 0);
+    const coverage = isSeededZojila && dataPoints.length === 0 ? 88 : (filledCount > 0 ? Math.min(100, Math.round((filledCount / totalRequiredFields) * 100)) : 0);
 
     // Real dynamic evidence count: 0 / 6 for empty projects
-    const evidenceCountStr = isSeededOdisha && projectEvidence.length === 0 ? '18 / 20' : `${projectEvidence.length} / ${Math.max(6, projectEvidence.length)}`;
+    const evidenceCountStr = isSeededZojila && projectEvidence.length === 0 ? '14 / 16' : `${projectEvidence.length} / ${Math.max(6, projectEvidence.length)}`;
 
     // Project type resolution
     const pType = (dbNode.project_type || 'Infrastructure').toLowerCase();
@@ -234,12 +249,12 @@ export default function ProjectDetail() {
     let activities = [];
     if (isTunnel) {
       activities = [
-        'Civil excavation & underground tunnelling',
-        'Ventilation & underground tunnel lighting',
-        'Heavy machinery auxiliary diesel monitoring',
-        'Concrete lining & structural materials',
-        'Site dust, runoff & environmental mitigation',
-        'Workforce occupational health & safety',
+        'Civil underground excavation & heading/benching tunneling',
+        'Ventilation shaft operations & high-volume airflow blowers',
+        'Continuous heavy earthmoving machinery & auxiliary diesel operations',
+        'Shotcrete, structural concrete batching & rock bolting',
+        'Mountain slope stabilization, spoil runoff & sediment mitigation',
+        'Workforce cold-climate occupational health & safety monitoring',
       ];
     } else if (isSolar) {
       activities = [
@@ -287,13 +302,13 @@ export default function ProjectDetail() {
     let description = dbNode.project_description;
     if (!description) {
       if (isTunnel) {
-        description = `${dbNode.name} is a major civil tunnelling project located in ${dbNode.location_state || 'Odisha, India'} under ${parentBu?.name || 'Heavy Infrastructure'}. Operations include continuous underground excavation, ventilation, structural concrete lining, and strict workforce EHS and environmental monitoring under SEBI BRSR Core.`;
+        description = `${dbNode.name} is a major civil tunnelling project located in ${dbNode.location_state || 'Ladakh, India'} under ${parentBu?.name || 'Transportation & Tunneling Business Unit'}. Operations include continuous underground excavation, ventilation, structural concrete lining, and strict workforce EHS and environmental monitoring under SEBI BRSR Core.`;
       } else if (isSolar) {
         description = `${dbNode.name} is a utility-scale solar photovoltaic installation in ${dbNode.location_state || 'India'} delivering clean energy to state discoms, equipped with automated tracking and continuous environmental monitoring.`;
       } else if (isWind) {
         description = `${dbNode.name} is a utility wind energy farm in ${dbNode.location_state || 'India'} feeding renewable power to the regional grid with zero liquid discharge and active environmental safeguards.`;
       } else {
-        description = `${dbNode.name} (${dbNode.code}) is an authorized operational site under ${parentBu?.name || 'MEIL Enterprise'} tracking real-time energy, fuel, water, waste, and workforce metrics in accordance with SEBI BRSR statutory principles.`;
+        description = `${dbNode.name} (${dbNode.code}) is an authorized operational site under ${parentBu?.name || 'Megha Road and Transport Ltd'} tracking real-time energy, fuel, water, waste, and workforce metrics in accordance with SEBI BRSR statutory principles.`;
       }
     }
 
@@ -305,7 +320,7 @@ export default function ProjectDetail() {
     };
 
     let metrics = [];
-    if (isSeededOdisha && dataPoints.length === 0) {
+    if (isSeededZojila && dataPoints.length === 0) {
       metrics = hero.metrics;
     } else {
       const mElec = getVal('ENV-ENERGY-001') || getVal('ENV-ENE');
@@ -315,14 +330,14 @@ export default function ProjectDetail() {
 
       metrics = [
         {
-          label: isSolar ? 'Clean Power Export' : isTunnel ? 'Underground Power Draw' : 'Grid Electricity Draw',
+          label: isTunnel ? 'Underground Grid Power' : isSolar ? 'Clean Power Export' : 'Grid Electricity Draw',
           value: mElec !== null ? Number(mElec).toLocaleString('en-IN') : '--',
           unit: isSolar ? 'MWh' : 'kWh',
           icon: Zap,
           trend: mElec !== null ? -5 : 0
         },
         {
-          label: isTunnel ? 'Machinery Diesel' : 'Auxiliary Diesel',
+          label: isTunnel ? 'Auxiliary & Machinery Diesel' : 'Auxiliary Diesel',
           value: mDiesel !== null ? Number(mDiesel).toLocaleString('en-IN') : '--',
           unit: 'L',
           icon: Flame,
@@ -347,7 +362,7 @@ export default function ProjectDetail() {
 
     // Dynamic ESG Sections & Percentages
     let esgSections = [];
-    if (isSeededOdisha && dataPoints.length === 0) {
+    if (isSeededZojila && dataPoints.length === 0) {
       esgSections = hero.esgSections;
     } else {
       const hasEnergy = getVal('ENV-ENERGY-001') !== null || getVal('ENV-ENERGY-002') !== null;
@@ -388,7 +403,7 @@ export default function ProjectDetail() {
         uploaded: ev.created_at ? new Date(ev.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Recent',
         field: ev.bill_type || ev.doc_type || 'Operational Evidence'
       }));
-    } else if (isSeededOdisha) {
+    } else if (isSeededZojila) {
       evidenceList = hero.evidence;
     }
 
@@ -400,21 +415,21 @@ export default function ProjectDetail() {
       status: derivedStatus,
       coverage,
       evidenceCount: evidenceCountStr,
-      bu: parentBu?.name || 'Infrastructure & Engineering BU',
-      subsidiary: parentSub?.name || 'Aarohan Enterprise Ltd.',
+      bu: parentBu?.name || 'Transportation & Tunneling Business Unit',
+      subsidiary: parentSub?.name || 'Megha Road and Transport Ltd',
       type: dbNode.project_type || (isTunnel ? 'Heavy Tunnelling & Civil' : 'Infrastructure Operations'),
       location: dbNode.location_state ? `${dbNode.location_state}, India` : 'India',
       stage: 'Operations',
       description,
       activities,
       template,
-      lastUpdated: isSeededOdisha ? hero.lastUpdated : (dataPoints.length > 0 ? 'Today · Active' : 'Not submitted yet'),
-      submittedBy: isSeededOdisha ? hero.submittedBy : (user?.name ? `${user.name} (${user.role?.replace('_', ' ')})` : 'Project Site Engineer'),
+      lastUpdated: isSeededZojila ? hero.lastUpdated : (dataPoints.length > 0 ? 'Today · Active' : 'Not submitted yet'),
+      submittedBy: isSeededZojila ? hero.submittedBy : (user?.name ? `${user.name} (${user.role?.replace('_', ' ')})` : 'Project Site Engineer'),
       esgSections,
       evidence: evidenceList,
       metrics,
-      reviews: isSeededOdisha ? hero.reviews : [],
-      pipeline: isSeededOdisha ? hero.pipeline : [
+      reviews: isSeededZojila ? hero.reviews : [],
+      pipeline: isSeededZojila ? hero.pipeline : [
         { label: 'Project Data Submitted', status: dataPoints.length > 0 ? 'done' : 'pending', time: dataPoints.length > 0 ? 'Submitted' : 'Pending Data Entry' },
         { label: 'BU Admin Review', status: derivedStatus === 'IN_REVIEW' ? 'active' : (derivedStatus === 'APPROVED' ? 'done' : 'pending'), time: 'Pending' },
         { label: 'Project Emission Calculation', status: derivedStatus === 'APPROVED' ? 'done' : 'pending', time: 'Pending Approval' },
@@ -1024,7 +1039,7 @@ function EsgDataTab({ project, selectedSection, setSelectedSection, navigate }) 
 
   const isTunnel = project.type?.toLowerCase().includes('tunnel') || project.name?.toLowerCase().includes('tunnel');
   const isSolar = project.type?.toLowerCase().includes('solar');
-  const isSeeded = project.code === 'PRJ-ODISHA-SOLAR';
+  const isSeeded = project.code === 'PRJ-ZOJILA-P7' || (project.name && project.name.toLowerCase().includes('zojila'));
 
   // Base field schema adapting to project operational nature
   const FIELDS = {
@@ -1032,34 +1047,34 @@ function EsgDataTab({ project, selectedSection, setSelectedSection, navigate }) 
       {
         id: 'diesel',
         metricCode: 'ENV-ENERGY-002',
-        label: isTunnel ? 'Auxiliary & Machinery Diesel' : (isSolar ? 'Auxiliary Diesel Consumption' : 'Auxiliary Fuel / Diesel Consumption'),
+        label: isTunnel ? 'Underground Machinery & DG Diesel' : 'Auxiliary Fuel / Diesel Consumption',
         desc: isTunnel ? 'Total diesel consumed by excavators, tunnel machinery, and backup DG sets.' : 'Total diesel consumed by backup generators and site machinery during the reporting period.',
-        value: isSeeded ? '12,450' : '',
+        value: isSeeded ? '14,200' : '',
         unit: 'litres',
-        source: isSeeded ? 'IOCL Invoices / Fuel Register' : 'Site Fuel Register / Delivery Vouchers',
-        evidence: isSeeded ? 'DIESEL-LOGBOOK-IOCL-MAR2026.pdf' : null,
+        source: isSeeded ? 'IOCL Fuel Delivery Challans' : 'Site Fuel Register / Delivery Vouchers',
+        evidence: isSeeded ? 'IOCL-DIESEL-CHALLANS-HEAVY-FLEET.pdf' : null,
         status: isSeeded ? 'filled' : 'empty'
       },
       {
         id: 'grid_draw',
         metricCode: 'ENV-ENERGY-001',
-        label: isTunnel ? 'Underground Grid Power & Ventilation' : (isSolar ? 'Auxiliary Grid Electricity Drawl' : 'Auxiliary Grid Electricity Drawl'),
+        label: isTunnel ? 'Underground Grid Power & Substation TSS-04' : 'Grid Electricity Draw',
         desc: isTunnel ? 'Grid electricity drawn for ventilation fans, tunnel lighting, and drainage pumping.' : 'Grid electricity drawn for auxiliary services, SCADA and site equipment.',
-        value: isSeeded ? '64,500' : '',
+        value: isSeeded ? '52,000' : '',
         unit: 'kWh',
-        source: isSeeded ? 'Discom Import Bill' : 'Discom Utility Monthly Bill',
-        evidence: isSeeded ? 'GRID-INVOICE-ODISHA-MAR2026.pdf' : null,
+        source: isSeeded ? 'DISCOM Grid TSS-04 Substation Meter' : 'Discom Utility Monthly Bill',
+        evidence: isSeeded ? 'DISCOM-UTILITY-BILL-ZOJILA-TSS04.pdf' : null,
         status: isSeeded ? 'filled' : 'empty'
       },
       {
         id: 'fleet_diesel',
         metricCode: 'ENV-ENERGY-003',
-        label: isTunnel ? 'Muck Haulage & Transit Fleet Diesel' : 'Mobile Fleet & Machinery Diesel',
+        label: isTunnel ? 'Muck Haulage & Spoil Transport Diesel' : 'Mobile Fleet & Machinery Diesel',
         desc: isTunnel ? 'Diesel consumed by heavy dumper trucks, spoil haulage, and site transport.' : 'Diesel consumed by earthmoving, transit and maintenance fleet at site.',
-        value: isSeeded ? '28,300' : '',
+        value: isSeeded ? '31,800' : '',
         unit: 'litres',
-        source: isSeeded ? 'Transit Fleet Dispatch Logs' : 'Fleet Logbook / Fuel Slips',
-        evidence: isSeeded ? 'DIESEL-LOGBOOK-IOCL-MAR2026.pdf' : null,
+        source: isSeeded ? 'Excavation Fleet Dispatch Logs' : 'Fleet Logbook / Fuel Slips',
+        evidence: isSeeded ? 'IOCL-DIESEL-CHALLANS-HEAVY-FLEET.pdf' : null,
         status: isSeeded ? 'filled' : 'empty'
       },
     ],
@@ -1067,12 +1082,12 @@ function EsgDataTab({ project, selectedSection, setSelectedSection, navigate }) 
       {
         id: 'water_robotic',
         metricCode: 'ENV-WATER-001',
-        label: isTunnel ? 'Construction & Dust Suppression Water' : (isSolar ? 'Water Withdrawal (Borewell)' : 'Site Water Withdrawal'),
-        desc: isTunnel ? 'Groundwater or tanker water extracted for drilling slurry, concrete curing, and dust suppression.' : 'Groundwater extracted for cleaning, dust control and domestic use.',
-        value: isSeeded ? '9,150' : '',
+        label: isTunnel ? 'Drilling Slurry & Dust Suppression Water' : 'Site Water Withdrawal',
+        desc: isTunnel ? 'Water extracted for drilling slurry, concrete curing, and portal dust suppression.' : 'Groundwater extracted for cleaning, dust control and domestic use.',
+        value: isSeeded ? '8,420' : '',
         unit: 'kL',
-        source: isSeeded ? 'CGWA Borewell Telemetry Log' : 'Flow Meter / Water Tanker Receipts',
-        evidence: isSeeded ? 'WATER-EXTRACTION-CGWA-METER.pdf' : null,
+        source: isSeeded ? 'Site Borewell & Slurry Flowmeters' : 'Flow Meter / Water Tanker Receipts',
+        evidence: isSeeded ? 'TUNNEL-DUST-WATER-METER-LOGS.pdf' : null,
         status: isSeeded ? 'filled' : 'empty'
       },
     ],
@@ -1080,9 +1095,9 @@ function EsgDataTab({ project, selectedSection, setSelectedSection, navigate }) 
       {
         id: 'waste_haz',
         metricCode: 'ENV-WASTE-001',
-        label: isTunnel ? 'Hazardous Waste (Oils & Sludge)' : 'Hazardous Waste (Used Oil & Sludge)',
-        desc: isTunnel ? 'Used compressor oils, hydraulic fluids, and grease disposed through SPCB recyclers.' : 'Used transformer oils and workshop sludge dispatched to SPCB re-refiners.',
-        value: isSeeded ? '1.85' : '',
+        label: isTunnel ? 'Muck Rock Waste & Hydraulic Oil' : 'Hazardous Waste',
+        desc: isTunnel ? 'Tunnel rock muck and used hydraulic fluids disposed through approved recyclers.' : 'Used oils and workshop sludge dispatched to SPCB re-refiners.',
+        value: isSeeded ? '1.60' : '',
         unit: 'tonnes',
         source: isSeeded ? 'SPCB Form 10 Manifest' : 'SPCB Hazardous Waste Manifest',
         evidence: isSeeded ? 'HAZARDOUS-WASTE-MANIFEST-SPCB.pdf' : null,
@@ -1094,8 +1109,8 @@ function EsgDataTab({ project, selectedSection, setSelectedSection, navigate }) 
         id: 'workforce',
         metricCode: null,
         label: 'Total Site Workforce',
-        desc: isTunnel ? 'Underground mining workers, civil engineers, safety marshals, and contractor staff.' : 'Direct staff, control room engineers, and maintenance contractor workforce.',
-        value: isSeeded ? '184' : '',
+        desc: isTunnel ? 'Underground tunneling technicians, civil engineers, safety marshals, and contractor staff.' : 'Direct staff and maintenance workforce.',
+        value: isSeeded ? '312' : '',
         unit: 'persons',
         source: 'Biometric Access Gate Records',
         evidence: null,
@@ -1106,7 +1121,7 @@ function EsgDataTab({ project, selectedSection, setSelectedSection, navigate }) 
         metricCode: null,
         label: 'Cumulative Safe Work Hours',
         desc: 'Total cumulative operational hours without Lost Time Injury (LTI).',
-        value: isSeeded ? '184,000' : '',
+        value: isSeeded ? '248,000' : '',
         unit: 'hours',
         source: 'Monthly Safety Audit',
         evidence: null,
@@ -1117,7 +1132,7 @@ function EsgDataTab({ project, selectedSection, setSelectedSection, navigate }) 
       {
         id: 'topsoil',
         metricCode: null,
-        label: isTunnel ? 'Spoil Dumping & Slope Stabilization Area' : (isSolar ? 'Conserved Topsoil Area' : 'Managed Environmental Buffer Area'),
+        label: isTunnel ? 'Spoil Dumping & Slope Stabilization Area' : 'Managed Environmental Buffer Area',
         desc: isTunnel ? 'Site land designated for approved rock spoil disposal and slope vegetative stabilization.' : 'Native ground cover preserved to prevent arid dust erosion.',
         value: isSeeded ? '450' : '',
         unit: 'Acres',
@@ -1622,7 +1637,7 @@ function PipelineTab({ project, navigate }) {
   const isApproved = ['APPROVED', 'CALCULATED'].includes(project.status);
   const isSubmitted = ['SUBMITTED', 'IN_REVIEW'].includes(project.status);
   const hasCapturedData = (project.dataPoints && project.dataPoints.length > 0) || project.coverage > 0;
-  const isSeeded = project.code === 'PRJ-ODISHA-SOLAR';
+  const isSeeded = project.code === 'PRJ-ZOJILA-P7' || (project.name && project.name.toLowerCase().includes('zojila'));
 
   const dynamicPipeline = [
     {
@@ -1712,12 +1727,12 @@ function PipelineTab({ project, navigate }) {
         </div>
         <div className="card-body" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0 }}>
           {[
-            { level: 'GROUP DISCLOSURE', label: 'Aarohan Infrastructure & Energy Group', value: '8,720.0 tCO₂e' },
-            { level: 'SUBSIDIARY CONSOLIDATION', label: 'Aarohan Renewable Energy Pvt. Ltd.', value: '4,210.0 tCO₂e' },
+            { level: 'GROUP DISCLOSURE', label: 'Megha Engineering & Infrastructures Ltd (MEIL)', value: '8,720.0 tCO₂e' },
+            { level: 'SUBSIDIARY CONSOLIDATION', label: project.subsidiary || 'Megha Road and Transport Ltd', value: '4,210.0 tCO₂e' },
             { level: 'BU AGGREGATION', label: project.bu, value: '1,950.0 tCO₂e' },
             { level: 'PROJECT EMISSION', label: project.name, value: isApproved ? '155.6 tCO₂e (Scope 1+2)' : '142.4 tCO₂e' },
-            { level: 'RAW OPERATIONAL FACT', label: 'Auxiliary Diesel (12,450 L) · Grid Electricity (64,500 kWh)', value: 'CEA Grid Factor: 0.713' },
-            { level: 'SOURCE EVIDENCE VOUCHER', label: 'GRID-INVOICE-ODISHA-MAR2026.pdf & DIESEL-LOGBOOK-IOCL-MAR2026.pdf', value: 'SHA-256 Validated' },
+            { level: 'RAW OPERATIONAL FACT', label: 'Auxiliary Diesel (46,000 L) · Grid Electricity (52,000 kWh)', value: 'CEA Grid Factor: 0.713' },
+            { level: 'SOURCE EVIDENCE VOUCHER', label: 'DISCOM-UTILITY-BILL-ZOJILA-TSS04.pdf & IOCL-DIESEL-CHALLANS-HEAVY-FLEET.pdf', value: 'SHA-256 Validated' },
           ].map((node, i, arr) => (
             <div key={i} style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
               <div className="lineage-node" style={{ width: '100%', maxWidth: 520, background: i === 0 ? 'var(--accent-subtle)' : i === arr.length - 1 ? 'var(--success-subtle)' : 'var(--bg-card)' }}>

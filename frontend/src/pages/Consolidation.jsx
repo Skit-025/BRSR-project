@@ -11,6 +11,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   ResponsiveContainer, Cell, AreaChart, Area
 } from 'recharts';
+import PageHelpButton from '../components/PageHelpButton';
 
 function RunStatusBadge({ status }) {
   const map = {
@@ -115,8 +116,8 @@ export default function Consolidation() {
           projects: [
             {
               project_id: 'p-001',
-              project_name: 'Odisha Solar Park - Site 01 (Site P-102)',
-              project_code: 'AAROHAN-SOLAR-01',
+              project_name: 'Tunnel Project P7 (Zojila Tunnel)',
+              project_code: 'PRJ-ZOJILA-P7',
               status: 'BU_APPROVED',
               submitted_at: '2026-10-04T09:45:00Z',
               raw_inputs: [
@@ -131,8 +132,8 @@ export default function Consolidation() {
             },
             {
               project_id: 'p-002',
-              project_name: 'Rajasthan Solar Cluster Package II',
-              project_code: 'AAROHAN-SOLAR-02',
+              project_name: 'Highway Construction P-001 (Odisha Expressway)',
+              project_code: 'PRJ-HWY-001',
               status: 'BU_APPROVED',
               submitted_at: '2026-10-04T11:20:00Z',
               raw_inputs: [
@@ -219,15 +220,18 @@ export default function Consolidation() {
             Collects once at Project level, validates at BU level, consolidates at Subsidiary level, and compiles Group BRSR.
           </p>
         </div>
-        <button
-          onClick={() => refetch()}
-          disabled={isRefetching}
-          className="btn btn-secondary"
-          style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '7px 14px', borderRadius: 6, border: '1px solid #e2e8f0', background: '#fff', color: '#09090b', fontWeight: 600 }}
-        >
-          <RefreshCw size={13} className={isRefetching ? 'spin' : ''} />
-          Refresh Pipeline
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <PageHelpButton title="Consolidation Guide" route="/consolidation" />
+          <button
+            onClick={() => refetch()}
+            disabled={isRefetching}
+            className="btn btn-secondary"
+            style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '7px 14px', borderRadius: 6, border: '1px solid #e2e8f0', background: '#fff', color: '#09090b', fontWeight: 600 }}
+          >
+            <RefreshCw size={13} className={isRefetching ? 'spin' : ''} />
+            Refresh Pipeline
+          </button>
+        </div>
       </div>
 
       {/* Notice Banner */}

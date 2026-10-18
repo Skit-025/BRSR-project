@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../api/client';
+import PageHelpButton from '../components/PageHelpButton';
 
 const ACTION_TYPES = {
   SUBMISSION_CREATED:   { label: 'Submission Created',  icon: FileText,     color: 'var(--accent)',  bg: 'var(--accent-subtle)',  border: 'var(--accent-border)'  },
@@ -166,7 +167,8 @@ export default function AuditLog() {
             Live record of operations retrieved from cryptographic audit ledger.
           </p>
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <PageHelpButton title="Audit Log Guide" route="/audit" />
           <button
             onClick={handleVerifyChain}
             disabled={verifyingChain}

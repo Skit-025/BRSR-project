@@ -6,6 +6,7 @@ import {
 import { useOrgNodes, useOrgPeriods } from '../hooks/useApi';
 import { useAuth } from '../context/AuthContext';
 import { disclosuresApi } from '../api/client';
+import PageHelpButton from '../components/PageHelpButton';
 
 const GROUP_TABS = [
   { id: 'group_general', label: 'Enterprise Boundary', icon: Globe2, desc: 'Group structure, subsidiaries in scope, consolidation approach' },
@@ -14,14 +15,14 @@ const GROUP_TABS = [
 ];
 const getInitialFormData = (groupNode) => {
   const code = groupNode?.code || '';
-  const isSeed = code === 'MEIL-GROUP' || code === 'AAROHAN-GROUP';
+  const isSeed = code === 'MEIL-GROUP';
 
   if (isSeed) {
     return {
       group_general: {
-        group_legal_name: groupNode?.name || 'Aarohan Infrastructure & Energy Group',
+        group_legal_name: groupNode?.name || 'Megha Engineering & Infrastructures Ltd (MEIL)',
         consolidation_approach: 'Operational Control (100% boundary for fully managed entities)',
-        subsidiaries_count_in_scope: '14',
+        subsidiaries_count_in_scope: '7',
         joint_ventures_count: '6',
         total_group_revenue_cr: '28450.00',
         statutory_financial_year: 'FY 2024-25',
@@ -214,6 +215,7 @@ export default function GroupDisclosure() {
 
         {/* Selectors */}
         <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+          <PageHelpButton title="Reporting Guide" route="/reporting" />
           <select
             value={selectedPeriod}
             onChange={e => setSelectedPeriod(e.target.value)}

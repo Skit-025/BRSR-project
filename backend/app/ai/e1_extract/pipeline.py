@@ -113,18 +113,35 @@ VALID_DOC_TYPES = set(METRIC_MAP.keys())
 # ---------------------------------------------------------------------------
 # Helper: Local OCR Engines (Windows Media OCR / winocr, pypdfium2, pdfplumber)
 # ---------------------------------------------------------------------------
+# Helper: Local OCR Engines (Windows Media OCR / winocr, pypdfium2, pdfplumber)
+# ---------------------------------------------------------------------------
+
+import concurrent.futures
+
+
+def _safe_winocr_recognize_pil(img) -> dict:
+    """Safely invokes winocr.recognize_pil_sync in a dedicated threadpool worker.
+    This prevents 'RuntimeError: asyncio.run() cannot be called from a running event loop'
+    and 'RuntimeWarning: coroutine to_coroutine was never awaited' when running in FastAPI/Uvicorn."""
+    try:
+        import winocr
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+            return pool.submit(winocr.recognize_pil_sync, img).result(timeout=20)
+    except Exception as e:
+        logger.debug(f"winocr threadpool execution error: {e}")
+        return {}
+
 
 def _extract_image_text(file_bytes: bytes) -> str:
     """Extract text from image bytes using Windows OCR (winocr) locally with multi-pass enhancement."""
     try:
-        import winocr
         from PIL import Image, ImageEnhance
         img = Image.open(io.BytesIO(file_bytes))
 
         # Pass 1: Direct recognition on original image
         best_text = ""
         try:
-            res = winocr.recognize_pil_sync(img)
+            res = _safe_winocr_recognize_pil(img)
             best_text = res.get("text", "")
         except Exception:
             pass
@@ -138,7 +155,7 @@ def _extract_image_text(file_bytes: bytes) -> str:
                 im_scaled = im_scaled.convert("RGB")
             im_contrast = ImageEnhance.Contrast(im_scaled).enhance(1.6)
             try:
-                res2 = winocr.recognize_pil_sync(im_contrast)
+                res2 = _safe_winocr_recognize_pil(im_contrast)
                 t2 = res2.get("text", "")
                 if len(t2.strip()) > len(best_text.strip()):
                     best_text = t2
@@ -149,7 +166,7 @@ def _extract_image_text(file_bytes: bytes) -> str:
             if len(best_text.strip()) < 50:
                 try:
                     im_gray = ImageEnhance.Contrast(im_scaled.convert("L")).enhance(2.0)
-                    res3 = winocr.recognize_pil_sync(im_gray)
+                    res3 = _safe_winocr_recognize_pil(im_gray)
                     t3 = res3.get("text", "")
                     if len(t3.strip()) > len(best_text.strip()):
                         best_text = t3
@@ -168,13 +185,12 @@ def _extract_scanned_pdf_text(file_bytes: bytes) -> str:
     """Render scanned PDF pages to images and run winocr locally."""
     try:
         import pypdfium2 as pdfium
-        import winocr
         pdf = pdfium.PdfDocument(file_bytes)
         texts = []
         for i in range(min(3, len(pdf))):
             page = pdf[i]
             img = page.render(scale=2).to_pil()
-            res = winocr.recognize_pil_sync(img)
+            res = _safe_winocr_recognize_pil(img)
             t = res.get("text", "")
             if t.strip():
                 texts.append(t)
@@ -1160,8 +1176,10 @@ def run_extraction_pipeline(request: E1ExtractRequest, db_session=None) -> E1Ext
         return False, actual_type
 
     if user_hint and user_hint in VALID_DOC_TYPES:
-        # ── A: User explicitly selected bill type — cross-validate content ──
-        if document_text and not is_image:
+        # ── A: User explicitly selected bill type ──────────────────────────
+        # For images: OCR text is unreliable → ALWAYS trust user's bill type selection
+        # For PDFs with good text: cross-validate content matches selected type
+        if document_text and not is_image and len(document_text.strip()) > 100:
             text_lower = combined_text.lower()
             is_match, actual_type = _content_matches_doc_type(text_lower, user_hint)
             if not is_match:
@@ -1193,7 +1211,7 @@ def run_extraction_pipeline(request: E1ExtractRequest, db_session=None) -> E1Ext
         doc_type = user_hint
         is_relevant = True
         rejection_reason = ""
-        logger.info(f"E1 user-provided bill type verified: '{doc_type}' for '{filename}'")
+        logger.info(f"E1 user-provided bill type accepted: '{doc_type}' for '{filename}' (image={is_image})")
 
     elif is_image:
         # ── B: Image file, no hint → vision LLM decides ─────────────────

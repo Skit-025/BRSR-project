@@ -79,67 +79,83 @@ def seed_aarohan_demo():
             db.flush()
         print(f"[OK] Group: {group.name} [{group.code}]")
 
-        # Subsidiary 1: Aarohan Renewable Energy Pvt. Ltd.
-        sub1 = db.query(OrgNode).filter(OrgNode.code == "AAROHAN-RENEW").first()
+        # Subsidiary 1: Megha Road and Transport Ltd
+        sub1 = db.query(OrgNode).filter(OrgNode.code.in_(["MEGHA-ROAD-TRANS", "AAROHAN-RENEW", "MEIL-HYDRO"])).first()
         if not sub1:
             sub1 = OrgNode(
-                code="AAROHAN-RENEW",
-                name="Aarohan Renewable Energy Pvt. Ltd.",
+                code="MEGHA-ROAD-TRANS",
+                name="Megha Road and Transport Ltd",
                 type="subsidiary",
                 parent_id=group.id,
-                path=f"{group.path}.RENEW",
+                path=f"{group.path}.ROAD_TRANS",
                 ownership_pct=100.0,
                 control_type="operational_control",
                 boundary=True,
-                project_type="renewable_energy",
-                location_state="Gujarat",
+                project_type="road_transport",
+                location_state="Telangana",
                 location_country="India",
                 is_active=True
             )
             db.add(sub1)
             db.flush()
+        else:
+            sub1.code = "MEGHA-ROAD-TRANS"
+            sub1.name = "Megha Road and Transport Ltd"
+            sub1.project_type = "road_transport"
+            db.flush()
         print(f"[OK] Subsidiary 1: {sub1.name}")
 
-        # BU 1: Solar EPC & Operations
-        bu1 = db.query(OrgNode).filter(OrgNode.code == "BU-SOLAR").first()
+        # BU 1: Transportation & Tunneling Business Unit
+        bu1 = db.query(OrgNode).filter(OrgNode.code.in_(["BU-TRANS", "BU-SOLAR"])).first()
         if not bu1:
             bu1 = OrgNode(
-                code="BU-SOLAR",
-                name="Solar EPC & Operations",
+                code="BU-TRANS",
+                name="Transportation & Tunneling Business Unit",
                 type="business_unit",
                 parent_id=sub1.id,
-                path=f"{sub1.path}.SOLAR",
+                path=f"{sub1.path}.TRANS",
                 ownership_pct=100.0,
                 control_type="operational_control",
                 boundary=True,
-                project_type="solar_power",
-                location_state="Odisha",
+                project_type="infrastructure",
+                location_state="Jammu & Kashmir",
                 location_country="India",
                 is_active=True
             )
             db.add(bu1)
             db.flush()
+        else:
+            bu1.code = "BU-TRANS"
+            bu1.name = "Transportation & Tunneling Business Unit"
+            bu1.parent_id = sub1.id
+            db.flush()
         print(f"[OK] BU 1: {bu1.name}")
 
-        # Project 1: 250 MW Odisha Solar Park (Hero experience)
-        proj1 = db.query(OrgNode).filter(OrgNode.code == "PRJ-ODISHA-SOLAR").first()
+        # Project 1: Tunnel Project P7 (Zojila Tunnel)
+        proj1 = db.query(OrgNode).filter(OrgNode.code.in_(["PRJ-ZOJILA-P7", "PRJ-ODISHA-SOLAR"])).first()
         if not proj1:
             proj1 = OrgNode(
-                code="PRJ-ODISHA-SOLAR",
-                name="250 MW Odisha Solar Park",
+                code="PRJ-ZOJILA-P7",
+                name="Tunnel Project P7 (Zojila Tunnel)",
                 type="project",
                 parent_id=bu1.id,
-                path=f"{bu1.path}.ODISHA250",
+                path=f"{bu1.path}.ZOJILA_P7",
                 ownership_pct=100.0,
                 control_type="operational_control",
                 boundary=True,
-                project_type="solar_generation",
-                project_description="250 MW utility-scale solar photovoltaic power plant with single-axis tracking systems, central inverters, and high-efficiency bifacial modules supplying clean power to the state grid.",
-                location_state="Odisha",
+                project_type="tunneling",
+                project_description="Construction of 14.15 km bi-directional tunnel under Zojila pass including ventilation shafts, emergency egress, concrete lining and continuous electrical substation.",
+                location_state="Ladakh",
                 location_country="India",
                 is_active=True
             )
             db.add(proj1)
+            db.flush()
+        else:
+            proj1.code = "PRJ-ZOJILA-P7"
+            proj1.name = "Tunnel Project P7 (Zojila Tunnel)"
+            proj1.project_type = "tunneling"
+            proj1.parent_id = bu1.id
             db.flush()
         print(f"[OK] Project 1: {proj1.name}")
 
@@ -277,8 +293,8 @@ def seed_aarohan_demo():
             ("admin@aarohan.in", "system_admin", "Dr. Deepa Nair (Platform System Admin)", None),
             ("group.admin@aarohan.in", "group_admin", "Aditya Sharma (Group ESG Director)", group.id),
             ("sub.admin@aarohan.in", "subsidiary_admin", "Meera Nair (Subsidiary ESG Admin)", sub1.id),
-            ("bu.admin@aarohan.in", "bu_admin", "Rajesh V. (Solar EPC BU Admin)", bu1.id),
-            ("project.user@aarohan.in", "project_admin", "Ravi Kumar (Site Engineer - Odisha Solar)", proj1.id),
+            ("bu.admin@aarohan.in", "bu_admin", "Rajesh V. (Transportation BU Admin)", bu1.id),
+            ("project.user@aarohan.in", "project_admin", "Ravi Kumar (Site Engineer - Zojila Tunnel P7)", proj1.id),
         ]
         user_records = {}
         for email, role, full_name, node_id in demo_users:

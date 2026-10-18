@@ -23,7 +23,7 @@ const PLATFORM_ROLES = [
     role: 'Subsidiary Admin',
     name: 'Meera Nair',
     email: 'sub.admin@aarohan.in',
-    desc: 'Oversight for Aarohan Renewable Energy Pvt. Ltd. (Solar & Wind business units).',
+    desc: 'Oversight for Megha Road and Transport Ltd (Transportation, highways, and tunneling business units).',
     icon: Building2,
     badgeColor: '#2563EB',
     route: '/dashboard',
@@ -33,21 +33,21 @@ const PLATFORM_ROLES = [
     role: 'BU Admin',
     name: 'Rajesh V.',
     email: 'bu.admin@aarohan.in',
-    desc: 'Solar EPC & Operations review queue, Segregation of Duties approval & change requests.',
+    desc: 'Transportation & Tunneling review queue, Segregation of Duties approval & change requests.',
     icon: GitMerge,
     badgeColor: '#0284C7',
-    route: '/workflow',
-    highlight: 'Review Queue'
+    route: '/dashboard',
+    highlight: 'BU View'
   },
   {
     role: 'Project Admin',
     name: 'Ravi Kumar',
     email: 'project.user@aarohan.in',
-    desc: '250 MW Odisha Solar Park raw operational fact entry, statutory voucher uploads & draft submission.',
+    desc: 'Tunnel Project P7 (Zojila Tunnel) raw operational fact entry, heavy machinery logs & statutory voucher submission.',
     icon: HardHat,
     badgeColor: '#059669',
-    route: '/projects/PRJ-ODISHA-SOLAR',
-    highlight: 'Hero Site Flow'
+    route: '/dashboard',
+    highlight: 'Project Overview'
   }
 ];
 
@@ -76,11 +76,8 @@ export default function Login() {
       const loggedUser = await login(identifier, password);
       if (loggedUser.role === 'system_admin') {
         navigate('/admin/users');
-      } else if (loggedUser.role === 'project_admin') {
-        navigate('/projects');
-      } else if (loggedUser.role === 'bu_admin') {
-        navigate('/workflow');
       } else {
+        // Based on role, always redirect to their respective Overview page (/dashboard)
         navigate('/dashboard');
       }
     } catch (err) {
@@ -96,8 +93,12 @@ export default function Login() {
     setError('');
     setAuthenticatingPersona(persona.email);
     try {
-      await login(persona.email, 'Password123!');
-      navigate(persona.route);
+      const loggedUser = await login(persona.email, 'Password123!');
+      if (loggedUser?.role === 'system_admin') {
+        navigate('/admin/users');
+      } else {
+        navigate(persona.route || '/dashboard');
+      }
     } catch (err) {
       console.error('Quick login error:', err);
       setError(err.response?.data?.detail || 'Authentication failed for selected profile.');
@@ -363,7 +364,7 @@ export default function Login() {
             }}>
               <span style={{ fontWeight: 600 }}>Reporting Entity:</span>
               <span style={{ fontWeight: 700, color: '#09090B', letterSpacing: '0.01em' }}>
-                Aarohan Infrastructure & Energy Group (FY 2025–26)
+                Megha Engineering & Infrastructures Ltd (MEIL) — FY 2025–26
               </span>
             </div>
           </div>

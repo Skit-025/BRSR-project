@@ -14,17 +14,23 @@ from app.modules.collection.models import Submission, DataPoint
 from app.modules.forms.schemas import DigitalFormResponse, FormSection, FormField
 from app.security.rbac import Role
 
-# Aarohan Subsidiaries
-AAROHAN_SUBSIDIARIES = [
-    {"code": "AAROHAN-RENEW", "name": "Aarohan Renewable Energy Pvt. Ltd."},
-    {"code": "AAROHAN-INFRA", "name": "Aarohan Infrastructure Projects Pvt. Ltd."},
+# Approved MEIL Subsidiaries Fallback
+_MEIL_SUBSIDIARIES_FALLBACK = [
+    {"code": "SUB-OLECTRA", "name": "Olectra Greentech Limited"},
+    {"code": "SUB-EVEY", "name": "Evey Trans Private Limited"},
+    {"code": "SUB-DRILLMEC", "name": "Drillmec S.p.A."},
+    {"code": "SUB-MEGHA-GAS", "name": "Megha Gas"},
+    {"code": "SUB-ICOMM", "name": "ICOMM (ICOMM Tele Limited)"},
+    {"code": "SUB-SEPC", "name": "SEPC Power Private Limited"},
+    {"code": "SUB-MFGIL", "name": "Megha Fibre Glass Industries Ltd (MFGIL)"},
 ]
+
 
 def _get_subsidiaries(db: Session) -> List[Dict[str, str]]:
     db_subs = db.query(OrgNode).filter(OrgNode.type == "subsidiary", OrgNode.is_deleted == False).all()
     if db_subs:
         return [{"code": s.code, "name": s.name} for s in db_subs]
-    return AAROHAN_SUBSIDIARIES
+    return _MEIL_SUBSIDIARIES_FALLBACK
 
 PRINCIPLE_NAMES = {
     "P1": ("Governance, Ethics & Anti-Corruption", "Governance"),
@@ -128,11 +134,11 @@ def build_master_digital_form(db: Session, period_id: str) -> DigitalFormRespons
     ).first()
 
     return DigitalFormResponse(
-        form_id="FORM-AAROHAN-MASTER-BRSR",
+        form_id="FORM-MEIL-MASTER-BRSR",
         form_type="master",
         entity_id=None,
-        entity_code="AAROHAN-GROUP",
-        entity_name="Aarohan Infrastructure & Energy Group (Consolidated Group)",
+        entity_code="MEIL-GROUP",
+        entity_name="Megha Engineering & Infrastructures Ltd (MEIL) — Consolidated",
         role=Role.SYSTEM_ADMIN.value,
         period_id=period_id,
         period_code=period_code,
@@ -180,8 +186,9 @@ def build_scoped_digital_form(
     if not entity:
         entity = db.query(OrgNode).filter(OrgNode.is_deleted == False).first()
 
-    entity_code = entity.code if entity else "AAROHAN-GROUP"
-    entity_name = entity.name if entity else "Aarohan Infrastructure & Energy Group"
+    entity_code = entity.code if entity else "MEIL-GROUP"
+    entity_name = entity.name if entity else "Megha Engineering & Infrastructures Ltd (MEIL)"
+
 
     period = _lookup_period(db, period_id)
     period_code = period.code if period else period_id

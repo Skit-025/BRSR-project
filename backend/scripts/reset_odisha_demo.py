@@ -22,10 +22,10 @@ from app.modules.consolidation.service import run_consolidation_engine
 def reset_demo(target_status: str = "SUBMITTED"):
     db = SessionLocal()
     try:
-        # 1. Find Odisha node & demo period
-        proj = db.query(OrgNode).filter(OrgNode.code == "PRJ-ODISHA-SOLAR").first()
+        # 1. Find Tunnel Project node & demo period
+        proj = db.query(OrgNode).filter(OrgNode.code.in_(["PRJ-ZOJILA-P7", "PRJ-ODISHA-SOLAR"])).first()
         if not proj:
-            print("[ERROR] PRJ-ODISHA-SOLAR node not found.")
+            print("[ERROR] PRJ-ZOJILA-P7 node not found.")
             return
 
         period = db.query(ReportingPeriod).filter(ReportingPeriod.code == "FY2025-26-M03").first()
@@ -33,7 +33,7 @@ def reset_demo(target_status: str = "SUBMITTED"):
             print("[ERROR] FY2025-26-M03 reporting period not found.")
             return
 
-        group = db.query(OrgNode).filter(OrgNode.code == "AAROHAN-GROUP").first()
+        group = db.query(OrgNode).filter(OrgNode.code.in_(["AAROHAN-GROUP", "MEIL-GROUP"])).first()
 
         # 2. Find submission
         sub = db.query(Submission).filter(
@@ -42,7 +42,7 @@ def reset_demo(target_status: str = "SUBMITTED"):
         ).first()
 
         if not sub:
-            print("[ERROR] Submission for PRJ-ODISHA-SOLAR not found.")
+            print("[ERROR] Submission for PRJ-ZOJILA-P7 not found.")
             return
 
         # 3. Clean up any reviews

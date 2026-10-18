@@ -345,7 +345,7 @@ export default function ProjectWizard() {
               }}>
                 <Building2 size={15} color="#0070F3" />
                 <span style={{ fontWeight: 600, color: '#09090B' }}>
-                  {assignedGroupNode?.name || 'Aarohan Group'}
+                  {assignedGroupNode?.name || 'Megha Engineering & Infrastructures Ltd (MEIL)'}
                 </span>
                 <span>›</span>
                 <span style={{ fontWeight: 600, color: '#09090B' }}>

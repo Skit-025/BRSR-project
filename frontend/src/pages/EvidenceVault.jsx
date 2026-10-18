@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import Modal from '../components/Modal';
+import PageHelpButton from '../components/PageHelpButton';
 
 // ─── FUEL TYPES ──────────────────────────────────────────────────────────────
 const FUEL_SUBTYPES = [
@@ -509,7 +510,8 @@ export default function EvidenceVault() {
             Immutable SHA-256 evidence repository. Upload a bill → save to vault → optionally run E1 OCR for instant BRSR field extraction.
           </p>
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <PageHelpButton title="Evidence Vault Guide" route="/evidence" />
           <button onClick={() => navigate('/trash')} className="btn btn-secondary"
             style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 6, fontSize: 13, border: '1px solid #e2e8f0', background: '#fff', color: '#09090b', fontWeight: 600 }}>
             <Trash2 size={13} color="#ef4444" /> Trash Can
