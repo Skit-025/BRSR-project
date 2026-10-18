@@ -1,4 +1,5 @@
 from typing import List, Optional
+from datetime import date
 from pydantic import BaseModel
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -62,7 +63,29 @@ def list_nodes(
     if current_user:
         query = filter_projects_query_for_user(db, query, current_user)
 
-    return query.all()
+    nodes = query.all()
+
+    # Populate assigned project admin details for each project node
+    try:
+        project_admins = db.query(User).filter(
+            User.role == "project_admin",
+            User.is_active == True,
+            User.is_deleted == False
+        ).all()
+        admin_map = {}
+        email_map = {}
+        for pa in project_admins:
+            if pa.org_node_id:
+                admin_map[str(pa.org_node_id)] = pa.full_name
+                email_map[str(pa.org_node_id)] = pa.email
+        for node in nodes:
+            nid = str(node.id)
+            setattr(node, "project_admin_name", admin_map.get(nid))
+            setattr(node, "project_admin_email", email_map.get(nid))
+    except Exception:
+        pass
+
+    return nodes
 
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 security = HTTPBearer(auto_error=False)
@@ -107,6 +130,8 @@ def create_node(
     # 1. Strict Project-Creation Matrix
     node_type_val = node_in.type.value if hasattr(node_in.type, "value") else str(node_in.type)
     if node_type_val in ("project", "site"):
+        if node_in.name:
+            node_in.name = node_in.name.strip().upper()
         parent_node = assert_can_create_project(db, current_user, node_in.parent_id)
 
         # 2. BU-Type Compatibility Check: project_type must align with parent BU classification
@@ -224,6 +249,19 @@ def get_node(
 
     if current_user and node.type in ("project", "site"):
         assert_user_authorized_for_project(db, current_user, str(node.id), "access this project")
+
+    try:
+        pa = db.query(User).filter(
+            User.role == "project_admin",
+            User.org_node_id == str(node.id),
+            User.is_active == True,
+            User.is_deleted == False
+        ).first()
+        if pa:
+            setattr(node, "project_admin_name", pa.full_name)
+            setattr(node, "project_admin_email", pa.email)
+    except Exception:
+        pass
 
     return node
 
@@ -445,12 +483,85 @@ def list_periods(financial_year: Optional[str] = None, db: Session = Depends(get
     return query.order_by(ReportingPeriod.start_date.desc()).all()
 
 
-@router.post("/periods", response_model=ReportingPeriodRead, status_code=status.HTTP_201_CREATED)
-def create_period(period_in: ReportingPeriodCreate, db: Session = Depends(get_db)):
-    existing = db.query(ReportingPeriod).filter(ReportingPeriod.code == period_in.code).first()
+@router.get("/periods/fy", response_model=List[str])
+def list_financial_years(db: Session = Depends(get_db)):
+    """Returns distinct list of financial years that have reporting periods."""
+    rows = db.query(ReportingPeriod.financial_year).filter(
+        ReportingPeriod.is_deleted == False
+    ).distinct().order_by(ReportingPeriod.financial_year.desc()).all()
+    return [r[0] for r in rows]
+
+
+@router.post("/periods", response_model=List[ReportingPeriodRead], status_code=status.HTTP_201_CREATED)
+def create_period(
+    period_in: ReportingPeriodCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Creates a reporting period. If create_monthly_periods=True (and period_type is ANNUAL or FY-wide),
+    auto-generates all 12 monthly periods for the specified Indian FY (Apr to Mar).
+    Accessible by group_admin and system_admin only.
+    """
+    allowed = ["system_admin", "group_admin"]
+    if current_user.role not in allowed:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only system_admin or group_admin can create reporting periods."
+        )
+
+    # Indian FY: April (month 4) of start_year to March (month 3) of next year
+    # financial_year format expected: "2025-2026"
+    created_periods = []
+
+    if period_in.create_monthly_periods:
+        # Parse financial year to get the start year
+        fy = period_in.financial_year  # e.g. "2025-2026"
+        try:
+            start_year = int(fy.split("-")[0])
+            end_year = int(fy.split("-")[1])
+        except Exception:
+            raise HTTPException(status_code=400, detail="financial_year must be in format 'YYYY-YYYY', e.g. '2025-2026'")
+
+        import calendar
+        # Indian FY months: Apr(4)=M01 ... Mar(3)=M12
+        month_sequence = [
+            (4, start_year), (5, start_year), (6, start_year),
+            (7, start_year), (8, start_year), (9, start_year),
+            (10, start_year), (11, start_year), (12, start_year),
+            (1, end_year), (2, end_year), (3, end_year)
+        ]
+        fy_short = f"FY{start_year}-{str(end_year)[-2:]}"  # e.g. FY2025-26
+
+        for idx, (m, yr) in enumerate(month_sequence, start=1):
+            m_code = f"{fy_short}-M{idx:02d}"  # e.g. FY2025-26-M01
+            existing = db.query(ReportingPeriod).filter(ReportingPeriod.code == m_code, ReportingPeriod.is_deleted == False).first()
+            if existing:
+                created_periods.append(existing)
+                continue
+            _, last_day = calendar.monthrange(yr, m)
+            new_period = ReportingPeriod(
+                code=m_code,
+                financial_year=fy,
+                period_type="month",
+                month=m,
+                quarter=((idx - 1) // 3) + 1,
+                start_date=date(yr, m, 1),
+                end_date=date(yr, m, last_day),
+                status="OPEN"
+            )
+            db.add(new_period)
+            created_periods.append(new_period)
+
+        db.commit()
+        for p in created_periods:
+            db.refresh(p)
+        return created_periods
+
+    # Single period creation (original behaviour)
+    existing = db.query(ReportingPeriod).filter(ReportingPeriod.code == period_in.code, ReportingPeriod.is_deleted == False).first()
     if existing:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Period '{period_in.code}' already exists.")
-    
     period = ReportingPeriod(
         code=period_in.code,
         financial_year=period_in.financial_year,
@@ -464,12 +575,25 @@ def create_period(period_in: ReportingPeriodCreate, db: Session = Depends(get_db
     db.add(period)
     db.commit()
     db.refresh(period)
-    return period
+    return [period]
 
 
 @router.put("/periods/{period_id}", response_model=ReportingPeriodRead)
-def update_period(period_id: str, period_in: ReportingPeriodUpdate, db: Session = Depends(get_db)):
-    """Updates a reporting period's lifecycle state (OPEN / LOCKED) or calendar dates."""
+def update_period(
+    period_id: str,
+    period_in: ReportingPeriodUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """Updates a reporting period's lifecycle state (OPEN / LOCKED) or calendar dates.
+    Lock/Unlock requires group_admin or system_admin.
+    """
+    allowed = ["system_admin", "group_admin", "subsidiary_admin"]
+    if current_user.role not in allowed:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only system_admin, group_admin, or subsidiary_admin can update reporting periods."
+        )
     period = db.query(ReportingPeriod).filter(ReportingPeriod.id == period_id, ReportingPeriod.is_deleted == False).first()
     if not period:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Reporting period not found.")
@@ -480,10 +604,63 @@ def update_period(period_id: str, period_in: ReportingPeriodUpdate, db: Session 
         period.start_date = period_in.start_date
     if period_in.end_date is not None:
         period.end_date = period_in.end_date
+    if period_in.financial_year is not None:
+        period.financial_year = period_in.financial_year
 
     db.commit()
     db.refresh(period)
     return period
+
+
+@router.delete("/periods/{period_id}")
+def delete_period(
+    period_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """Deletes an individual reporting period. Restricted to system_admin."""
+    if current_user.role != "system_admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only system_admin can delete reporting periods."
+        )
+    import time
+    period = db.query(ReportingPeriod).filter(ReportingPeriod.id == period_id, ReportingPeriod.is_deleted == False).first()
+    if not period:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Reporting period not found.")
+
+    period.is_deleted = True
+    period.code = f"{period.code}__del__{int(time.time())}"
+    db.commit()
+    return {"success": True, "message": f"Reporting period '{period.id}' deleted successfully."}
+
+
+@router.delete("/periods/fy/{financial_year}")
+def delete_financial_year(
+    financial_year: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """Deletes all reporting periods for a Financial Year. Restricted to system_admin."""
+    if current_user.role != "system_admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only system_admin can delete an entire Financial Year."
+        )
+    import time
+    periods = db.query(ReportingPeriod).filter(
+        ReportingPeriod.financial_year == financial_year,
+        ReportingPeriod.is_deleted == False
+    ).all()
+    if not periods:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"No active periods found for FY '{financial_year}'.")
+
+    now_ts = int(time.time())
+    for p in periods:
+        p.is_deleted = True
+        p.code = f"{p.code}__del__{now_ts}"
+    db.commit()
+    return {"success": True, "message": f"All {len(periods)} periods for FY '{financial_year}' deleted successfully.", "count": len(periods)}
 
 # --- APPLICABILITY ENGINE ---
 

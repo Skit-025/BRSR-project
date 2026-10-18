@@ -54,7 +54,7 @@ const ROLE_PERMISSIONS = {
     'bu_disclosure:read',
     'subsidiary_disclosure:write', 'subsidiary_disclosure:read',
     'report:read', 'report:lineage',
-    'audit:read', 'users:manage_scoped',
+    'period:lock', 'audit:read', 'users:manage_scoped',
     'ai:e1:use', 'ai:e2:use', 'ai:e3:use', 'ai:e4:use', 'ai:e5:use', 'ai:e6:use', 'ai:e7:use', 'ai:approve',
   ]),
 

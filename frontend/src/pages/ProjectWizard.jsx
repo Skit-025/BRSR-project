@@ -170,6 +170,18 @@ export default function ProjectWizard() {
     setSubmitting(true);
     setCreateError(null);
     try {
+      const cleanName = form.name.trim().toUpperCase();
+      const cleanLoc = (form.location || 'India').trim().toLowerCase();
+
+      const dup = nodes.find(n =>
+        (n.type === 'project' || n.type === 'site') &&
+        (n.name || '').trim().toUpperCase() === cleanName &&
+        (n.location_state || '').trim().toLowerCase() === cleanLoc
+      );
+      if (dup) {
+        throw new Error(`Duplicate project: "${cleanName}" already exists in "${form.location || 'India'}".`);
+      }
+
       const code = 'PRJ-' + form.name.replace(/[^a-zA-Z0-9]/g, '-').toUpperCase().slice(0, 15) + '-' + Date.now().toString().slice(-4);
       const parentId = form.bu || assignedBuNode?.id;
       if (!parentId) {
@@ -180,7 +192,7 @@ export default function ProjectWizard() {
 
       const res = await orgApi.createNode({
         code,
-        name: form.name,
+        name: cleanName,
         type: 'project',
         parent_id: parentId,
         project_type: projectType,
@@ -245,16 +257,18 @@ export default function ProjectWizard() {
 
   return (
     <div className="page-content anim-fade-up">
-      {/* Back */}
-      <button
-        onClick={() => navigate('/projects')}
-        style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 13, marginBottom: 8, padding: 0 }}
-      >
-        <ArrowLeft size={14} /> Projects
-      </button>
+      <div style={{ maxWidth: 840, width: '100%', margin: '0 auto 8px' }}>
+        {/* Back */}
+        <button
+          onClick={() => navigate('/projects')}
+          style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 13, padding: 0 }}
+        >
+          <ArrowLeft size={14} /> Projects
+        </button>
+      </div>
 
       {/* Header */}
-      <div className="page-header">
+      <div className="page-header" style={{ maxWidth: 840, width: '100%', margin: '0 auto 16px' }}>
         <div>
           <h1 className="page-title">Create Project</h1>
           <p className="page-subtitle">Set up a new project for ESG data collection.</p>
@@ -262,7 +276,7 @@ export default function ProjectWizard() {
       </div>
 
       {/* Wizard card */}
-      <div className="card" style={{ maxWidth: 720 }}>
+      <div className="card" style={{ maxWidth: 840, width: '100%', margin: '0 auto' }}>
         <div className="card-body" style={{ padding: '32px 36px' }}>
           <StepBar currentStep={step} />
 
@@ -278,10 +292,10 @@ export default function ProjectWizard() {
               <div className="form-group">
                 <input
                   className="form-control"
-                  style={{ fontSize: 18, fontWeight: 600, padding: '14px 16px' }}
-                  placeholder="e.g. NH-16 Odisha Highway Expansion"
+                  style={{ fontSize: 18, fontWeight: 600, padding: '14px 16px', textTransform: 'uppercase' }}
+                  placeholder="e.g. NH-16 ODISHA HIGHWAY EXPANSION"
                   value={form.name}
-                  onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+                  onChange={e => setForm(f => ({ ...f, name: e.target.value.toUpperCase() }))}
                   autoFocus
                 />
                 {form.name.length > 2 && (
@@ -356,8 +370,8 @@ export default function ProjectWizard() {
                   {assignedBuNode?.name || (availableBUs.find(b => b.id === form.bu)?.name || 'Select BU')}
                 </span>
                 <span style={{ color: '#94A3B8' }}>›</span>
-                <span style={{ fontStyle: 'italic', color: '#09090B' }}>
-                  {form.name || 'New Project'}
+                <span style={{ fontStyle: 'italic', color: '#09090B', textTransform: 'uppercase' }}>
+                  {(form.name || 'NEW PROJECT').toUpperCase()}
                 </span>
                 {assignedBuNode && (
                   <span style={{
@@ -558,7 +572,7 @@ export default function ProjectWizard() {
                 <div className="card">
                   <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                     {[
-                      { label: 'Project Name', value: form.name },
+                      { label: 'Project Name', value: (form.name || '').toUpperCase() },
                       { label: 'Business Unit', value: assignedBuNode?.name || availableBUs.find(b => b.id === form.bu)?.name || nodes.find(b => b.id === form.bu)?.name || '-' },
                       { label: 'Type', value: PROJECT_TYPES.find(t => t.value === form.type)?.label || form.type },
                       { label: 'Location', value: form.location },

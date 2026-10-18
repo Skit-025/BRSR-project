@@ -1,5 +1,5 @@
 from typing import Optional, List
-from datetime import date
+from datetime import date, datetime
 from pydantic import BaseModel, ConfigDict
 from app.modules.org.models import NodeType, ControlType, ProjectType, PeriodType, PeriodStatus
 
@@ -36,6 +36,7 @@ class OrgNodeUpdate(BaseModel):
 
 class ReportingPeriodUpdate(BaseModel):
     status: Optional[PeriodStatus] = None
+    financial_year: Optional[str] = None
     start_date: Optional[date] = None
     end_date: Optional[date] = None
     admin_password: Optional[str] = None
@@ -61,19 +62,24 @@ class OrgNodeRead(BaseModel):
     is_pat_designated: bool
     has_land_acquisition: bool
     is_active: bool
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+    project_admin_name: Optional[str] = None
+    project_admin_email: Optional[str] = None
 
 class OrgNodeTreeRead(OrgNodeRead):
     children: List["OrgNodeTreeRead"] = []
 
 class ReportingPeriodCreate(BaseModel):
-    code: str
+    code: Optional[str] = None   # auto-generated when create_monthly_periods=True
     financial_year: str
     period_type: PeriodType = PeriodType.MONTH
     month: Optional[int] = None
     quarter: Optional[int] = None
-    start_date: date
-    end_date: date
+    start_date: Optional[date] = None   # ignored when create_monthly_periods=True
+    end_date: Optional[date] = None     # ignored when create_monthly_periods=True
     status: PeriodStatus = PeriodStatus.OPEN
+    create_monthly_periods: Optional[bool] = False
 
 class ReportingPeriodRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)

@@ -6,8 +6,10 @@ import {
   AlertTriangle, Circle, MoreHorizontal, ArrowUpRight,
   SlidersHorizontal, Download, RefreshCw
 } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
 import { useOrgNodes, useOrgPeriods } from '../hooks/useApi';
 import { useAuth } from '../context/AuthContext';
+import { authApi } from '../api/client';
 import PageHelpButton from '../components/PageHelpButton';
 
 /* ── Seeded project data for Transportation & Tunneling Group ── */
@@ -55,9 +57,27 @@ export default function Projects() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { data: nodes = [], isLoading } = useOrgNodes();
+  const { data: usersList = [] } = useQuery({
+    queryKey: ['projects-assigned-users'],
+    queryFn: async () => {
+      try {
+        const res = await authApi.getAdminUsers();
+        return res.data || [];
+      } catch {
+        try {
+          const res2 = await authApi.getScopedUsers();
+          return res2.data || [];
+        } catch {
+          return [];
+        }
+      }
+    },
+    staleTime: 15_000,
+  });
+
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
-  const [sortBy, setSortBy] = useState('name');
+  const [sortBy, setSortBy] = useState('serialNo');
   const [sortDir, setSortDir] = useState('asc');
   const [showFilters, setShowFilters] = useState(false);
   const [page, setPage] = useState(1);
@@ -96,15 +116,35 @@ export default function Projects() {
     if (!projectNodes || projectNodes.length === 0) {
       return [];
     }
-    return projectNodes.map(n => {
+    // Sort by created_at ascending (oldest first = lowest serial number)
+    const sorted = [...projectNodes].sort((a, b) => {
+      const ta = a.created_at ? new Date(a.created_at).getTime() : 0;
+      const tb = b.created_at ? new Date(b.created_at).getTime() : 0;
+      return ta - tb;
+    });
+    return sorted.map((n, idx) => {
       const parentBu = nodes.find(b => b.id === n.parent_id);
       const parentSub = parentBu ? nodes.find(s => s.id === parentBu.parent_id) : null;
+
+      // Find project admin assigned to this project node
+      const matchedUser = (usersList || []).find(u =>
+        u.role === 'project_admin' && (
+          String(u.org_node_id) === String(n.id) ||
+          String(u.assigned_project_id) === String(n.id) ||
+          (u.org_node_id && String(u.org_node_id) === String(n.code))
+        )
+      );
+      const projectAdmin = n.project_admin_name || matchedUser?.full_name || null;
+
       const knownStatus = MEIL_STATUS_MAP[n.code] || {};
       return {
+        serialNo: idx + 1,
         id: n.id,
-        name: n.name,
+        name: (n.name || '').toUpperCase(),
         code: n.code,
         bu: parentBu?.name || 'Assigned BU',
+        buCode: parentBu?.code || '',
+        buLocation: parentBu?.location_state || '',
         subsidiary: parentSub?.name || 'MEIL',
         status: knownStatus.status || 'DRAFT',
         coverage: knownStatus.coverage || 0,
@@ -112,9 +152,13 @@ export default function Projects() {
         type: n.project_type || 'Infrastructure',
         location: n.location_state ? `${n.location_state}, India` : 'India',
         lastActivity: knownStatus.lastActivity || 'Not started',
+        createdAt: n.created_at,
+        projectAdmin: projectAdmin,
+        isListed: n.is_listed,
+        isWaterStressed: n.is_water_stressed,
       };
     });
-  }, [nodes, user]);
+  }, [nodes, user, usersList]);
 
   const filtered = useMemo(() => {
     let rows = [...projectsList];
@@ -133,14 +177,19 @@ export default function Projects() {
         return cfg?.label === statusFilter;
       });
     }
-    rows.sort((a, b) => {
-      let va = a[sortBy], vb = b[sortBy];
-      if (typeof va === 'string') va = va.toLowerCase();
-      if (typeof vb === 'string') vb = vb.toLowerCase();
-      if (va < vb) return sortDir === 'asc' ? -1 : 1;
-      if (va > vb) return sortDir === 'asc' ? 1 : -1;
-      return 0;
-    });
+    // Default sort preserves creation-time order (serialNo), other sorts override
+    if (sortBy !== 'serialNo') {
+      rows.sort((a, b) => {
+        let va = a[sortBy], vb = b[sortBy];
+        if (typeof va === 'string') va = va.toLowerCase();
+        if (typeof vb === 'string') vb = vb.toLowerCase();
+        if (va < vb) return sortDir === 'asc' ? -1 : 1;
+        if (va > vb) return sortDir === 'asc' ? 1 : -1;
+        return 0;
+      });
+    } else {
+      if (sortDir === 'desc') rows = [...rows].reverse();
+    }
     return rows;
   }, [projectsList, search, statusFilter, sortBy, sortDir]);
 
@@ -286,6 +335,11 @@ export default function Projects() {
           <table className="data-table">
             <thead>
               <tr>
+                <th style={{ width: 48, textAlign: 'center' }}>
+                  <button onClick={() => handleSort('serialNo')} style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'none', border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                    # <SortIcon col="serialNo" />
+                  </button>
+                </th>
                 <th>
                   <button onClick={() => handleSort('name')} style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'none', border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                     Project <SortIcon col="name" />
@@ -326,16 +380,34 @@ export default function Projects() {
                   style={{ cursor: 'pointer' }}
                   onClick={() => navigate(`/projects/${proj.id}`)}
                 >
+                  <td style={{ textAlign: 'center', width: 48 }}>
+                    <span style={{
+                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                      width: 26, height: 26, borderRadius: '50%',
+                      background: '#f1f5f9', border: '1px solid #e2e8f0',
+                      fontSize: 11, fontWeight: 700, color: '#475569',
+                      fontFamily: 'ui-monospace, monospace'
+                    }}>
+                      {proj.serialNo}
+                    </span>
+                  </td>
                   <td>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                      <span style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: 13 }}>{proj.name}</span>
+                      <span style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: 13, textTransform: 'uppercase' }}>{(proj.name || '').toUpperCase()}</span>
                       <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{proj.type} · {proj.period}</span>
                     </div>
                   </td>
                   <td>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                      <span style={{ fontSize: 13, color: 'var(--text-primary)' }}>{proj.bu}</span>
-                      <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{proj.subsidiary}</span>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                      <span style={{ fontSize: 13, color: 'var(--text-primary)', fontWeight: 500 }}>{proj.bu}</span>
+                      {proj.buCode && <span style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'ui-monospace, monospace' }}>{proj.buCode}{proj.buLocation ? ` · ${proj.buLocation}` : ''}</span>}
+                      <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                        {proj.subsidiary}
+                        {proj.projectAdmin
+                          ? <span style={{ marginLeft: 4, color: '#2563eb' }}>· PA: {proj.projectAdmin}</span>
+                          : <span style={{ marginLeft: 4, color: '#94a3b8', fontStyle: 'italic' }}>· No project admin</span>
+                        }
+                      </span>
                     </div>
                   </td>
                   <td><StatusBadge status={proj.status} /></td>

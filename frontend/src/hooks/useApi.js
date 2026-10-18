@@ -59,11 +59,25 @@ export const useOrgNodes = (opts) => {
   });
 };
 
-export const useOrgPeriods = (opts) => {
+export const useOrgPeriods = (params, opts) => {
   if (isMock()) return MockApi.useMockOrgPeriods();
+  // Support legacy call signature: useOrgPeriods(opts) where opts is an object with non-array keys
+  let _params = params, _opts = opts;
+  if (params && typeof params === 'object' && !Array.isArray(params) && ('enabled' in params || 'staleTime' in params || 'refetchOnWindowFocus' in params)) {
+    _params = undefined;
+    _opts = params;
+  }
   return useQuery({
-    queryKey: ['org-periods'],
-    queryFn: () => orgApi.getPeriods().then(r => r.data),
+    queryKey: ['org-periods', _params],
+    queryFn: () => orgApi.getPeriods(_params).then(r => r.data),
+    ..._opts,
+  });
+};
+
+export const useOrgFY = (opts) => {
+  return useQuery({
+    queryKey: ['org-periods-fy'],
+    queryFn: () => orgApi.getFY().then(r => r.data),
     ...opts,
   });
 };
@@ -221,7 +235,10 @@ export const useCreatePeriod = () => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (d) => orgApi.createPeriod(d),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['org-periods'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['org-periods'] });
+      qc.invalidateQueries({ queryKey: ['org-periods-fy'] });
+    },
   });
 };
 
@@ -231,6 +248,28 @@ export const useUpdatePeriod = () => {
   return useMutation({
     mutationFn: ({ id, data }) => orgApi.updatePeriod(id, data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['org-periods'] }),
+  });
+};
+
+export const useDeletePeriod = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id) => orgApi.deletePeriod(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['org-periods'] });
+      qc.invalidateQueries({ queryKey: ['org-periods-fy'] });
+    },
+  });
+};
+
+export const useDeleteFY = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (financialYear) => orgApi.deleteFY(financialYear),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['org-periods'] });
+      qc.invalidateQueries({ queryKey: ['org-periods-fy'] });
+    },
   });
 };
 

@@ -78,6 +78,7 @@ import Assurance      from './pages/Assurance';
 import BackgroundJobs from './pages/BackgroundJobs';
 import AarohanAI      from './pages/AarohanAI';
 import Trash          from './pages/Trash';
+import PeriodManagement from './pages/PeriodManagement';
 
 // ── Disclosure pages (Type 3 forms — spec §46) ────────────────────────────────
 // BU Disclosures: targets, initiatives, BU-specific data (spec §23)
@@ -162,6 +163,7 @@ function PermissionGuard({ perms = [], children }) {
 // ─── Main app shell ──────────────────────────────────────────────────────────
 function ProtectedLayout() {
   const { user, token, loading } = useAuth();
+  const [sidebarOpen, setSidebarOpen] = React.useState(false);
 
   if (loading) {
     return (
@@ -178,23 +180,10 @@ function ProtectedLayout() {
 
   return (
     <div className="app-shell">
-      <Sidebar />
+      <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
       <div className="main-area">
-        <Header />
-        <div
-          className="main-content-scroll"
-          id="main-content-scroll"
-          style={{
-            flex: 1,
-            minHeight: 0,
-            minWidth: 0,
-            overflowY: 'auto',
-            overflowX: 'hidden',
-            display: 'flex',
-            flexDirection: 'column',
-            position: 'relative',
-          }}
-        >
+        <Header onToggleSidebar={() => setSidebarOpen(p => !p)} isSidebarOpen={sidebarOpen} />
+        <div className="main-content-scroll" id="main-content-scroll">
           <Outlet />
         </div>
       </div>
@@ -244,7 +233,7 @@ export default function App() {
                   </PermissionGuard>
                 } />
 
-                {/* Configuration — org:hierarchy_view (System, Group, Subsidiary Admins only; BU & Project use Projects console) */}
+                {/* Configuration — org:hierarchy_view (System, Group, Subsidiary Admins) */}
                 <Route path="/org" element={
                   <PermissionGuard perms={['org:hierarchy_view']}>
                     <OrgHierarchy />
@@ -350,6 +339,11 @@ export default function App() {
                 <Route path="/trash" element={
                   <PermissionGuard>
                     <Trash />
+                  </PermissionGuard>
+                } />
+                <Route path="/periods" element={
+                  <PermissionGuard perms={['period:lock']}>
+                    <PeriodManagement />
                   </PermissionGuard>
                 } />
 

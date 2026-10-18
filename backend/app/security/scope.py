@@ -230,10 +230,29 @@ def filter_projects_query_for_user(db: Session, query, user: User):
             # No active project assignments: return empty result set
             return query.filter(OrgNode.id == "00000000-0000-0000-0000-000000000000")
         
+        # Include assigned projects and their ancestors (BU, Subsidiary, Group) so they can navigate the hierarchy
+        allowed_ids = set(assigned_ids)
+        try:
+            all_active = db.query(OrgNode.id, OrgNode.parent_id, OrgNode.code).filter(OrgNode.is_deleted == False).all()
+            parent_map = {str(n.id): (str(n.parent_id) if n.parent_id else None) for n in all_active}
+            code_to_id = {n.code: str(n.id) for n in all_active if n.code}
+            
+            for item in list(assigned_ids):
+                curr_id = code_to_id.get(item, str(item))
+                while curr_id and curr_id in parent_map:
+                    pid = parent_map[curr_id]
+                    if pid:
+                        allowed_ids.add(pid)
+                        curr_id = pid
+                    else:
+                        break
+        except Exception:
+            pass
+
         # Match by ID or code
         uuids = []
         codes = []
-        for ident in assigned_ids:
+        for ident in allowed_ids:
             try:
                 uuid.UUID(str(ident))
                 uuids.append(str(ident))

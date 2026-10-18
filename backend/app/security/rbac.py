@@ -128,7 +128,7 @@ ROLE_PERMISSIONS: dict[Role, Set[Permission]] = {
         Permission.BU_DISCLOSURE_READ,
         Permission.SUBSIDIARY_DISCLOSURE_WRITE, Permission.SUBSIDIARY_DISCLOSURE_READ,
         Permission.REPORT_READ, Permission.REPORT_LINEAGE,
-        Permission.AUDIT_READ,
+        Permission.PERIOD_LOCK, Permission.AUDIT_READ,
         Permission.USERS_MANAGE_SCOPED,
     },
 

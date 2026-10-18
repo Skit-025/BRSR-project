@@ -1,9 +1,10 @@
 import React, { useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { 
   Building2, ChevronRight, Plus, Calendar, Layers, 
   Globe, AlertCircle, CheckCircle2, X, RefreshCw, Filter, Search, Lock, Unlock,
   Info, Eye, ExternalLink, ShieldCheck, Clock, FileText, Edit3, ShieldAlert, Sparkles,
-  Trash2
+  Trash2, User, ArrowRight, ArrowLeft, Factory, HardHat, MapPin, Check, PenLine
 } from 'lucide-react';
 import { useOrgNodes, useOrgPeriods, useCreateNode, useCreatePeriod, useUpdateNode, useUpdatePeriod, useDeleteNode } from '../hooks/useApi';
 import { useAuth } from '../context/AuthContext';
@@ -52,11 +53,14 @@ const PROJECT_TYPES = [
 ];
 
 export default function OrgHierarchy() {
+  const navigate = useNavigate();
   const { data: nodes = [], isLoading: loadN, refetch: refetchNodes } = useOrgNodes();
   const { data: periods = [], isLoading: loadP, refetch: refetchPeriods } = useOrgPeriods();
-  const { user, isAdmin, isProjectAdmin, canWriteOrg } = useAuth();
+  const nodeList = Array.isArray(nodes) ? nodes : [];
+  const periodList = Array.isArray(periods) ? periods : [];
+  const { user, isAdmin, isProjectAdmin, canWriteOrg, hasPermission } = useAuth();
   const canCreateUnits = user?.role === 'system_admin' || user?.role === 'group_admin' || user?.role === 'subsidiary_admin';
-  const canManagePeriods = ['system_admin', 'group_admin'].includes(user?.role);
+  const canManagePeriods = ['system_admin', 'group_admin', 'subsidiary_admin'].includes(user?.role) || hasPermission('period:lock');
   const createNode = useCreateNode();
   const updateNode = useUpdateNode();
   const deleteNode = useDeleteNode();
@@ -84,6 +88,12 @@ export default function OrgHierarchy() {
   const [deleteAdminPassword, setDeleteAdminPassword] = useState('');
   const [deleteError, setDeleteError] = useState('');
   const [isDeletingPending, setIsDeletingPending] = useState(false);
+
+  // Interactive Drill-Down Navigation states
+  const [selectedSubsidiary, setSelectedSubsidiary] = useState(null);
+  const [selectedBU, setSelectedBU] = useState(null);
+  const [drillSearch, setDrillSearch] = useState('');
+  const [activeHierarchyView, setActiveHierarchyView] = useState('drilldown'); // 'drilldown' | 'table'
 
   // Allowed Hierarchy Level options (Strict 1-level down rule)
   const allowedLevelOptions = useMemo(() => {
@@ -200,6 +210,20 @@ export default function OrgHierarchy() {
       return;
     }
 
+    if (['project', 'site'].includes(nodeForm.type)) {
+      const cleanName = nodeForm.name.trim().toUpperCase();
+      const cleanLoc = (nodeForm.location_state || '').trim().toLowerCase();
+      const dup = nodeList.find(n =>
+        (n.type === 'project' || n.type === 'site') &&
+        (n.name || '').trim().toUpperCase() === cleanName &&
+        (n.location_state || '').trim().toLowerCase() === cleanLoc
+      );
+      if (dup) {
+        setErrorMsg(`Duplicate project: "${cleanName}" already exists in "${nodeForm.location_state || 'the specified location'}".`);
+        return;
+      }
+    }
+
     try {
       let parentId = nodeForm.parent_id;
       if (!parentId) {
@@ -210,9 +234,13 @@ export default function OrgHierarchy() {
         }
       }
 
+      const finalName = ['project', 'site'].includes(nodeForm.type)
+        ? nodeForm.name.trim().toUpperCase()
+        : nodeForm.name.trim();
+
       await createNode.mutateAsync({
         code: nodeForm.code.trim().toUpperCase(),
-        name: nodeForm.name.trim(),
+        name: finalName,
         type: nodeForm.type,
         parent_id: parentId || null,
         ownership_pct: parseFloat(nodeForm.ownership_pct) || 100.0,
@@ -345,10 +373,6 @@ export default function OrgHierarchy() {
     }
   };
 
-  // Safe array guards
-  const nodeList = Array.isArray(nodes) ? nodes : [];
-  const periodList = Array.isArray(periods) ? periods : [];
-
   const handleOpenAddModal = () => {
     setErrorMsg('');
     const defaultType = user?.role === 'subsidiary_admin' ? 'business_unit' : 'subsidiary';
@@ -413,20 +437,49 @@ export default function OrgHierarchy() {
       return nodeList;
     }
     if (user?.role === 'group_admin') {
-      // Group Admin can ONLY see Group (Level 1) and Subsidiaries (Level 2)
-      return nodeList.filter(n => n.type === 'group' || n.type === 'subsidiary' || n.type === 'company');
+      return nodeList;
     }
     if (user?.role === 'subsidiary_admin') {
-      // Subsidiary Admin can ONLY see their Subsidiary (Level 2) and direct BUs (Level 3) under them
       const subId = user?.org_node_id ? String(user.org_node_id) : null;
-      return nodeList.filter(n => {
-        if (subId && String(n.id) === subId) return true;
-        if (subId && String(n.parent_id) === subId && (n.type === 'business_unit' || n.type === 'bu')) return true;
-        if (!subId && (n.type === 'business_unit' || n.type === 'bu' || n.type === 'subsidiary')) return true;
+      const mySub = subId ? nodeList.find(n => String(n.id) === subId) : nodeList.find(n => n.type === 'subsidiary' || n.type === 'company');
+      const mySubId = mySub ? String(mySub.id) : subId;
+      const mySubCode = mySub ? mySub.code : null;
+      const mySubPath = mySub ? mySub.path : null;
+
+      // Find BUs belonging to this subsidiary
+      const bus = nodeList.filter(n => {
+        if (n.type !== 'business_unit' && n.type !== 'bu') return false;
+        if (mySubId && String(n.parent_id) === mySubId) return true;
+        if (mySubPath && n.path && n.path.startsWith(mySubPath + '.')) return true;
+        if (mySubCode && n.path && n.path.includes(mySubCode)) return true;
         return false;
       });
+      const buIds = new Set(bus.map(b => String(b.id)));
+      const buPaths = bus.map(b => b.path).filter(Boolean);
+      const buCodes = bus.map(b => b.code).filter(Boolean);
+
+      // Find projects belonging to those BUs (or directly under this subsidiary)
+      const projects = nodeList.filter(n => {
+        if (n.type !== 'project' && n.type !== 'site') return false;
+        if (n.parent_id && buIds.has(String(n.parent_id))) return true;
+        if (mySubId && String(n.parent_id) === mySubId) return true;
+        if (buPaths.some(bp => n.path && n.path.startsWith(bp + '.'))) return true;
+        if (buCodes.some(bc => n.path && n.path.includes(bc))) return true;
+        if (mySubPath && n.path && n.path.startsWith(mySubPath + '.')) return true;
+        if (mySubCode && n.path && n.path.includes(mySubCode)) return true;
+        return false;
+      });
+
+      const result = [];
+      if (mySub) result.push(mySub);
+      result.push(...bus);
+      result.push(...projects);
+      return result.length > 0 ? result : nodeList;
     }
-    return [];
+    if (user?.role === 'project_admin') {
+      return nodeList;
+    }
+    return nodeList;
   }, [nodeList, user]);
 
   const canDeleteNode = (node) => {
@@ -453,6 +506,149 @@ export default function OrgHierarchy() {
     return matchType && matchSearch;
   });
 
+  // Sort periods newest first and slice to latest 5
+  const sortedPeriods = useMemo(() => {
+    return [...periodList].sort((a, b) => {
+      const ta = a.start_date ? new Date(a.start_date).getTime() : 0;
+      const tb = b.start_date ? new Date(b.start_date).getTime() : 0;
+      if (tb !== ta) return tb - ta;
+      return (b.code || '').localeCompare(a.code || '');
+    });
+  }, [periodList]);
+
+  const latestPeriods = useMemo(() => sortedPeriods.slice(0, 5), [sortedPeriods]);
+
+  // Executive Hierarchy & Compliance Stats
+  const hierarchyStats = useMemo(() => {
+    const totalUnits = scopedNodes.length;
+    const subsidiaries = scopedNodes.filter(n => n.type === 'subsidiary' || n.type === 'company').length;
+    const bus = scopedNodes.filter(n => n.type === 'business_unit' || n.type === 'bu').length;
+    const projects = scopedNodes.filter(n => n.type === 'project' || n.type === 'site').length;
+    const openPeriods = periodList.filter(p => p.status === 'OPEN').length;
+    const latestFY = sortedPeriods[0]?.financial_year || '2025-2026';
+    return { totalUnits, subsidiaries, bus, projects, openPeriods, latestFY };
+  }, [scopedNodes, periodList, sortedPeriods]);
+
+  // ─── Drill-Down Derivations ───────────────────────────────────
+  // All subsidiaries in scope
+  const scopedSubsidiaries = useMemo(() => {
+    return scopedNodes.filter(n => n.type === 'subsidiary' || n.type === 'company');
+  }, [scopedNodes]);
+
+  // Primary subsidiary for subsidiary_admin
+  const primarySubsidiary = useMemo(() => {
+    if (user?.role === 'subsidiary_admin') {
+      const subId = user?.org_node_id ? String(user.org_node_id) : null;
+      return (subId && scopedNodes.find(n => String(n.id) === subId)) 
+        || scopedSubsidiaries[0] 
+        || null;
+    }
+    return null;
+  }, [user, scopedNodes, scopedSubsidiaries]);
+
+  // Currently active subsidiary
+  const currentSubsidiary = useMemo(() => {
+    if (selectedSubsidiary) return selectedSubsidiary;
+    if (user?.role === 'subsidiary_admin') return primarySubsidiary;
+    return null;
+  }, [selectedSubsidiary, user, primarySubsidiary]);
+
+  // BUs under current subsidiary
+  const busUnderCurrentSub = useMemo(() => {
+    const allBUs = scopedNodes.filter(n => n.type === 'business_unit' || n.type === 'bu');
+    if (!currentSubsidiary) return allBUs;
+    const subId = String(currentSubsidiary.id);
+    const subPath = currentSubsidiary.path;
+    const subCode = currentSubsidiary.code;
+    return allBUs.filter(bu => {
+      if (bu.parent_id && String(bu.parent_id) === subId) return true;
+      if (subPath && bu.path && bu.path.startsWith(subPath + '.')) return true;
+      if (subCode && bu.path && bu.path.includes(subCode)) return true;
+      return false;
+    });
+  }, [scopedNodes, currentSubsidiary]);
+
+  // Projects under selected BU
+  const projectsUnderSelectedBU = useMemo(() => {
+    const allProjects = scopedNodes.filter(n => n.type === 'project' || n.type === 'site');
+    if (!selectedBU) return [];
+    const buId = String(selectedBU.id);
+    const buPath = selectedBU.path;
+    const buCode = selectedBU.code;
+    return allProjects.filter(prj => {
+      if (prj.parent_id && String(prj.parent_id) === buId) return true;
+      if (buPath && prj.path && prj.path.startsWith(buPath + '.')) return true;
+      if (buCode && prj.path && prj.path.includes(buCode)) return true;
+      return false;
+    });
+  }, [scopedNodes, selectedBU]);
+
+  const getProjectsCountForBU = (bu) => {
+    const buId = String(bu.id);
+    const buPath = bu.path;
+    const buCode = bu.code;
+    return scopedNodes.filter(n => (n.type === 'project' || n.type === 'site') && (
+      (n.parent_id && String(n.parent_id) === buId) ||
+      (buPath && n.path && n.path.startsWith(buPath + '.')) ||
+      (buCode && n.path && n.path.includes(buCode))
+    )).length;
+  };
+
+  const getCountsForSubsidiary = (sub) => {
+    const subId = String(sub.id);
+    const subPath = sub.path;
+    const subCode = sub.code;
+    const bus = scopedNodes.filter(n => (n.type === 'business_unit' || n.type === 'bu') && (
+      (n.parent_id && String(n.parent_id) === subId) ||
+      (subPath && n.path && n.path.startsWith(subPath + '.')) ||
+      (subCode && n.path && n.path.includes(subCode))
+    ));
+    const buIds = new Set(bus.map(b => String(b.id)));
+    const buPaths = bus.map(b => b.path).filter(Boolean);
+    const buCodes = bus.map(b => b.code).filter(Boolean);
+
+    const projects = scopedNodes.filter(n => (n.type === 'project' || n.type === 'site') && (
+      (n.parent_id && buIds.has(String(n.parent_id))) ||
+      (n.parent_id && String(n.parent_id) === subId) ||
+      buPaths.some(bp => n.path && n.path.startsWith(bp + '.')) ||
+      buCodes.some(bc => n.path && n.path.includes(bc)) ||
+      (subPath && n.path && n.path.startsWith(subPath + '.')) ||
+      (subCode && n.path && n.path.includes(subCode))
+    ));
+    return { buCount: bus.length, projectCount: projects.length };
+  };
+
+  const filteredSubsidiaries = useMemo(() => {
+    if (!drillSearch) return scopedSubsidiaries;
+    const q = drillSearch.toLowerCase();
+    return scopedSubsidiaries.filter(s => 
+      s.name?.toLowerCase().includes(q) || 
+      s.code?.toLowerCase().includes(q)
+    );
+  }, [scopedSubsidiaries, drillSearch]);
+
+  const filteredBUs = useMemo(() => {
+    if (!drillSearch) return busUnderCurrentSub;
+    const q = drillSearch.toLowerCase();
+    return busUnderCurrentSub.filter(b => 
+      b.name?.toLowerCase().includes(q) || 
+      b.code?.toLowerCase().includes(q) ||
+      b.project_type?.toLowerCase().includes(q)
+    );
+  }, [busUnderCurrentSub, drillSearch]);
+
+  const filteredProjects = useMemo(() => {
+    if (!drillSearch) return projectsUnderSelectedBU;
+    const q = drillSearch.toLowerCase();
+    return projectsUnderSelectedBU.filter(p => 
+      p.name?.toLowerCase().includes(q) || 
+      p.code?.toLowerCase().includes(q) ||
+      p.project_type?.toLowerCase().includes(q) ||
+      p.project_admin_name?.toLowerCase().includes(q) ||
+      p.location_state?.toLowerCase().includes(q)
+    );
+  }, [projectsUnderSelectedBU, drillSearch]);
+
   if (user?.role === 'bu_admin' || user?.role === 'project_admin') {
     return (
       <div className="page-content anim-fade-up">
@@ -461,19 +657,20 @@ export default function OrgHierarchy() {
             <Layers size={32} color="#3b82f6" />
           </div>
           <h2 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--text-primary)', marginBottom: 10 }}>
-            Projects Console Dedicated Workspace
+            {user?.role === 'project_admin' ? 'Projects Hub Dedicated Workspace' : 'Projects Console Dedicated Workspace'}
           </h2>
           <p style={{ color: 'var(--text-secondary)', fontSize: '14px', lineHeight: 1.6, marginBottom: 24 }}>
-            {user?.role === 'bu_admin'
-              ? 'Business Unit Admins create and manage operational projects directly from the Projects feature. The 4-Tier Org Hierarchy administration is reserved for Group and Subsidiary Admins.'
-              : 'Project Admins are assigned to specific operational projects and do not have access to Organization Hierarchy configuration.'}
+            {user?.role === 'project_admin'
+              ? 'Project Administrators manage data collection and operational metrics directly within the Projects hub. The 4-Tier Org Hierarchy administration is reserved for Group and Subsidiary Admins.'
+              : 'Business Unit Admins create and manage operational projects directly from the Projects feature. The 4-Tier Org Hierarchy administration is reserved for Group and Subsidiary Admins.'
+            }
           </p>
           <button 
             className="btn btn-primary" 
             onClick={() => window.location.href = '/projects'}
             style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '10px 24px', margin: '0 auto' }}
           >
-            <span>Proceed to Projects Console</span>
+            <span>Proceed to Projects Hub</span>
             <ChevronRight size={15} />
           </button>
         </div>
@@ -548,46 +745,215 @@ export default function OrgHierarchy() {
         </div>
       )}
 
-      {/* Reporting Periods Large Dedicated Area */}
-      <div className="card" style={{ padding: '0', overflow: 'hidden' }}>
+      {/* ── Role-Specific Executive Governance Banner ── */}
+      <div style={{
+        background: '#FFFFFF',
+        border: '1px solid #E2E8F0',
+        borderRadius: '12px',
+        padding: '20px 24px',
+        marginBottom: '20px',
+        boxShadow: '0 1px 3px rgba(0, 0, 0, 0.05)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        flexWrap: 'wrap',
+        gap: '16px'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+          <div style={{
+            width: 48,
+            height: 48,
+            borderRadius: '12px',
+            background: user?.role === 'system_admin' ? '#FEF2F2' : user?.role === 'group_admin' ? '#F5F3FF' : '#ECFDF5',
+            border: `1px solid ${user?.role === 'system_admin' ? '#FECACA' : user?.role === 'group_admin' ? '#DDD6FE' : '#A7F3D0'}`,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: '22px'
+          }}>
+            {user?.role === 'system_admin' ? '🛡️' : user?.role === 'group_admin' ? '🏛️' : user?.role === 'subsidiary_admin' ? '🏢' : '🏗️'}
+          </div>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ fontSize: '16px', fontWeight: 700, color: '#0F172A' }}>
+                {user?.role === 'system_admin'
+                  ? 'System Administrator — Platform Root Governance'
+                  : user?.role === 'group_admin'
+                  ? 'Group Administrator — Enterprise Consolidation'
+                  : user?.role === 'subsidiary_admin'
+                  ? 'Subsidiary Administrator — Corporate Governance'
+                  : 'Project Administrator — Operational Data & Site Governance'}
+              </span>
+              <span style={{
+                fontSize: '11px',
+                fontWeight: 700,
+                padding: '2px 8px',
+                borderRadius: '9999px',
+                background: user?.role === 'system_admin' ? '#FEF2F2' : user?.role === 'group_admin' ? '#EEF2FF' : user?.role === 'subsidiary_admin' ? '#ECFDF5' : '#F5F3FF',
+                color: user?.role === 'system_admin' ? '#DC2626' : user?.role === 'group_admin' ? '#4F46E5' : user?.role === 'subsidiary_admin' ? '#059669' : '#7C3AED',
+                border: `1px solid ${user?.role === 'system_admin' ? '#FECACA' : user?.role === 'group_admin' ? '#C7D2FE' : user?.role === 'subsidiary_admin' ? '#A7F3D0' : '#DDD6FE'}`
+              }}>
+                {user?.role?.toUpperCase().replace('_', ' ')}
+              </span>
+            </div>
+            <p style={{ margin: '4px 0 0', fontSize: '13px', color: '#475569', lineHeight: 1.5 }}>
+              {user?.role === 'system_admin'
+                ? 'Root sovereignty across all 4 tiers (Group, Subsidiary, BU, Projects). Authority to lock/unlock periods, create FY schedules, and manage deletion.'
+                : user?.role === 'group_admin'
+                ? 'Corporate oversight across MEIL Group and its operating subsidiaries. Authorized to lock reporting periods, create FY cycles, and configure entities.'
+                : user?.role === 'subsidiary_admin'
+                ? 'Scoped authority over assigned subsidiary entities and associated Business Units. Can create BUs, lock reporting periods, and monitor project reporting compliance.'
+                : 'Operational authority over assigned projects and site boundaries. Explore your assigned subsidiaries, business units, and operational project nodes below.'}
+            </p>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <button
+            className="btn btn-secondary btn-sm"
+            onClick={() => navigate('/periods')}
+            style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#FFFFFF', border: '1px solid #CBD5E1', color: '#0F172A', fontWeight: 600 }}
+          >
+            <Calendar size={14} color="#4F46E5" />
+            <span>FY &amp; Periods Console</span>
+          </button>
+          {canCreateUnits && (
+            <button
+              className="btn btn-primary btn-sm"
+              onClick={handleOpenAddModal}
+              style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+            >
+              <Plus size={14} />
+              <span>+ Add Unit</span>
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* ── Executive Summary Metrics Bar ── */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+        gap: '14px',
+        marginBottom: '20px'
+      }}>
+        <div className="card" style={{ padding: '16px 20px', background: '#FFFFFF', borderRadius: '10px', border: '1px solid #E2E8F0', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+          <div style={{ fontSize: '11px', fontWeight: 600, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            Entities in Scope
+          </div>
+          <div style={{ fontSize: '24px', fontWeight: 800, color: '#0F172A', marginTop: '4px', fontFamily: 'JetBrains Mono' }}>
+            {hierarchyStats.totalUnits}
+          </div>
+          <div style={{ fontSize: '12px', color: '#64748B', marginTop: '2px' }}>
+            Active organizational units
+          </div>
+        </div>
+
+        <div className="card" style={{ padding: '16px 20px', background: '#FFFFFF', borderRadius: '10px', border: '1px solid #E2E8F0', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+          <div style={{ fontSize: '11px', fontWeight: 600, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            Subsidiaries (Tier 2)
+          </div>
+          <div style={{ fontSize: '24px', fontWeight: 800, color: '#059669', marginTop: '4px', fontFamily: 'JetBrains Mono' }}>
+            {hierarchyStats.subsidiaries}
+          </div>
+          <div style={{ fontSize: '12px', color: '#64748B', marginTop: '2px' }}>
+            Corporate entities
+          </div>
+        </div>
+
+        <div className="card" style={{ padding: '16px 20px', background: '#FFFFFF', borderRadius: '10px', border: '1px solid #E2E8F0', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+          <div style={{ fontSize: '11px', fontWeight: 600, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            Business Units (Tier 3)
+          </div>
+          <div style={{ fontSize: '24px', fontWeight: 800, color: '#0284C7', marginTop: '4px', fontFamily: 'JetBrains Mono' }}>
+            {hierarchyStats.bus}
+          </div>
+          <div style={{ fontSize: '12px', color: '#64748B', marginTop: '2px' }}>
+            Operating divisions
+          </div>
+        </div>
+
+        <div className="card" style={{ padding: '16px 20px', background: '#FFFFFF', borderRadius: '10px', border: '1px solid #E2E8F0', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+          <div style={{ fontSize: '11px', fontWeight: 600, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            Projects (Tier 4)
+          </div>
+          <div style={{ fontSize: '24px', fontWeight: 800, color: '#D97706', marginTop: '4px', fontFamily: 'JetBrains Mono' }}>
+            {hierarchyStats.projects}
+          </div>
+          <div style={{ fontSize: '12px', color: '#64748B', marginTop: '2px' }}>
+            Operational sites
+          </div>
+        </div>
+
+        <div className="card" style={{ padding: '16px 20px', background: '#FFFFFF', borderRadius: '10px', border: '1px solid #E2E8F0', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+          <div style={{ fontSize: '11px', fontWeight: 600, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            Current FY Cycle
+          </div>
+          <div style={{ fontSize: '22px', fontWeight: 800, color: '#7C3AED', marginTop: '4px', fontFamily: 'JetBrains Mono' }}>
+            FY {hierarchyStats.latestFY}
+          </div>
+          <div style={{ fontSize: '12px', color: '#64748B', marginTop: '2px' }}>
+            {hierarchyStats.openPeriods} open submission window(s)
+          </div>
+        </div>
+      </div>
+
+      {/* ── Reporting Periods: Displays Latest 5 Periods with See in Details ── */}
+      <div className="card" style={{ padding: '0', overflow: 'hidden', marginBottom: '20px' }}>
         <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12, padding: '18px 24px', borderBottom: '1px solid var(--border-subtle)' }}>
           <div>
             <div className="card-title" style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '16px' }}>
               <Calendar size={18} color="var(--brand-400)" />
-              <span>Reporting Periods & Statutory Audit Windows ({periodList.length})</span>
+              <span>Reporting Periods &amp; Statutory Windows</span>
+              <span style={{
+                fontSize: '11px',
+                fontWeight: 700,
+                padding: '2px 8px',
+                borderRadius: '6px',
+                background: '#EEF2FF',
+                color: '#4F46E5',
+                border: '1px solid #C7D2FE'
+              }}>
+                Showing Latest 5 of {periodList.length}
+              </span>
             </div>
             <div className="card-subtitle text-muted text-sm" style={{ marginTop: '2px' }}>
-              Fiscal timelines, monthly collection packs, and SEBI BRSR compliance audit windows
+              Latest 5 reporting cycles shown below. Use the dedicated console to view and manage all Financial Years.
             </div>
           </div>
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
             <button 
               className="btn btn-secondary btn-sm"
-              onClick={() => setShowAllPeriodsModal(true)}
-              style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+              onClick={() => navigate('/periods')}
+              style={{ display: 'flex', alignItems: 'center', gap: 6, borderColor: 'var(--brand-400)', color: 'var(--brand-400)' }}
             >
-              <Eye size={13} color="var(--brand-400)" />
-              <span>Dedicated Periods Console</span>
+              <Eye size={13} />
+              <span>See in Details (All FYs &amp; Periods)</span>
+              <ChevronRight size={13} />
             </button>
-            <button 
-              className="btn btn-primary btn-sm"
-              onClick={() => { setShowPeriodModal(true); setErrorMsg(''); }}
-              style={{ display: 'flex', alignItems: 'center', gap: 6 }}
-            >
-              <Plus size={13} />
-              <span>+ Add Period</span>
-            </button>
+            {canManagePeriods && (
+              <button 
+                className="btn btn-primary btn-sm"
+                onClick={() => { setShowPeriodModal(true); setErrorMsg(''); }}
+                style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+              >
+                <Plus size={13} />
+                <span>+ Add Period</span>
+              </button>
+            )}
           </div>
         </div>
 
-        {/* Large Prominent Grid */}
+        {/* Latest 5 Periods Grid */}
         <div 
           style={{ 
             padding: '20px 24px', 
             display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(290px, 1fr))',
-            gap: '16px',
-            background: 'rgba(11, 13, 26, 0.4)'
+            gridTemplateColumns: 'repeat(auto-fill, minmax(230px, 1fr))',
+            gap: '14px',
+            background: '#F8FAFC',
+            borderTop: '1px solid #E2E8F0',
+            borderBottom: '1px solid #E2E8F0'
           }}
         >
           {loadP ? (
@@ -595,11 +961,11 @@ export default function OrgHierarchy() {
               <RefreshCw size={20} className="spin" style={{ margin: '0 auto 8px', display: 'block' }} />
               Loading reporting periods...
             </div>
-          ) : periodList.length === 0 ? (
-            <div style={{ padding: '36px 20px', color: 'var(--text-muted)', gridColumn: '1 / -1', textAlign: 'center', background: 'rgba(255,255,255,0.015)', borderRadius: '8px', border: '1px dashed var(--border-default)' }}>
-              <Calendar size={28} color="var(--brand-400)" style={{ margin: '0 auto 8px', display: 'block' }} />
-              <div style={{ fontSize: '14px', fontWeight: 600, color: '#fff', marginBottom: 4 }}>No Reporting Periods Configured</div>
-              <p style={{ fontSize: '12px', color: 'var(--text-secondary)', maxWidth: 420, margin: '0 auto 12px' }}>
+          ) : latestPeriods.length === 0 ? (
+            <div style={{ padding: '36px 20px', color: '#64748B', gridColumn: '1 / -1', textAlign: 'center', background: '#FFFFFF', borderRadius: '8px', border: '1px dashed #CBD5E1' }}>
+              <Calendar size={28} color="#4F46E5" style={{ margin: '0 auto 8px', display: 'block' }} />
+              <div style={{ fontSize: '14px', fontWeight: 600, color: '#0F172A', marginBottom: 4 }}>No Reporting Periods Configured</div>
+              <p style={{ fontSize: '12px', color: '#475569', maxWidth: 420, margin: '0 auto 12px' }}>
                 Create a reporting period (e.g. FY 2025-26) to establish statutory collection cycles and enable ESG data submissions.
               </p>
               <button 
@@ -613,23 +979,23 @@ export default function OrgHierarchy() {
               </button>
             </div>
           ) : (
-            periodList.map((p) => {
+            latestPeriods.map((p) => {
               const isLocked = p.status === 'LOCKED';
               return (
                 <div 
                   key={p.id} 
                   style={{
-                    background: 'var(--bg-elevated)',
-                    border: '1px solid var(--border-default)',
-                    borderRadius: 'var(--radius-md)',
-                    padding: '16px 20px',
+                    background: '#FFFFFF',
+                    border: `1px solid ${isLocked ? '#FECACA' : '#BBF7D0'}`,
+                    borderRadius: '8px',
+                    padding: '14px 16px',
                     position: 'relative',
                     overflow: 'hidden',
                     display: 'flex',
                     flexDirection: 'column',
                     justifyContent: 'space-between',
-                    gap: '12px',
-                    boxShadow: '0 2px 8px rgba(0,0,0,0.2)'
+                    gap: '10px',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.06)'
                   }}
                 >
                   <div style={{
@@ -642,54 +1008,1177 @@ export default function OrgHierarchy() {
                   }} />
 
                   <div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
-                      <span style={{ fontWeight: 700, fontSize: '15px', color: '#fff', fontFamily: 'JetBrains Mono', letterSpacing: '-0.2px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
+                      <span style={{ fontWeight: 700, fontSize: '14px', color: '#0F172A', fontFamily: 'JetBrains Mono', letterSpacing: '-0.2px' }}>
                         {p.code}
                       </span>
                       {isLocked ? (
-                        <span className="badge badge-rose" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <span className="badge badge-rose" style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: '10px' }}>
                           <Lock size={10} /> Locked
                         </span>
                       ) : (
-                        <span className="badge badge-emerald" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <span className="badge badge-emerald" style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: '10px' }}>
                           <Unlock size={10} /> Open
                         </span>
                       )}
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                      <span className="badge badge-brand" style={{ fontSize: '11px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                      <span className="badge badge-brand" style={{ fontSize: '10px' }}>
                         FY {p.financial_year}
                       </span>
-                      <span className="badge badge-indigo" style={{ fontSize: '11px' }}>
-                        {p.period_type?.toUpperCase()} PACK
+                      <span className="badge badge-indigo" style={{ fontSize: '10px' }}>
+                        {p.period_type?.toUpperCase()}
                       </span>
                     </div>
                   </div>
 
-                  <div style={{ fontSize: '12px', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <Clock size={12} color="var(--brand-400)" />
-                    <span>{p.start_date}</span>
+                  <div style={{ fontSize: '11px', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <Clock size={11} color="var(--brand-400)" />
+                    <span>{p.start_date || '—'}</span>
                     <span style={{ color: 'var(--text-muted)' }}>→</span>
-                    <span>{p.end_date}</span>
+                    <span>{p.end_date || '—'}</span>
                   </div>
 
-                  <button 
-                    className="btn btn-secondary btn-sm" 
-                    onClick={() => setSelectedPeriodDetail(p)} 
-                    style={{ width: '100%', justifyContent: 'center', gap: '6px', marginTop: '4px' }}
-                    title="Inspect complete statutory details for this reporting period"
-                  >
-                    <Info size={13} color="var(--brand-400)" />
-                    <span>Show in Details</span>
-                  </button>
+                  <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
+                    <button 
+                      className="btn btn-secondary btn-sm" 
+                      onClick={() => setSelectedPeriodDetail(p)} 
+                      style={{ flex: 1, justifyContent: 'center', gap: '4px', fontSize: '11px', padding: '4px 8px' }}
+                      title="Inspect complete statutory details"
+                    >
+                      <Info size={12} color="var(--brand-400)" />
+                      <span>Details</span>
+                    </button>
+                    {canManagePeriods && (
+                      <button
+                        className="btn btn-secondary btn-sm"
+                        onClick={() => handleTogglePeriodStatus(p)}
+                        style={{ padding: '4px 8px', fontSize: '11px' }}
+                        title={isLocked ? 'Unlock period' : 'Lock period'}
+                      >
+                        {isLocked ? <Unlock size={12} color="#10b981" /> : <Lock size={12} color="#ef4444" />}
+                      </button>
+                    )}
+                  </div>
                 </div>
               );
             })
           )}
         </div>
+
+        {/* Bottom Banner with link to full detailed view */}
+        <div style={{
+          padding: '12px 24px',
+          background: '#FFFFFF',
+          borderTop: '1px solid #E2E8F0',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: 10
+        }}>
+          <span style={{ fontSize: '12px', color: '#475569' }}>
+            Showing <strong>{latestPeriods.length}</strong> of <strong>{periodList.length}</strong> statutory reporting periods. Complete calendar &amp; quarterly groups available in the dedicated console.
+          </span>
+          <button
+            onClick={() => navigate('/periods')}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: 'var(--brand-400)',
+              fontSize: '12px',
+              fontWeight: 600,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 4
+            }}
+          >
+            <span>See in Details: Open FY Calendar &amp; All Periods</span>
+            <ChevronRight size={13} />
+          </button>
+        </div>
       </div>
 
-      {/* Org Hierarchy Table Card */}
+
+      {/* ── View Switcher: Interactive Drill-Down Explorer vs All Units Data Table ── */}
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: '16px',
+        flexWrap: 'wrap',
+        gap: 12
+      }}>
+        <div style={{
+          display: 'inline-flex',
+          background: '#F1F5F9',
+          padding: '4px',
+          borderRadius: '10px',
+          border: '1px solid #E2E8F0'
+        }}>
+          <button
+            type="button"
+            onClick={() => setActiveHierarchyView('drilldown')}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '8px 18px',
+              borderRadius: '8px',
+              fontSize: '13px',
+              fontWeight: activeHierarchyView === 'drilldown' ? 700 : 500,
+              background: activeHierarchyView === 'drilldown' ? '#FFFFFF' : 'transparent',
+              color: activeHierarchyView === 'drilldown' ? '#0F172A' : '#64748B',
+              boxShadow: activeHierarchyView === 'drilldown' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+              border: 'none',
+              cursor: 'pointer',
+              transition: 'all 0.15s ease'
+            }}
+          >
+            <Layers size={15} color={activeHierarchyView === 'drilldown' ? '#4F46E5' : '#64748B'} />
+            <span>Interactive Drill-Down Explorer</span>
+            <span style={{
+              fontSize: '10.5px',
+              fontWeight: 700,
+              padding: '2px 8px',
+              borderRadius: '9999px',
+              background: activeHierarchyView === 'drilldown' ? '#EEF2FF' : '#E2E8F0',
+              color: activeHierarchyView === 'drilldown' ? '#4F46E5' : '#64748B'
+            }}>
+              {user?.role === 'subsidiary_admin' ? 'BUs → Projects' : 'Subsidiaries → BUs → Projects'}
+            </span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveHierarchyView('table')}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '8px 18px',
+              borderRadius: '8px',
+              fontSize: '13px',
+              fontWeight: activeHierarchyView === 'table' ? 700 : 500,
+              background: activeHierarchyView === 'table' ? '#FFFFFF' : 'transparent',
+              color: activeHierarchyView === 'table' ? '#0F172A' : '#64748B',
+              boxShadow: activeHierarchyView === 'table' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+              border: 'none',
+              cursor: 'pointer',
+              transition: 'all 0.15s ease'
+            }}
+          >
+            <Building2 size={15} color={activeHierarchyView === 'table' ? '#4F46E5' : '#64748B'} />
+            <span>All Units Data Table</span>
+            <span style={{
+              fontSize: '10.5px',
+              fontWeight: 700,
+              padding: '2px 8px',
+              borderRadius: '9999px',
+              background: activeHierarchyView === 'table' ? '#EEF2FF' : '#E2E8F0',
+              color: activeHierarchyView === 'table' ? '#4F46E5' : '#64748B'
+            }}>
+              {scopedNodes.length}
+            </span>
+          </button>
+        </div>
+
+        {activeHierarchyView === 'drilldown' && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            {(selectedSubsidiary || selectedBU) && (
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={() => {
+                  setSelectedSubsidiary(null);
+                  setSelectedBU(null);
+                  setDrillSearch('');
+                }}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: '12px', background: '#FFFFFF', border: '1px solid #CBD5E1', color: '#0F172A', fontWeight: 600 }}
+              >
+                <RefreshCw size={12} />
+                <span>Reset View to Root</span>
+              </button>
+            )}
+            {canCreateUnits && (
+              <button 
+                className="btn btn-primary btn-sm" 
+                onClick={handleOpenAddModal}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+              >
+                <Plus size={14} />
+                <span>+ Add Unit</span>
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+
+      {activeHierarchyView === 'drilldown' ? (
+        <div className="card" style={{ padding: '0', overflow: 'hidden', background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '12px', marginBottom: '24px' }}>
+          {/* Breadcrumb Navigation Header */}
+          <div style={{
+            padding: '16px 24px',
+            background: '#F8FAFC',
+            borderBottom: '1px solid #E2E8F0',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: 12
+          }}>
+            {/* Interactive Breadcrumbs */}
+            <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 8, fontSize: '13px' }}>
+              <span style={{ fontSize: '11px', fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em', marginRight: 4 }}>
+                Hierarchy Navigation:
+              </span>
+
+              {user?.role === 'subsidiary_admin' ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => { setSelectedBU(null); setDrillSearch(''); }}
+                    style={{
+                      background: selectedBU ? '#FFFFFF' : '#0F172A',
+                      color: selectedBU ? '#0F172A' : '#FFFFFF',
+                      border: selectedBU ? '1px solid #CBD5E1' : 'none',
+                      borderRadius: '6px',
+                      padding: '4px 10px',
+                      fontSize: '12.5px',
+                      fontWeight: 600,
+                      cursor: selectedBU ? 'pointer' : 'default',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 6
+                    }}
+                  >
+                    <Building2 size={13} color={selectedBU ? '#059669' : '#34D399'} />
+                    <span>{currentSubsidiary?.name || 'Subsidiary Entity'}</span>
+                  </button>
+                  {selectedBU && (
+                    <>
+                      <ChevronRight size={14} color="#94A3B8" />
+                      <span style={{
+                        background: '#0F172A',
+                        color: '#FFFFFF',
+                        borderRadius: '6px',
+                        padding: '4px 10px',
+                        fontSize: '12.5px',
+                        fontWeight: 700,
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 6
+                      }}>
+                        <Layers size={13} color="#818CF8" />
+                        <span>{selectedBU.name}</span>
+                        <span style={{ fontSize: '10px', background: '#312E81', color: '#C7D2FE', padding: '1px 6px', borderRadius: '4px' }}>
+                          Level 3 BU
+                        </span>
+                      </span>
+                    </>
+                  )}
+                </>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => { setSelectedSubsidiary(null); setSelectedBU(null); setDrillSearch(''); }}
+                    style={{
+                      background: (!selectedSubsidiary && !selectedBU) ? '#0F172A' : '#FFFFFF',
+                      color: (!selectedSubsidiary && !selectedBU) ? '#FFFFFF' : '#0F172A',
+                      border: (!selectedSubsidiary && !selectedBU) ? 'none' : '1px solid #CBD5E1',
+                      borderRadius: '6px',
+                      padding: '4px 10px',
+                      fontSize: '12.5px',
+                      fontWeight: 600,
+                      cursor: (selectedSubsidiary || selectedBU) ? 'pointer' : 'default',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 6
+                    }}
+                  >
+                    <Building2 size={13} color={(!selectedSubsidiary && !selectedBU) ? '#34D399' : '#059669'} />
+                    <span>Subsidiaries</span>
+                    <span style={{
+                      fontSize: '10px',
+                      padding: '1px 6px',
+                      borderRadius: '4px',
+                      background: (!selectedSubsidiary && !selectedBU) ? '#064E3B' : '#ECFDF5',
+                      color: (!selectedSubsidiary && !selectedBU) ? '#A7F3D0' : '#059669'
+                    }}>
+                      {scopedSubsidiaries.length}
+                    </span>
+                  </button>
+
+                  {selectedSubsidiary && (
+                    <>
+                      <ChevronRight size={14} color="#94A3B8" />
+                      <button
+                        type="button"
+                        onClick={() => { setSelectedBU(null); setDrillSearch(''); }}
+                        style={{
+                          background: selectedBU ? '#FFFFFF' : '#0F172A',
+                          color: selectedBU ? '#0F172A' : '#FFFFFF',
+                          border: selectedBU ? '1px solid #CBD5E1' : 'none',
+                          borderRadius: '6px',
+                          padding: '4px 10px',
+                          fontSize: '12.5px',
+                          fontWeight: 600,
+                          cursor: selectedBU ? 'pointer' : 'default',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 6
+                        }}
+                      >
+                        <Building2 size={13} color={selectedBU ? '#059669' : '#34D399'} />
+                        <span>{selectedSubsidiary.name}</span>
+                      </button>
+                    </>
+                  )}
+
+                  {selectedBU && (
+                    <>
+                      <ChevronRight size={14} color="#94A3B8" />
+                      <span style={{
+                        background: '#0F172A',
+                        color: '#FFFFFF',
+                        borderRadius: '6px',
+                        padding: '4px 10px',
+                        fontSize: '12.5px',
+                        fontWeight: 700,
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 6
+                      }}>
+                        <Layers size={13} color="#818CF8" />
+                        <span>{selectedBU.name}</span>
+                        <span style={{ fontSize: '10px', background: '#312E81', color: '#C7D2FE', padding: '1px 6px', borderRadius: '4px' }}>
+                          Level 3 BU
+                        </span>
+                      </span>
+                    </>
+                  )}
+                </>
+              )}
+            </div>
+
+            {/* Quick Drill Search */}
+            <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+              <Search size={14} style={{ position: 'absolute', left: 10, color: '#94A3B8' }} />
+              <input
+                type="text"
+                placeholder={
+                  selectedBU 
+                    ? "Filter projects in BU..." 
+                    : currentSubsidiary 
+                    ? "Filter business units..." 
+                    : "Filter subsidiaries..."
+                }
+                className="form-control"
+                style={{ paddingLeft: 30, width: 220, height: 32, fontSize: '12px', background: '#FFFFFF', border: '1px solid #CBD5E1' }}
+                value={drillSearch}
+                onChange={(e) => setDrillSearch(e.target.value)}
+              />
+              {drillSearch && (
+                <button
+                  type="button"
+                  onClick={() => setDrillSearch('')}
+                  style={{ position: 'absolute', right: 8, background: 'none', border: 'none', cursor: 'pointer', color: '#94A3B8' }}
+                >
+                  <X size={13} />
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Drill-down Body Content */}
+          <div style={{ padding: '24px' }}>
+            {/* VIEW 1: PROJECTS UNDER SELECTED BU */}
+            {selectedBU ? (
+              <div>
+                {/* Level Title & Action Bar */}
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  flexWrap: 'wrap',
+                  gap: 12,
+                  marginBottom: '20px',
+                  paddingBottom: '16px',
+                  borderBottom: '1px solid #E2E8F0'
+                }}>
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <button
+                        type="button"
+                        onClick={() => { setSelectedBU(null); setDrillSearch(''); }}
+                        style={{
+                          background: '#F1F5F9',
+                          border: '1px solid #CBD5E1',
+                          borderRadius: '6px',
+                          padding: '4px 8px',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 4,
+                          fontSize: '12px',
+                          fontWeight: 600,
+                          color: '#0F172A',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        <ArrowLeft size={13} />
+                        <span>Back to Business Units</span>
+                      </button>
+                      <h2 style={{ fontSize: '18px', fontWeight: 800, color: '#0F172A', margin: 0 }}>
+                        Projects under "{selectedBU.name}"
+                      </h2>
+                      <span style={{
+                        fontSize: '11px',
+                        fontFamily: 'JetBrains Mono, monospace',
+                        background: '#EEF2FF',
+                        color: '#4F46E5',
+                        padding: '2px 8px',
+                        borderRadius: '6px',
+                        fontWeight: 700,
+                        border: '1px solid #C7D2FE'
+                      }}>
+                        {selectedBU.code}
+                      </span>
+                    </div>
+                    <p style={{ fontSize: '13px', color: '#475569', margin: '4px 0 0' }}>
+                      Showing <strong>{filteredProjects.length}</strong> operational projects configured under this Business Unit. Inspect reporting status, boundaries, and assigned project administrators.
+                    </p>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{
+                      fontSize: '12px',
+                      fontWeight: 700,
+                      padding: '4px 10px',
+                      borderRadius: '8px',
+                      background: '#F5F3FF',
+                      color: '#7C3AED',
+                      border: '1px solid #DDD6FE'
+                    }}>
+                      ⚡ {projectsUnderSelectedBU.length} Total Projects in BU
+                    </span>
+                  </div>
+                </div>
+
+                {/* Projects Grid */}
+                {filteredProjects.length === 0 ? (
+                  <div style={{
+                    padding: '48px 24px',
+                    textAlign: 'center',
+                    background: '#F8FAFC',
+                    borderRadius: '12px',
+                    border: '1px dashed #CBD5E1'
+                  }}>
+                    <Layers size={36} color="#94A3B8" style={{ margin: '0 auto 10px', display: 'block' }} />
+                    <div style={{ fontSize: '15px', fontWeight: 700, color: '#0F172A', marginBottom: 6 }}>
+                      {drillSearch ? 'No Matching Projects Found' : 'No Operational Projects Configured in this BU'}
+                    </div>
+                    <p style={{ fontSize: '13px', color: '#475569', maxWidth: 440, margin: '0 auto 16px', lineHeight: 1.5 }}>
+                      {drillSearch
+                        ? `No projects matching "${drillSearch}" were found in this Business Unit.`
+                        : 'Operational projects under this Business Unit can be created from the Projects console or assigned by corporate administration.'}
+                    </p>
+                    {drillSearch && (
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-sm"
+                        onClick={() => setDrillSearch('')}
+                      >
+                        Clear Project Search
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))',
+                    gap: '16px'
+                  }}>
+                    {filteredProjects.map((prj) => (
+                      <div
+                        key={prj.id}
+                        style={{
+                          background: '#FFFFFF',
+                          border: '1px solid #E2E8F0',
+                          borderRadius: '12px',
+                          padding: '18px 20px',
+                          boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          justifyContent: 'space-between',
+                          gap: '14px',
+                          transition: 'all 0.2s ease'
+                        }}
+                      >
+                        <div>
+                          {/* Card Top Pill Row */}
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                              <div style={{
+                                width: 34,
+                                height: 34,
+                                borderRadius: '8px',
+                                background: '#F5F3FF',
+                                border: '1px solid #DDD6FE',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center'
+                              }}>
+                                <Layers size={18} color="#7C3AED" />
+                              </div>
+                              <div>
+                                <span style={{
+                                  fontSize: '11px',
+                                  fontWeight: 700,
+                                  fontFamily: 'JetBrains Mono, monospace',
+                                  color: '#475569',
+                                  background: '#F1F5F9',
+                                  padding: '2px 6px',
+                                  borderRadius: '4px',
+                                  border: '1px solid #E2E8F0'
+                                }}>
+                                  {prj.code}
+                                </span>
+                              </div>
+                            </div>
+                            <span style={{
+                              fontSize: '10.5px',
+                              fontWeight: 700,
+                              padding: '2px 8px',
+                              borderRadius: '9999px',
+                              background: prj.boundary ? '#ECFDF5' : '#FEF2F2',
+                              color: prj.boundary ? '#059669' : '#DC2626',
+                              border: `1px solid ${prj.boundary ? '#A7F3D0' : '#FECACA'}`
+                            }}>
+                              {prj.boundary ? 'In Boundary' : 'Excluded'}
+                            </span>
+                          </div>
+
+                          {/* Project Name */}
+                          <h3 style={{ fontSize: '15px', fontWeight: 800, color: '#0F172A', margin: '0 0 8px', lineHeight: 1.4, textTransform: 'uppercase' }}>
+                            {(prj.name || '').toUpperCase()}
+                          </h3>
+
+                          {/* Metadata Grid */}
+                          <div style={{
+                            display: 'grid',
+                            gridTemplateColumns: '1fr 1fr',
+                            gap: '8px',
+                            background: '#F8FAFC',
+                            padding: '10px 12px',
+                            borderRadius: '8px',
+                            border: '1px solid #E2E8F0',
+                            fontSize: '12px'
+                          }}>
+                            <div>
+                              <span style={{ color: '#64748B', display: 'block', fontSize: '10.5px', textTransform: 'uppercase', fontWeight: 600 }}>
+                                Sector / Type
+                              </span>
+                              <span style={{ color: '#0F172A', fontWeight: 600 }}>
+                                {prj.project_type || 'Infrastructure'}
+                              </span>
+                            </div>
+                            <div>
+                              <span style={{ color: '#64748B', display: 'block', fontSize: '10.5px', textTransform: 'uppercase', fontWeight: 600 }}>
+                                Region / State
+                              </span>
+                              <span style={{ color: '#0F172A', fontWeight: 600 }}>
+                                {prj.location_state || 'Telangana, India'}
+                              </span>
+                            </div>
+                            <div>
+                              <span style={{ color: '#64748B', display: 'block', fontSize: '10.5px', textTransform: 'uppercase', fontWeight: 600 }}>
+                                Control
+                              </span>
+                              <span style={{ color: '#0F172A', fontWeight: 600 }}>
+                                {prj.control_type === 'operational_control' ? 'Operational' : (prj.control_type || '100% MEIL')}
+                              </span>
+                            </div>
+                            <div>
+                              <span style={{ color: '#64748B', display: 'block', fontSize: '10.5px', textTransform: 'uppercase', fontWeight: 600 }}>
+                                Ownership
+                              </span>
+                              <span style={{ color: '#0F172A', fontWeight: 700 }}>
+                                {prj.ownership_pct ? `${prj.ownership_pct}%` : '100%'}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Assigned Project Admin Card */}
+                          <div style={{
+                            marginTop: '10px',
+                            padding: '8px 12px',
+                            borderRadius: '8px',
+                            background: prj.project_admin_name ? '#F0FDF4' : '#F8FAFC',
+                            border: `1px solid ${prj.project_admin_name ? '#BBF7D0' : '#E2E8F0'}`,
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 10
+                          }}>
+                            <div style={{
+                              width: 28,
+                              height: 28,
+                              borderRadius: '50%',
+                              background: prj.project_admin_name ? '#DCFCE7' : '#E2E8F0',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center'
+                            }}>
+                              <User size={14} color={prj.project_admin_name ? '#16A34A' : '#64748B'} />
+                            </div>
+                            <div style={{ overflow: 'hidden' }}>
+                              <span style={{ fontSize: '10px', fontWeight: 700, color: '#64748B', textTransform: 'uppercase', display: 'block' }}>
+                                Assigned Project Admin
+                              </span>
+                              {prj.project_admin_name ? (
+                                <div style={{ fontSize: '12px', fontWeight: 700, color: '#15803D', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                  {prj.project_admin_name}{' '}
+                                  <span style={{ fontWeight: 400, color: '#475569', fontSize: '11px' }}>
+                                    ({prj.project_admin_email || 'Active'})
+                                  </span>
+                                </div>
+                              ) : (
+                                <span style={{ fontSize: '12px', fontWeight: 500, color: '#64748B', fontStyle: 'italic' }}>
+                                  Not assigned yet
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Card Bottom Actions */}
+                        <div style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          gap: 8,
+                          paddingTop: '12px',
+                          borderTop: '1px solid #E2E8F0'
+                        }}>
+                          <button
+                            type="button"
+                            className="btn btn-secondary btn-xs"
+                            onClick={() => setSelectedNodeDetail(prj)}
+                            style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: '11.5px', background: '#FFFFFF', border: '1px solid #CBD5E1', color: '#0F172A', fontWeight: 600 }}
+                          >
+                            <Eye size={13} color="#4F46E5" />
+                            <span>View Full Details</span>
+                          </button>
+
+                          {user?.role === 'project_admin' ? (
+                            <button
+                              type="button"
+                              className="btn btn-primary btn-xs"
+                              onClick={() => navigate('/collection')}
+                              style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: '11.5px' }}
+                            >
+                              <PenLine size={13} />
+                              <span>Data Entry</span>
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              className="btn btn-secondary btn-xs"
+                              onClick={() => setSelectedNodeDetail(prj)}
+                              style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: '11.5px', background: '#F8FAFC', border: '1px solid #CBD5E1', color: '#0F172A', fontWeight: 600 }}
+                            >
+                              <span>View Project Details</span>
+                              <ChevronRight size={13} />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : currentSubsidiary ? (
+              /* VIEW 2: BUSINESS UNITS UNDER CURRENT SUBSIDIARY */
+              <div>
+                {/* Level Title & Action Bar */}
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  flexWrap: 'wrap',
+                  gap: 12,
+                  marginBottom: '20px',
+                  paddingBottom: '16px',
+                  borderBottom: '1px solid #E2E8F0'
+                }}>
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      {user?.role !== 'subsidiary_admin' && (
+                        <button
+                          type="button"
+                          onClick={() => { setSelectedSubsidiary(null); setDrillSearch(''); }}
+                          style={{
+                            background: '#F1F5F9',
+                            border: '1px solid #CBD5E1',
+                            borderRadius: '6px',
+                            padding: '4px 8px',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 4,
+                            fontSize: '12px',
+                            fontWeight: 600,
+                            color: '#0F172A',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          <ArrowLeft size={13} />
+                          <span>Back to Subsidiaries</span>
+                        </button>
+                      )}
+                      <h2 style={{ fontSize: '18px', fontWeight: 800, color: '#0F172A', margin: 0 }}>
+                        Business Units under "{currentSubsidiary.name}"
+                      </h2>
+                      <span style={{
+                        fontSize: '11px',
+                        fontFamily: 'JetBrains Mono, monospace',
+                        background: '#ECFDF5',
+                        color: '#059669',
+                        padding: '2px 8px',
+                        borderRadius: '6px',
+                        fontWeight: 700,
+                        border: '1px solid #A7F3D0'
+                      }}>
+                        {currentSubsidiary.code}
+                      </span>
+                    </div>
+                    <p style={{ fontSize: '13px', color: '#475569', margin: '4px 0 0' }}>
+                      Showing <strong>{filteredBUs.length}</strong> operating division(s). Click any Business Unit card below to see all operational projects under it.
+                    </p>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    {canCreateUnits && (
+                      <button
+                        type="button"
+                        className="btn btn-primary btn-sm"
+                        onClick={handleOpenAddModal}
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                      >
+                        <Plus size={14} />
+                        <span>+ Add Business Unit</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Business Units Grid */}
+                {filteredBUs.length === 0 ? (
+                  <div style={{
+                    padding: '48px 24px',
+                    textAlign: 'center',
+                    background: '#F8FAFC',
+                    borderRadius: '12px',
+                    border: '1px dashed #CBD5E1'
+                  }}>
+                    <Building2 size={36} color="#94A3B8" style={{ margin: '0 auto 10px', display: 'block' }} />
+                    <div style={{ fontSize: '15px', fontWeight: 700, color: '#0F172A', marginBottom: 6 }}>
+                      {drillSearch ? 'No Matching Business Units Found' : 'No Business Units Configured Yet'}
+                    </div>
+                    <p style={{ fontSize: '13px', color: '#475569', maxWidth: 440, margin: '0 auto 16px', lineHeight: 1.5 }}>
+                      {drillSearch
+                        ? `No Business Units matching "${drillSearch}" were found in this subsidiary.`
+                        : 'Create a Business Unit (Level 3) under this subsidiary to organize your operational projects.'}
+                    </p>
+                    {canCreateUnits && (
+                      <button
+                        type="button"
+                        className="btn btn-primary btn-sm"
+                        onClick={handleOpenAddModal}
+                      >
+                        <Plus size={14} />
+                        <span>Create Business Unit</span>
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
+                    gap: '16px'
+                  }}>
+                    {filteredBUs.map((bu) => {
+                      const prjCount = getProjectsCountForBU(bu);
+                      return (
+                        <div
+                          key={bu.id}
+                          onClick={() => { setSelectedBU(bu); setDrillSearch(''); }}
+                          style={{
+                            background: '#FFFFFF',
+                            border: '1px solid #E2E8F0',
+                            borderRadius: '12px',
+                            padding: '20px',
+                            boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            justifyContent: 'space-between',
+                            gap: '14px',
+                            cursor: 'pointer',
+                            transition: 'all 0.2s ease'
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.borderColor = '#4F46E5';
+                            e.currentTarget.style.boxShadow = '0 8px 24px rgba(79, 70, 229, 0.08)';
+                            e.currentTarget.style.transform = 'translateY(-2px)';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.borderColor = '#E2E8F0';
+                            e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.04)';
+                            e.currentTarget.style.transform = 'translateY(0)';
+                          }}
+                        >
+                          <div>
+                            {/* Card Top Pill Row */}
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <div style={{
+                                  width: 36,
+                                  height: 36,
+                                  borderRadius: '10px',
+                                  background: '#EEF2FF',
+                                  border: '1px solid #C7D2FE',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center'
+                                }}>
+                                  <Building2 size={18} color="#4F46E5" />
+                                </div>
+                                <span style={{
+                                  fontSize: '11px',
+                                  fontWeight: 700,
+                                  fontFamily: 'JetBrains Mono, monospace',
+                                  color: '#475569',
+                                  background: '#F1F5F9',
+                                  padding: '2px 8px',
+                                  borderRadius: '6px',
+                                  border: '1px solid #E2E8F0'
+                                }}>
+                                  {bu.code}
+                                </span>
+                              </div>
+                              <span style={{
+                                fontSize: '10.5px',
+                                fontWeight: 700,
+                                padding: '2px 8px',
+                                borderRadius: '9999px',
+                                background: '#EEF2FF',
+                                color: '#4F46E5',
+                                border: '1px solid #C7D2FE'
+                              }}>
+                                Level 3 BU
+                              </span>
+                            </div>
+
+                            {/* BU Name */}
+                            <h3 style={{ fontSize: '16px', fontWeight: 800, color: '#0F172A', margin: '0 0 8px', lineHeight: 1.4 }}>
+                              {bu.name}
+                            </h3>
+
+                            {/* Metadata */}
+                            <div style={{
+                              display: 'grid',
+                              gridTemplateColumns: '1fr 1fr',
+                              gap: '6px',
+                              background: '#F8FAFC',
+                              padding: '10px 12px',
+                              borderRadius: '8px',
+                              border: '1px solid #E2E8F0',
+                              fontSize: '12px',
+                              marginBottom: 10
+                            }}>
+                              <div>
+                                <span style={{ color: '#64748B', display: 'block', fontSize: '10.5px', textTransform: 'uppercase', fontWeight: 600 }}>
+                                  Sector
+                                </span>
+                                <span style={{ color: '#0F172A', fontWeight: 600 }}>
+                                  {bu.project_type || 'Operations'}
+                                </span>
+                              </div>
+                              <div>
+                                <span style={{ color: '#64748B', display: 'block', fontSize: '10.5px', textTransform: 'uppercase', fontWeight: 600 }}>
+                                  Location
+                                </span>
+                                <span style={{ color: '#0F172A', fontWeight: 600 }}>
+                                  {bu.location_state || 'India'}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Footer with Project Count & CTA */}
+                          <div style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            paddingTop: '12px',
+                            borderTop: '1px solid #E2E8F0'
+                          }}>
+                            <span style={{
+                              fontSize: '11.5px',
+                              fontWeight: 700,
+                              padding: '3px 10px',
+                              borderRadius: '9999px',
+                              background: '#F5F3FF',
+                              color: '#7C3AED',
+                              border: '1px solid #DDD6FE',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 4
+                            }}>
+                              ⚡ {prjCount} {prjCount === 1 ? 'Project' : 'Projects'}
+                            </span>
+
+                            <span style={{
+                              fontSize: '12.5px',
+                              fontWeight: 700,
+                              color: '#4F46E5',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 4
+                            }}>
+                              <span>View Projects</span>
+                              <ChevronRight size={15} />
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            ) : (
+              /* VIEW 3: SUBSIDIARIES GRID (FOR PROJECT ADMIN / GROUP ADMIN / SYSTEM ADMIN) */
+              <div>
+                {/* Level Title & Action Bar */}
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  flexWrap: 'wrap',
+                  gap: 12,
+                  marginBottom: '20px',
+                  paddingBottom: '16px',
+                  borderBottom: '1px solid #E2E8F0'
+                }}>
+                  <div>
+                    <h2 style={{ fontSize: '18px', fontWeight: 800, color: '#0F172A', margin: 0 }}>
+                      Assigned Subsidiaries &amp; Corporate Entities
+                    </h2>
+                    <p style={{ fontSize: '13px', color: '#475569', margin: '4px 0 0' }}>
+                      Showing <strong>{filteredSubsidiaries.length}</strong> corporate subsidiary entity(ies) in your scope. Click any subsidiary to view the Business Units under it.
+                    </p>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{
+                      fontSize: '12px',
+                      fontWeight: 700,
+                      padding: '4px 10px',
+                      borderRadius: '8px',
+                      background: '#ECFDF5',
+                      color: '#059669',
+                      border: '1px solid #A7F3D0'
+                    }}>
+                      🏢 {scopedSubsidiaries.length} Total Subsidiaries
+                    </span>
+                  </div>
+                </div>
+
+                {/* Subsidiaries Grid */}
+                {filteredSubsidiaries.length === 0 ? (
+                  <div style={{
+                    padding: '48px 24px',
+                    textAlign: 'center',
+                    background: '#F8FAFC',
+                    borderRadius: '12px',
+                    border: '1px dashed #CBD5E1'
+                  }}>
+                    <Building2 size={36} color="#94A3B8" style={{ margin: '0 auto 10px', display: 'block' }} />
+                    <div style={{ fontSize: '15px', fontWeight: 700, color: '#0F172A', marginBottom: 6 }}>
+                      {drillSearch ? 'No Matching Subsidiaries Found' : 'No Subsidiaries in Current Scope'}
+                    </div>
+                    <p style={{ fontSize: '13px', color: '#475569', maxWidth: 440, margin: '0 auto', lineHeight: 1.5 }}>
+                      No corporate subsidiary units were found matching your current filter.
+                    </p>
+                  </div>
+                ) : (
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
+                    gap: '16px'
+                  }}>
+                    {filteredSubsidiaries.map((sub) => {
+                      const counts = getCountsForSubsidiary(sub);
+                      return (
+                        <div
+                          key={sub.id}
+                          onClick={() => { setSelectedSubsidiary(sub); setSelectedBU(null); setDrillSearch(''); }}
+                          style={{
+                            background: '#FFFFFF',
+                            border: '1px solid #E2E8F0',
+                            borderRadius: '12px',
+                            padding: '20px',
+                            boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            justifyContent: 'space-between',
+                            gap: '14px',
+                            cursor: 'pointer',
+                            transition: 'all 0.2s ease'
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.borderColor = '#059669';
+                            e.currentTarget.style.boxShadow = '0 8px 24px rgba(5, 150, 105, 0.08)';
+                            e.currentTarget.style.transform = 'translateY(-2px)';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.borderColor = '#E2E8F0';
+                            e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.04)';
+                            e.currentTarget.style.transform = 'translateY(0)';
+                          }}
+                        >
+                          <div>
+                            {/* Card Top Pill Row */}
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <div style={{
+                                  width: 36,
+                                  height: 36,
+                                  borderRadius: '10px',
+                                  background: '#ECFDF5',
+                                  border: '1px solid #A7F3D0',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center'
+                                }}>
+                                  <Building2 size={18} color="#059669" />
+                                </div>
+                                <span style={{
+                                  fontSize: '11px',
+                                  fontWeight: 700,
+                                  fontFamily: 'JetBrains Mono, monospace',
+                                  color: '#475569',
+                                  background: '#F1F5F9',
+                                  padding: '2px 8px',
+                                  borderRadius: '6px',
+                                  border: '1px solid #E2E8F0'
+                                }}>
+                                  {sub.code}
+                                </span>
+                              </div>
+                              <span style={{
+                                fontSize: '10.5px',
+                                fontWeight: 700,
+                                padding: '2px 8px',
+                                borderRadius: '9999px',
+                                background: '#ECFDF5',
+                                color: '#059669',
+                                border: '1px solid #A7F3D0'
+                              }}>
+                                Level 2 Subsidiary
+                              </span>
+                            </div>
+
+                            {/* Subsidiary Name */}
+                            <h3 style={{ fontSize: '16px', fontWeight: 800, color: '#0F172A', margin: '0 0 8px', lineHeight: 1.4 }}>
+                              {sub.name}
+                            </h3>
+
+                            {/* Metadata */}
+                            <div style={{
+                              display: 'grid',
+                              gridTemplateColumns: '1fr 1fr',
+                              gap: '6px',
+                              background: '#F8FAFC',
+                              padding: '10px 12px',
+                              borderRadius: '8px',
+                              border: '1px solid #E2E8F0',
+                              fontSize: '12px'
+                            }}>
+                              <div>
+                                <span style={{ color: '#64748B', display: 'block', fontSize: '10.5px', textTransform: 'uppercase', fontWeight: 600 }}>
+                                  Ownership
+                                </span>
+                                <span style={{ color: '#0F172A', fontWeight: 700 }}>
+                                  {sub.ownership_pct ? `${sub.ownership_pct}% MEIL` : '100% MEIL'}
+                                </span>
+                              </div>
+                              <div>
+                                <span style={{ color: '#64748B', display: 'block', fontSize: '10.5px', textTransform: 'uppercase', fontWeight: 600 }}>
+                                  Location
+                                </span>
+                                <span style={{ color: '#0F172A', fontWeight: 600 }}>
+                                  {sub.location_state || 'Corporate HQ'}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Footer with BU Count, Project Count & CTA */}
+                          <div style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            paddingTop: '12px',
+                            borderTop: '1px solid #E2E8F0'
+                          }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                              <span style={{
+                                fontSize: '11px',
+                                fontWeight: 700,
+                                padding: '2px 8px',
+                                borderRadius: '6px',
+                                background: '#EEF2FF',
+                                color: '#4F46E5',
+                                border: '1px solid #C7D2FE'
+                              }}>
+                                🏢 {counts.buCount} BUs
+                              </span>
+                              <span style={{
+                                fontSize: '11px',
+                                fontWeight: 700,
+                                padding: '2px 8px',
+                                borderRadius: '6px',
+                                background: '#F5F3FF',
+                                color: '#7C3AED',
+                                border: '1px solid #DDD6FE'
+                              }}>
+                                ⚡ {counts.projectCount} Projects
+                              </span>
+                            </div>
+
+                            <span style={{
+                              fontSize: '12.5px',
+                              fontWeight: 700,
+                              color: '#059669',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 4
+                            }}>
+                              <span>View BUs</span>
+                              <ChevronRight size={15} />
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      ) : (
+      /* Org Hierarchy Table Card */
       <div className="card">
         <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
           <div>
@@ -740,6 +2229,44 @@ export default function OrgHierarchy() {
           </div>
         </div>
 
+        {/* Quick Filter Pill Tabs */}
+        <div style={{
+          padding: '10px 24px',
+          background: '#F8FAFC',
+          borderBottom: '1px solid #E2E8F0',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          overflowX: 'auto'
+        }}>
+          {[
+            { id: 'ALL', label: `All Units (${scopedNodes.length})` },
+            { id: 'group', label: 'Group Root' },
+            { id: 'subsidiary', label: `Subsidiaries (${hierarchyStats.subsidiaries})` },
+            { id: 'business_unit', label: `Business Units (${hierarchyStats.bus})` },
+            { id: 'project', label: `Projects (${hierarchyStats.projects})` }
+          ].map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setFilterType(tab.id)}
+              style={{
+                padding: '4px 12px',
+                borderRadius: '9999px',
+                border: filterType === tab.id ? '1px solid #4F46E5' : '1px solid #E2E8F0',
+                background: filterType === tab.id ? '#0F172A' : '#FFFFFF',
+                color: filterType === tab.id ? '#FFFFFF' : '#475569',
+                fontSize: '11.5px',
+                fontWeight: filterType === tab.id ? 700 : 500,
+                cursor: 'pointer',
+                whiteSpace: 'nowrap',
+                transition: 'all 0.15s ease'
+              }}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
         {/* Scrollable Table Container */}
         <div className="table-wrap" style={{ overflowX: 'auto' }}>
           <table className="data-table">
@@ -767,7 +2294,7 @@ export default function OrgHierarchy() {
                   <td colSpan={8} style={{ textAlign: 'center', padding: '48px 24px' }}>
                     <div style={{ maxWidth: 440, margin: '0 auto' }}>
                       <Building2 size={32} color="var(--brand-400)" style={{ margin: '0 auto 10px', display: 'block' }} />
-                      <div style={{ fontSize: '15px', fontWeight: 700, color: '#fff', marginBottom: 6 }}>
+                      <div style={{ fontSize: '15px', fontWeight: 700, color: '#0F172A', marginBottom: 6 }}>
                         {nodeList.length === 0 ? 'No Organization Units Configured' : 'No Matching Units Found'}
                       </div>
                       <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: 16, lineHeight: 1.5 }}>
@@ -812,9 +2339,17 @@ export default function OrgHierarchy() {
                           ))}
                           {depth > 0 && <ChevronRight size={12} color="var(--text-muted)" />}
                           <Building2 size={14} color="var(--brand-400)" />
-                          <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
-                            {node.name}
-                          </span>
+                          <div style={{ display: 'flex', flexDirection: 'column' }}>
+                            <span style={{ fontWeight: 600, color: 'var(--text-primary)', textTransform: ['project', 'site'].includes(node.type) ? 'uppercase' : 'none' }}>
+                              {['project', 'site'].includes(node.type) ? (node.name || '').toUpperCase() : node.name}
+                            </span>
+                            {(node.type === 'project' || node.type === 'site') && node.project_admin_name && (
+                              <span style={{ fontSize: '11px', color: '#4F46E5', display: 'flex', alignItems: 'center', gap: 4, marginTop: 1 }}>
+                                <span>👤 Admin:</span>
+                                <strong>{node.project_admin_name}</strong>
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </td>
                       <td>
@@ -889,6 +2424,7 @@ export default function OrgHierarchy() {
           </table>
         </div>
       </div>
+      )}
 
       {/* Modal: Add Org Unit */}
       <Modal 
@@ -902,7 +2438,7 @@ export default function OrgHierarchy() {
                   <Building2 size={18} color="var(--brand-400)" />
                 </div>
                 <div>
-                  <h3 style={{ fontSize: '16px', color: '#fff' }}>Add Organization Unit</h3>
+                  <h3 style={{ fontSize: '16px', color: '#0F172A' }}>Add Organization Unit</h3>
                   <p style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
                     Create a new node within MEIL's 4-tier hierarchy structure
                   </p>
@@ -1141,7 +2677,7 @@ export default function OrgHierarchy() {
                   <Calendar size={18} color="var(--brand-400)" />
                 </div>
                 <div>
-                  <h3 style={{ fontSize: '16px', color: '#fff' }}>Create Reporting Period</h3>
+                  <h3 style={{ fontSize: '16px', color: '#0F172A' }}>Create Reporting Period</h3>
                   <p style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
                     Open a new monthly or quarterly ESG submission window
                   </p>
@@ -1256,7 +2792,7 @@ export default function OrgHierarchy() {
                 <Calendar size={18} color="var(--brand-400)" />
               </div>
               <div>
-                <h3 style={{ fontSize: '16px', color: '#fff' }}>Reporting Period Details</h3>
+                <h3 style={{ fontSize: '16px', color: '#0F172A' }}>Reporting Period Details</h3>
                 <p style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
                   Statutory configuration & SEBI compliance window for {selectedPeriodDetail?.code}
                 </p>
@@ -1369,7 +2905,7 @@ export default function OrgHierarchy() {
                   <Calendar size={18} color="var(--brand-400)" />
                 </div>
                 <div>
-                  <h3 style={{ fontSize: '16px', color: '#fff' }}>Dedicated Reporting Periods Console</h3>
+                  <h3 style={{ fontSize: '16px', color: '#0F172A' }}>Dedicated Reporting Periods Console</h3>
                   <p style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
                     Complete catalog of fiscal cycles, statutory deadlines, and locking states
                   </p>
@@ -1404,7 +2940,7 @@ export default function OrgHierarchy() {
                       periodList.map(p => (
                       <tr key={p.id}>
                         <td>
-                          <span style={{ fontFamily: 'JetBrains Mono', fontWeight: 700, color: '#fff' }}>
+                          <span style={{ fontFamily: 'JetBrains Mono', fontWeight: 700, color: '#0F172A' }}>
                             {p.code}
                           </span>
                         </td>
@@ -1467,9 +3003,9 @@ export default function OrgHierarchy() {
                 <Building2 size={18} color="var(--brand-400)" />
               </div>
               <div>
-                <h3 style={{ fontSize: '16px', color: '#fff' }}>Entity Unit Details</h3>
+                <h3 style={{ fontSize: '16px', color: '#0F172A' }}>Entity Unit Details</h3>
                 <p style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-                  4-Tier Hierarchy Node: {selectedNodeDetail?.name}
+                  4-Tier Hierarchy Node: {['project', 'site'].includes(selectedNodeDetail?.type) ? (selectedNodeDetail?.name || '').toUpperCase() : selectedNodeDetail?.name}
                 </p>
               </div>
             </div>
@@ -1482,7 +3018,9 @@ export default function OrgHierarchy() {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
               <div style={{ background: 'var(--bg-elevated)', padding: '12px 16px', borderRadius: '8px', border: '1px solid var(--border-default)' }}>
                 <div style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Entity Name</div>
-                <div style={{ fontSize: '14px', fontWeight: 700, color: '#fff', marginTop: 2 }}>{selectedNodeDetail?.name}</div>
+                <div style={{ fontSize: '14px', fontWeight: 700, color: '#0F172A', marginTop: 2, textTransform: ['project', 'site'].includes(selectedNodeDetail?.type) ? 'uppercase' : 'none' }}>
+                  {['project', 'site'].includes(selectedNodeDetail?.type) ? (selectedNodeDetail?.name || '').toUpperCase() : selectedNodeDetail?.name}
+                </div>
               </div>
 
               <div style={{ background: 'var(--bg-elevated)', padding: '12px 16px', borderRadius: '8px', border: '1px solid var(--border-default)' }}>
@@ -1576,7 +3114,7 @@ export default function OrgHierarchy() {
                 <Edit3 size={18} />
               </div>
               <div>
-                <h3 style={{ fontSize: '16px', color: '#fff', margin: 0 }}>System Admin: Edit Unit</h3>
+                <h3 style={{ fontSize: '16px', color: '#0F172A', margin: 0 }}>System Admin: Edit Unit</h3>
                 <p style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: '2px 0 0 0' }}>
                   Modify unit details & SEBI statutory boundaries ({editingNode?.code})
                 </p>
@@ -1723,7 +3261,7 @@ export default function OrgHierarchy() {
                 <Trash2 size={18} color="#ef4444" />
               </div>
               <div>
-                <h3 style={{ fontSize: '16px', color: '#fff' }}>Delete Organization Unit</h3>
+                <h3 style={{ fontSize: '16px', color: '#0F172A' }}>Delete Organization Unit</h3>
                 <p style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
                   Unit will be soft-deleted and moved to the Trash Can (restorable)
                 </p>
@@ -1743,7 +3281,7 @@ export default function OrgHierarchy() {
               <div style={{ fontSize: '13px', fontWeight: 700, color: '#ef4444', marginBottom: 4 }}>
                 ⚠ You are about to delete:
               </div>
-              <div style={{ fontSize: '14px', color: '#fff', fontWeight: 600 }}>{deletingNode.name}</div>
+              <div style={{ fontSize: '14px', color: '#0F172A', fontWeight: 600 }}>{deletingNode.name}</div>
               <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: 2 }}>
                 Code: {deletingNode.code} | Type: {deletingNode.type?.replace('_', ' ').toUpperCase()}
               </div>

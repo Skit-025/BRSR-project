@@ -71,7 +71,7 @@ const ACTIVE_PERSONAS = [
   }
 ];
 
-export default function Header() {
+export default function Header({ onToggleSidebar, isSidebarOpen }) {
   const navigate = useNavigate();
   const location = useLocation();
   const queryClient = useQueryClient();
@@ -234,8 +234,21 @@ export default function Header() {
         zIndex: 50,
         fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
       }}>
-        {/* ── Left: Search & Org Scope ── */}
+        {/* ── Left: Hamburger + Search + Org Scope ── */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+          {/* Hamburger button */}
+          <button
+            id="hamburger-menu-btn"
+            type="button"
+            onClick={onToggleSidebar}
+            className={isSidebarOpen ? 'hamburger-btn is-open' : 'hamburger-btn'}
+            aria-label={isSidebarOpen ? 'Close navigation' : 'Open navigation'}
+            title={isSidebarOpen ? 'Close menu' : 'Open menu'}
+          >
+            <span className="ham-line" />
+            <span className="ham-line" />
+            <span className="ham-line" />
+          </button>
           <button
             type="button"
             onClick={() => setIsPaletteOpen(true)}

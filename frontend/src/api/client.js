@@ -252,9 +252,12 @@ export const orgApi = {
   getTrash: () => api.get('/org/trash'),
   restoreNode: (id) => api.post(`/org/trash/${id}/restore`),
   cleanTrash: (adminPassword) => api.post('/org/trash/clean', { admin_password: adminPassword }),
-  getPeriods: () => api.get('/org/periods'),
+  getPeriods: (params) => api.get('/org/periods', { params }),
+  getFY: () => api.get('/org/periods/fy'),
   createPeriod: (data) => api.post('/org/periods', data),
   updatePeriod: (id, data) => api.put(`/org/periods/${id}`, data),
+  deletePeriod: (id) => api.delete(`/org/periods/${id}`),
+  deleteFY: (financialYear) => api.delete(`/org/periods/fy/${encodeURIComponent(financialYear)}`),
   getApplicability: (nodeId, periodId) =>
     api.get(`/org/applicability/${nodeId}`, { params: periodId ? { period_id: periodId } : {} }),
 };
