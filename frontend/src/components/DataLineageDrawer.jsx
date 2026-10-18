@@ -138,23 +138,23 @@ export default function DataLineageDrawer({ isOpen, onClose, metricData, metricC
         },
         {
           level: 'SUBSIDIARY AGGREGATION LEVEL',
-          entity: 'Aarohan Renewable Energy Pvt. Ltd.',
-          actor: 'Subsidiary Rollup (Solar & Wind Energy Divisions)',
+          entity: 'Megha Road and Transport Ltd',
+          actor: 'Subsidiary Rollup (Roads & Tunnel Infrastructure Divisions)',
           timestamp: 'March 2026',
           value: isDiesel ? '28,100 Litres' : '94,000 kWh',
           note: 'Equity Ownership: 100% · Fully consolidated subsidiary entity'
         },
         {
           level: 'BUSINESS UNIT LEVEL',
-          entity: 'Solar EPC & Power Operations BU',
+          entity: 'Transportation & Tunneling BU',
           actor: 'Division Aggregation Node',
           timestamp: 'March 2026',
           value: isDiesel ? '18,500 Litres' : '65,000 kWh',
-          note: 'Aggregated from 4 utility-scale operational solar power parks'
+          note: 'Aggregated from operational civil & tunneling project sites'
         },
         {
           level: 'PROJECT OPERATIONAL LEVEL',
-          entity: '250 MW Odisha Solar Park - Site 01',
+          entity: 'Tunnel Project P7 (Zojila Tunnel)',
           actor: 'Authenticated Site User (project.user@aarohan.in)',
           timestamp: '14 May 2024 · 11:32 AM',
           value: isDiesel ? '2,450 Litres' : '14,842 kWh',
@@ -163,7 +163,7 @@ export default function DataLineageDrawer({ isOpen, onClose, metricData, metricC
       ],
       evidence: [
         {
-          filename: isDiesel ? 'IOCL_Bulk_Diesel_Challan_May2024.pdf' : 'TSSPDCL_HT_Electricity_Bill_Q1.pdf',
+          filename: isDiesel ? 'IOCL-DIESEL-CHALLANS-HEAVY-FLEET.pdf' : 'DISCOM-UTILITY-BILL-ZOJILA-TSS04.pdf',
           file_type: 'PDF Invoice',
           sha256: '774ea8cf9d123e445bc118944123567890abcdef1234567890abcdef12345678',
           doc_type: isDiesel ? 'fuel_receipt' : 'electricity_bill',

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useMetricCatalogue } from '../hooks/useApi';
 import { BookOpen, Search, Filter, Leaf, Users, Shield, Award, CheckCircle2, ChevronRight, Hash, RefreshCw, X } from 'lucide-react';
 import Modal from '../components/Modal';
+import PageHelpButton from '../components/PageHelpButton';
 
 const CATEGORY_STYLES = {
   Environmental: { icon: Leaf,   color: '#10b981', bg: 'rgba(16, 185, 129, 0.1)' },
@@ -59,6 +60,7 @@ export default function MetricCatalogue() {
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <PageHelpButton title="Metric Catalogue Guide" route="/metrics" />
           <button className="btn btn-secondary" style={{ borderRadius: 6, border: '1px solid #e2e8f0', background: '#fff', color: '#09090b', fontWeight: 600 }} onClick={() => refetch()} disabled={isRefetching}>
             <RefreshCw size={13} className={isRefetching ? 'spin' : ''} />
             <span>Refresh</span>

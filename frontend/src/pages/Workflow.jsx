@@ -15,6 +15,7 @@ import { useWorkflowQueue, useReviewSubmission } from '../hooks/useApi';
 import { workflowApi, collectionApi } from '../api/client';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../context/AuthContext';
+import PageHelpButton from '../components/PageHelpButton';
 
 const STATUS_STYLES = {
   DRAFT:               { label: 'Draft',           color: '#475569', bg: '#f1f5f9' },
@@ -237,15 +238,18 @@ export default function Workflow() {
             Segregation of duties (SoD) enforced approval queue, BU aggregations, and immutable period locks.
           </p>
         </div>
-        <button
-          onClick={() => refetch()}
-          disabled={isRefetching}
-          className="btn btn-secondary"
-          style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '7px 14px', borderRadius: 6, border: '1px solid #e2e8f0', background: '#fff', color: '#09090b', fontWeight: 600 }}
-        >
-          <RefreshCw size={13} className={isRefetching ? 'spin' : ''} />
-          Refresh Queue
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <PageHelpButton title="Workflow Guide" route="/workflow" />
+          <button
+            onClick={() => refetch()}
+            disabled={isRefetching}
+            className="btn btn-secondary"
+            style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '7px 14px', borderRadius: 6, border: '1px solid #e2e8f0', background: '#fff', color: '#09090b', fontWeight: 600 }}
+          >
+            <RefreshCw size={13} className={isRefetching ? 'spin' : ''} />
+            Refresh Queue
+          </button>
+        </div>
       </div>
 
       {/* Notice */}

@@ -7,6 +7,7 @@ import {
 import { useOrgNodes, useOrgPeriods } from '../hooks/useApi';
 import { useAuth } from '../context/AuthContext';
 import { disclosuresApi } from '../api/client';
+import PageHelpButton from '../components/PageHelpButton';
 
 const SECTIONS = [
   { id: 'bu_targets', label: 'ESG Targets & Commitments', icon: Target, desc: 'Reduction targets set at the Business Unit level' },
@@ -280,6 +281,7 @@ export default function BUDisclosure() {
 
         {/* Selectors */}
         <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+          <PageHelpButton title="Reporting Guide" route="/reporting" />
           <select
             value={selectedBU}
             onChange={e => setSelectedBU(e.target.value)}

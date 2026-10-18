@@ -11,6 +11,7 @@ import { useOrgNodes, useOrgPeriods, useScopedForm, useSavePack, useSubmitPack, 
 import { useAuth } from "../context/AuthContext";
 import { collectionApi, evidenceApi, calcApi, validationApi, aiApi } from "../api/client";
 import Modal from "../components/Modal";
+import PageHelpButton from "../components/PageHelpButton";
 
 
 // ── Domain colour map ─────────────────────────────────────────────────────────
@@ -77,7 +78,9 @@ function EvidenceAttachPanel({
   evidenceRule,
   projectId,
   onUploaded,
+  onDeleted,
   onValueConfirmed,
+  onValueRemoved,
   stickyDocType,
   setStickyDocType,
 }) {
@@ -137,16 +140,30 @@ function EvidenceAttachPanel({
     setExtractedField(null);
     setConfirmedSuccess(null);
 
-    // Frontend format & size validation
-    const validExts = [".pdf", ".jpg", ".jpeg", ".png", ".xlsx", ".xls", ".csv"];
-    const ext = "." + (file.name.split(".").pop() || "").toLowerCase();
-    if (!validExts.includes(ext)) {
-      setError(`Unsupported format (${ext}). Supported: PDF, JPG, PNG, XLSX, CSV.`);
-      return;
-    }
+    // Size validation only — any format accepted (incl. browser-dragged images like .webp)
     if (file.size > 25 * 1024 * 1024) {
       setError("File exceeds maximum size limit (25 MB).");
       return;
+    }
+
+    // Soft bill-type mismatch hint (non-blocking)
+    const ext = "." + (file.name.split(".").pop() || "").toLowerCase();
+    const BILL_TYPE_HINTS = {
+      Electricity: [".pdf", ".jpg", ".jpeg", ".png", ".webp"],
+      Fuel:        [".pdf", ".jpg", ".jpeg", ".png", ".webp"],
+      Gas:         [".pdf", ".jpg", ".jpeg", ".png", ".webp"],
+      Water:       [".pdf", ".jpg", ".jpeg", ".png", ".webp"],
+      Waste:       [".pdf", ".xlsx", ".xls", ".csv", ".jpg", ".jpeg", ".png", ".webp"],
+      Other:       null, // any format accepted
+    };
+    const allowedForType = BILL_TYPE_HINTS[billType];
+    if (allowedForType && !allowedForType.includes(ext)) {
+      // Still allow the upload but surface a contextual note
+      setError(
+        `Note: "${ext}" files are uncommon for a ${billType} bill. ` +
+        `Make sure this document actually contains ${billType} usage data.`
+      );
+      // Don't return — let the upload proceed
     }
 
     setUploading(true);
@@ -171,6 +188,7 @@ function EvidenceAttachPanel({
         category: stickyDocType || "Bill",
         billType: (stickyDocType || "Bill") === "Bill" ? billType : "Unknown",
         uploadedAt: new Date().toLocaleTimeString(),
+        contributedValue: null,
       };
 
       setAttachedFiles(prev => [...prev, item]);
@@ -229,11 +247,15 @@ function EvidenceAttachPanel({
   const handleConfirmValue = () => {
     const finalVal = isEditingValue ? editedValue : extractedField?.value;
     if (finalVal !== undefined && finalVal !== null && finalVal !== "") {
-      onValueConfirmed?.(finalVal);
+      const numVal = Number(finalVal);
+      if (!isNaN(numVal)) {
+        setAttachedFiles(prev => prev.map(f => f.id === pendingEvidence?.id ? { ...f, contributedValue: numVal } : f));
+      }
+      onValueConfirmed?.(finalVal, pendingEvidence?.id);
       const conversionNote = extractedField?.metadata?.converted_by_llm
         ? ` (converted from ${extractedField.metadata.original_value} ${extractedField.metadata.original_unit} via chat model)`
         : "";
-      setConfirmedSuccess(`✓ Inserted ${finalVal} ${extractedField?.unit || unit || ""} into ESG field from ${pendingEvidence?.displayId}${conversionNote}`);
+      setConfirmedSuccess(`✓ Added ${finalVal} ${extractedField?.unit || unit || ""} to ESG field from ${pendingEvidence?.displayId}${conversionNote}`);
     }
     setPendingEvidence(null);
     setExtractedField(null);
@@ -284,7 +306,16 @@ function EvidenceAttachPanel({
         setPendingEvidence(null);
         setExtractedField(null);
       }
-      setConfirmedSuccess(`🗑 Document ${fileToDelete.displayId || fileToDelete.name} moved to Trash Can.`);
+      onDeleted?.(fileToDelete.id);
+
+      // If this file contributed an extracted value, subtract only that value from the field
+      if (fileToDelete.contributedValue !== undefined && fileToDelete.contributedValue !== null) {
+        onValueRemoved?.(fileToDelete.contributedValue, fileToDelete.id);
+        setConfirmedSuccess(`🗑 Document ${fileToDelete.displayId || fileToDelete.name} deleted. Subtracted ${fileToDelete.contributedValue} ${unit || ""} from field.`);
+      } else {
+        setConfirmedSuccess(`🗑 Document ${fileToDelete.displayId || fileToDelete.name} moved to Trash Can.`);
+      }
+
       setFileToDelete(null);
     } catch (err) {
       setDeleteError(err.response?.data?.detail || err.message || "Failed to delete evidence.");
@@ -543,7 +574,7 @@ function EvidenceAttachPanel({
               }}
             >
               <Check size={13} />
-              Confirm &amp; Use Value
+              Confirm &amp; Add to Field
             </button>
             {!isEditingValue ? (
               <button
@@ -602,7 +633,7 @@ function EvidenceAttachPanel({
                 borderRadius: 6, fontSize: 11.5
               }}
             >
-              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
                 <span style={{
                   fontFamily: "monospace", fontWeight: 700, fontSize: 10.5,
                   background: "#e0f2fe", color: "#0369a1", padding: "1px 5px", borderRadius: 3
@@ -618,6 +649,15 @@ function EvidenceAttachPanel({
                 }}>
                   {f.category}{f.category === "Bill" && f.billType && f.billType !== "Unknown" ? `: ${f.billType}` : ""}
                 </span>
+                {f.contributedValue !== undefined && f.contributedValue !== null && (
+                  <span style={{
+                    fontSize: 10.5, fontWeight: 700,
+                    color: "#15803d", background: "#dcfce7", border: "1px solid #bbf7d0",
+                    padding: "1px 6px", borderRadius: 4, fontFamily: "ui-monospace, monospace"
+                  }}>
+                    +{f.contributedValue} {unit || ""}
+                  </span>
+                )}
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                 {f.id && (
@@ -768,7 +808,7 @@ function EvidenceAttachPanel({
 }
 
 // ─── Why / What guidance card (Spec §13 & §16) with E3 Guidance RAG ───────────
-function GuidanceCard({ field, open, onToggle }) {
+function GuidanceCard({ field, open, onToggle, isCalculated }) {
   const [aiLoading, setAiLoading] = useState(false);
   const [aiAnswer, setAiAnswer] = useState(null);
   const [customQuestion, setCustomQuestion] = useState("");
@@ -849,10 +889,14 @@ function GuidanceCard({ field, open, onToggle }) {
             </span>
           </div>
           <div style={{ marginBottom: 8 }}>
-            <strong style={{ color: "#b45309", display: "block", marginBottom: 3, fontSize: 11, fontFamily: "ui-monospace, monospace" }}>
-              4. EVIDENCE VOUCHER REQUIRED
+            <strong style={{ color: isCalculated ? "#7c3aed" : "#b45309", display: "block", marginBottom: 3, fontSize: 11, fontFamily: "ui-monospace, monospace" }}>
+              4. EVIDENCE REQUIREMENTS
             </strong>
-            <span style={{ color: "#475569" }}>{defaultDocs}</span>
+            <span style={{ color: isCalculated ? "#6d28d9" : "#475569" }}>
+              {isCalculated
+                ? "⚡ Auto-calculated parameter — no document attachment required. Supporting vouchers are attached to underlying raw inputs."
+                : defaultDocs}
+            </span>
           </div>
 
           {/* E3 Guidance RAG Interactive Section */}
@@ -1047,7 +1091,7 @@ function PreSubmissionModal({ open, onClose, onConfirm, submitting, stats, valid
 }
 
 // ─── Single Parameter Field ─────────────────────────────────────────────────
-function ParameterField({ field, value, onChange, readOnly, submissionStatus, onEvidenceUploaded, projectId, stickyDocType, setStickyDocType }) {
+function ParameterField({ field, value, onChange, readOnly, submissionStatus, onEvidenceUploaded, onEvidenceDeleted, projectId, stickyDocType, setStickyDocType }) {
   const [showGuidance, setShowGuidance] = useState(false);
   const [localError, setLocalError] = useState(null);
 
@@ -1067,6 +1111,35 @@ function ParameterField({ field, value, onChange, readOnly, submissionStatus, on
       }
     }
     onChange(field.metric_code, v);
+  };
+
+  // Add extracted bill value incrementally to the field (1st starts from 0, subsequent bills add up)
+  const handleValueConfirmedFromBill = (confirmedVal) => {
+    const addedNum = Number(confirmedVal);
+    if (isNaN(addedNum)) {
+      handleChange(confirmedVal);
+      return;
+    }
+
+    const curNum = (value !== undefined && value !== null && value !== "" && !isNaN(Number(value)))
+      ? Number(value)
+      : 0;
+
+    const newTotal = parseFloat((curNum + addedNum).toFixed(4));
+    handleChange(newTotal === 0 ? "0" : String(newTotal));
+  };
+
+  // Subtract ONLY the deleted bill's extracted value from the field
+  const handleValueRemovedFromBill = (removedVal) => {
+    const subtractedNum = Number(removedVal);
+    if (isNaN(subtractedNum) || subtractedNum <= 0) return;
+
+    const curNum = (value !== undefined && value !== null && value !== "" && !isNaN(Number(value)))
+      ? Number(value)
+      : 0;
+
+    const newTotal = Math.max(0, parseFloat((curNum - subtractedNum).toFixed(4)));
+    handleChange(newTotal === 0 ? "0" : String(newTotal));
   };
 
   // Scope badge
@@ -1219,10 +1292,31 @@ function ParameterField({ field, value, onChange, readOnly, submissionStatus, on
       )}
 
       {/* Guidance card */}
-      <GuidanceCard field={field} open={showGuidance} onToggle={() => setShowGuidance(p => !p)} />
+      <GuidanceCard field={field} open={showGuidance} onToggle={() => setShowGuidance(p => !p)} isCalculated={isCalculated} />
 
-      {/* Generalized Document Evidence Attachment Workflow */}
-      {!isLocked && field.evidence_rule !== "none" && (
+      {/* Auto-Calculated Parameter Clarification */}
+      {isCalculated && (
+        <div style={{
+          marginTop: 10,
+          padding: "8px 12px",
+          background: "#fdf4ff",
+          border: "1px dashed #e879f9",
+          borderRadius: 8,
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          fontSize: 12,
+          color: "#86198f"
+        }}>
+          <span style={{ fontSize: 13 }}>⚡</span>
+          <span>
+            <strong>Auto-Calculated Indicator:</strong> Values are computed deterministically by the Statutory Calculation Engine from raw activity data. No document attachment required.
+          </span>
+        </div>
+      )}
+
+      {/* Generalized Document Evidence Attachment Workflow — strictly for raw input metrics, omitted for auto-calculated */}
+      {!isLocked && !isCalculated && field.evidence_rule !== "none" && (
         <EvidenceAttachPanel
           metricCode={field.metric_code}
           metricName={field.metric_name || field.name}
@@ -1230,7 +1324,9 @@ function ParameterField({ field, value, onChange, readOnly, submissionStatus, on
           evidenceRule={field.evidence_rule}
           projectId={projectId}
           onUploaded={(evId) => onEvidenceUploaded?.(field.metric_code, evId)}
-          onValueConfirmed={(confirmedVal) => handleChange(confirmedVal)}
+          onDeleted={(evId) => onEvidenceDeleted?.(field.metric_code, evId)}
+          onValueConfirmed={handleValueConfirmedFromBill}
+          onValueRemoved={handleValueRemovedFromBill}
           stickyDocType={stickyDocType}
           setStickyDocType={setStickyDocType}
         />
@@ -1332,7 +1428,7 @@ function ProjectContextCard({ entity, form }) {
 }
 
 // ─── Domain Section ──────────────────────────────────────────────────────────
-function DomainSection({ domain, principle, fields, values, onChange, submissionStatus, onEvidenceUploaded, projectId, stickyDocType, setStickyDocType }) {
+function DomainSection({ domain, principle, fields, values, onChange, submissionStatus, onEvidenceUploaded, onEvidenceDeleted, projectId, stickyDocType, setStickyDocType }) {
   const [collapsed, setCollapsed] = useState(false);
   const meta = DOMAIN_META[domain] || DOMAIN_META["Environment"];
   const DomainIcon = meta.icon;
@@ -1396,6 +1492,7 @@ function DomainSection({ domain, principle, fields, values, onChange, submission
               onChange={onChange}
               submissionStatus={submissionStatus}
               onEvidenceUploaded={onEvidenceUploaded}
+              onEvidenceDeleted={onEvidenceDeleted}
               projectId={projectId}
               stickyDocType={stickyDocType}
               setStickyDocType={setStickyDocType}
@@ -1565,6 +1662,14 @@ export default function DataEntry() {
     }));
   }, []);
 
+  const handleEvidenceDeleted = useCallback((metricCode, evidenceId) => {
+    if (!evidenceId) return;
+    setEvidenceIds(prev => ({
+      ...prev,
+      [metricCode]: (prev[metricCode] || []).filter(id => id !== evidenceId),
+    }));
+  }, []);
+
   const handleSave = async () => {
     if (!selectedEntity || !selectedPeriod) return;
     setSaving(true);
@@ -1668,10 +1773,17 @@ export default function DataEntry() {
     }
   };
 
-  // ── Completion stats ─────────────────────────────────────────────────────
+  // ── Completion stats (Evaluates operational parameters entered) ───────────
   const allFields = form?.sections?.flatMap(s => s.fields || []) || [];
-  const filledCount = allFields.filter(f => values[f.metric_code] !== undefined && values[f.metric_code] !== "").length;
-  const totalFields = allFields.length;
+  const rawFields = allFields.filter(f => !Boolean(
+    f.calc_formula_code ||
+    f.formula_ref ||
+    f.entry_level === "calculated" ||
+    (f.metric_code?.startsWith("ENV-GHG") && !f.metric_code?.includes("FUEL")) ||
+    f.metric_code?.includes("INTENSITY")
+  ));
+  const filledCount = (rawFields.length > 0 ? rawFields : allFields).filter(f => values[f.metric_code] !== undefined && values[f.metric_code] !== "").length;
+  const totalFields = rawFields.length > 0 ? rawFields.length : allFields.length;
   const completionPct = totalFields > 0 ? Math.round((filledCount / totalFields) * 100) : 0;
 
   const submissionStatus = form?.submission_status || "DRAFT";
@@ -1716,13 +1828,16 @@ export default function DataEntry() {
             <span>{breadcrumb}</span>
           </div>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
-            <div>
-              <h1 style={{ fontSize: 26, fontWeight: 700, color: "#09090b", margin: 0, letterSpacing: "-0.02em" }}>
-                ESG Data Collection
-              </h1>
-              <p style={{ margin: "4px 0 0", fontSize: 13, color: "#64748b" }}>
-                Log operational metrics, upload statutory vouchers, and submit for BU aggregation.
-              </p>
+            <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
+              <div>
+                <h1 style={{ fontSize: 26, fontWeight: 700, color: "#09090b", margin: 0, letterSpacing: "-0.02em" }}>
+                  ESG Data Collection
+                </h1>
+                <p style={{ margin: "4px 0 0", fontSize: 13, color: "#64748b" }}>
+                  Log operational metrics, upload statutory vouchers, and submit for BU aggregation.
+                </p>
+              </div>
+              <PageHelpButton title="Data Entry Guide" route="/collection" style={{ marginTop: 4 }} />
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
               {/* Entity selector */}
@@ -1952,6 +2067,7 @@ export default function DataEntry() {
                 onChange={handleFieldChange}
                 submissionStatus={submissionStatus}
                 onEvidenceUploaded={handleEvidenceUploaded}
+                onEvidenceDeleted={handleEvidenceDeleted}
                 projectId={selectedEntity}
                 stickyDocType={stickyDocType}
                 setStickyDocType={handleDocTypeChange}

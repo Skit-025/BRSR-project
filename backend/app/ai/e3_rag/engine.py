@@ -14,6 +14,11 @@ from app.ai.e3_rag.retriever import retrieve
 
 logger = logging.getLogger(__name__)
 
+# Hard cap on context sent to LLM — prevents 45K token overflow on smaller models
+# Gemini 1.5 Flash has 1M context so this is a safety net for OpenRouter fallbacks
+MAX_GUIDANCE_CHARS = 3000   # max chars from a single knowledge chunk
+MAX_PROMPT_CHARS   = 28000  # max total prompt size before truncation
+
 CAUTION_NOTICE = (
     "\n\n> ⚠️ **Caution**: This guidance is generated using general AI regulatory knowledge "
     "(no direct statutory chunk was matched in the local knowledge base). "
@@ -63,13 +68,14 @@ class GuidanceRAGEngine:
 
         if chunk:
             # ── PATH A: Grounded Context Found in Knowledge Base ───────────
+            guidance_text = (chunk.get('guidance') or '')[:MAX_GUIDANCE_CHARS]
             prompt = (
                 f"You are an expert SEBI BRSR compliance and sustainability reporting advisor.\n\n"
                 f"User Question: {question}\n"
                 f"Indicator Reference: {indicator_code or chunk.get('section', 'BRSR Indicator')}\n"
                 f"Statutory Section: {chunk.get('section')}\n"
                 f"Guidance Text from SEBI BRSR Guidance Note:\n"
-                f"\"\"\"{chunk.get('guidance')}\"\"\"\n\n"
+                f"\"\"\"{guidance_text}\"\"\"\n\n"
                 f"Provide a descriptive, authoritative explanation to address the user's question.\n"
                 f"Formatting & Length Requirements:\n"
                 f"- Your response MUST be between 100 and 150 words in total length.\n"

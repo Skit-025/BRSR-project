@@ -9,13 +9,14 @@ import {
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth, ROLE_META } from '../context/AuthContext';
 import CommandPalette from './CommandPalette';
+import FeatureGuideModal from './FeatureGuideModal';
 import { notificationsApi } from '../api/client';
 
 const PLATFORM_JOURNEY_STEPS = [
   { step: '01', title: 'Organization', desc: 'Enterprise structure & entity roll-up', route: '/dashboard', icon: Building2, role: 'Group Admin' },
-  { step: '02', title: 'Subsidiary', desc: 'Aarohan Renewable Energy Pvt. Ltd.', route: '/disclosure/subsidiary', icon: Building2, role: 'Subsidiary Admin' },
-  { step: '03', title: 'Business Unit', desc: 'Solar EPC & Operations BU oversight', route: '/disclosure/bu', icon: Layers, role: 'BU Admin' },
-  { step: '04', title: 'Project Hub', desc: '250 MW Odisha Solar Park hero site', route: '/projects', icon: HardHat, role: 'Project Admin' },
+  { step: '02', title: 'Subsidiary', desc: 'Megha Road and Transport Ltd', route: '/disclosure/subsidiary', icon: Building2, role: 'Subsidiary Admin' },
+  { step: '03', title: 'Business Unit', desc: 'Transportation & Tunneling BU oversight', route: '/disclosure/bu', icon: Layers, role: 'BU Admin' },
+  { step: '04', title: 'Project Hub', desc: 'Tunnel Project P7 (Zojila Tunnel)', route: '/projects', icon: HardHat, role: 'Project Admin' },
   { step: '05', title: 'Data Entry', desc: 'Operational parameters & statutory vouchers', route: '/collection', icon: PenLine, role: 'Project Admin' },
   { step: '06', title: 'Review & Gate', desc: 'Four-eyes Segregation of Duties & audit check', route: '/workflow', icon: GitMerge, role: 'BU Admin' },
   { step: '07', title: 'Calculation', desc: 'Bottom-up boundary consolidation engine', route: '/consolidation', icon: Layers, role: 'Group Admin' },
@@ -46,7 +47,7 @@ const ACTIVE_PERSONAS = [
     name: 'Meera Nair',
     label: 'Subsidiary Admin',
     email: 'sub.admin@aarohan.in',
-    org: 'Aarohan Renewable Energy Pvt. Ltd.',
+    org: 'Megha Road and Transport Ltd',
     color: '#6366F1',
     route: '/dashboard'
   },
@@ -55,18 +56,18 @@ const ACTIVE_PERSONAS = [
     name: 'Rajesh V.',
     label: 'BU Admin',
     email: 'bu.admin@aarohan.in',
-    org: 'Solar EPC & Operations',
+    org: 'Transportation & Tunneling',
     color: '#0EA5E9',
-    route: '/workflow'
+    route: '/dashboard'
   },
   {
     roleKey: 'project_admin',
     name: 'Ravi Kumar',
     label: 'Project Admin',
     email: 'project.user@aarohan.in',
-    org: '250 MW Odisha Solar Park',
+    org: 'Tunnel Project P7 (Zojila Tunnel)',
     color: '#059669',
-    route: '/collection'
+    route: '/dashboard'
   }
 ];
 
@@ -80,6 +81,8 @@ export default function Header() {
   const [showNotifications, setShowNotifications] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showJourneyModal, setShowJourneyModal] = useState(false);
+  const [showFeatureGuide, setShowFeatureGuide] = useState(false);
+  const [guideTargetRoute, setGuideTargetRoute] = useState(null);
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [notifsLoading, setNotifsLoading] = useState(false);
@@ -102,12 +105,30 @@ export default function Header() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Global Ctrl+K / Cmd+K listener
+  // Listen for programmatic open-feature-guide events from in-page '?' buttons
+  useEffect(() => {
+    const handleOpenGuide = (e) => {
+      if (e?.detail?.route) {
+        setGuideTargetRoute(e.detail.route);
+      } else {
+        setGuideTargetRoute(null);
+      }
+      setShowFeatureGuide(true);
+    };
+    window.addEventListener('open-feature-guide', handleOpenGuide);
+    return () => window.removeEventListener('open-feature-guide', handleOpenGuide);
+  }, []);
+
+  // Global Ctrl+K / Cmd+K listener and Shift+? guide shortcut
   useEffect(() => {
     const handleKeyDown = (e) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
         e.preventDefault();
         setIsPaletteOpen(prev => !prev);
+      }
+      if (e.key === '?' && !['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName)) {
+        e.preventDefault();
+        setShowFeatureGuide(prev => !prev);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -287,7 +308,47 @@ export default function Header() {
         </div>
 
         {/* ── Right Controls ── */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          {/* Feature Guide (?) Button in Top-Right Corner */}
+          <button
+            onClick={() => setShowFeatureGuide(true)}
+            id="top-feature-guide-button"
+            className="feature-guide-trigger-btn"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              background: '#EFF6FF',
+              color: '#1D4ED8',
+              border: '1px solid #BFDBFE',
+              padding: '4px 11px',
+              borderRadius: 6,
+              fontSize: 12,
+              fontWeight: 700,
+              cursor: 'pointer',
+              transition: 'all 0.15s ease',
+              boxShadow: '0 1px 2px rgba(37, 99, 235, 0.08)'
+            }}
+            title="Open Feature Guide, Regulatory Rationale, Role Manual & Tasks (?)"
+          >
+            <div
+              style={{
+                width: 17,
+                height: 17,
+                borderRadius: '50%',
+                background: '#2563EB',
+                color: '#FFFFFF',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: 11,
+                fontWeight: 800
+              }}
+            >
+              ?
+            </div>
+            <span>Page Guide</span>
+          </button>
           {/* Statutory Workflow Quick Launcher */}
           <button
             onClick={() => setShowJourneyModal(true)}
@@ -770,6 +831,16 @@ export default function Header() {
           </div>
         </div>
       )}
+
+      {/* Feature Guide Modal with Comprehensive 5-Pillar SEBI Breakdown */}
+      <FeatureGuideModal
+        isOpen={showFeatureGuide}
+        onClose={() => {
+          setShowFeatureGuide(false);
+          setGuideTargetRoute(null);
+        }}
+        initialRoute={guideTargetRoute || location.pathname}
+      />
     </>
   );
 }

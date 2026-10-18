@@ -19,6 +19,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../context/AuthContext';
 import ProjectSummary from './ProjectSummary';
 import DataLineageDrawer from '../components/DataLineageDrawer';
+import PageHelpButton from '../components/PageHelpButton';
 
 // ── 9 BRSR Principles with full 38 statutory SEBI indicators ────────────────
 const BRSR_FRAMEWORK = [
@@ -188,13 +189,8 @@ function CustomTooltip({ active, payload }) {
   return null;
 }
 
-export default function Reporting() {
+function CorporateReporting() {
   const { user } = useAuth();
-
-  // Project users see the ProjectSummary read model, not the full corporate BRSR
-  if (user?.role === 'project_admin') {
-    return <ProjectSummary />;
-  }
 
   const qc = useQueryClient();
   const { data: nodes = [] }    = useOrgNodes();
@@ -212,7 +208,7 @@ export default function Reporting() {
 
   React.useEffect(() => {
     if (!entityId && nodes.length > 0) {
-      const defaultNode = nodes.find(n => n.code === 'AAROHAN-GROUP') || nodes.find(n => n.type === 'group' || n.is_root) || nodes[0];
+      const defaultNode = nodes.find(n => n.code === 'MEIL-GROUP') || nodes.find(n => n.type === 'group' || n.is_root) || nodes[0];
       if (defaultNode) setEntityId(defaultNode.id);
     }
     if (!periodId && periods.length > 0) {
@@ -444,7 +440,8 @@ export default function Reporting() {
             Business Responsibility &amp; Sustainability Report — 9 Principles, {TOTAL_INDICATORS} indicators, SHA-256 sealed.
           </p>
         </div>
-        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+          <PageHelpButton title="Reporting Guide" route="/reporting" />
           <button onClick={handleExportHtml} className="btn btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '7px 14px', borderRadius: 6, border: '1px solid #e2e8f0', background: '#fff', color: '#09090b', fontWeight: 600 }}>
             <Download size={13} /> Export HTML
           </button>
@@ -732,13 +729,13 @@ export default function Reporting() {
               <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-default)', fontWeight: 700, fontSize: '14px' }}>
                 Section A — General Disclosures (SEBI BRSR Format)
               </div>
-              {/* Aarohan disclosures */}
+              {/* MEIL disclosures */}
               <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '2px' }}>
                 {[
-                  { field: 'Corporate Identity Number (CIN)', value: report?.section_a?.cin || 'L40106MH2014PLC258901' },
-                  { field: 'Company Name', value: report?.section_a?.name || 'Aarohan Infrastructure & Energy Group' },
-                  { field: 'Registered Address', value: report?.section_a?.address || 'Aarohan Towers, Plot 14, BKC, Bandra East, Mumbai – 400051, Maharashtra' },
-                  { field: 'Corporate Website', value: report?.section_a?.website || 'www.aarohan-energy.in' },
+                  { field: 'Corporate Identity Number (CIN)', value: report?.section_a?.cin || 'U45200TG1989PLC013058' },
+                  { field: 'Company Name', value: report?.section_a?.name || 'Megha Engineering & Infrastructures Ltd (MEIL)' },
+                  { field: 'Registered Address', value: report?.section_a?.address || 'S-22, Technocrat Indl. Estate, Balanagar, Hyderabad – 500037, Telangana' },
+                  { field: 'Corporate Website', value: report?.section_a?.website || 'www.meghaeng.com' },
                   { field: 'Financial Year Reported', value: selectedPeriod?.financial_year || report?.section_a?.fy || '2025-2026' },
                   { field: 'Reporting Currency', value: 'INR (₹)' },
                   { field: 'Reporting Boundary', value: 'Group — Consolidated (all subsidiaries, JVs and associates with operational control)' },
@@ -1335,4 +1332,15 @@ export default function Reporting() {
       />
     </div>
   );
+}
+
+export default function Reporting() {
+  const { user } = useAuth();
+
+  // Project users see the ProjectSummary read model, not the full corporate BRSR
+  if (user?.role === 'project_admin') {
+    return <ProjectSummary key={user?.id || 'project_admin'} />;
+  }
+
+  return <CorporateReporting key={user?.id || 'corporate_reporting'} />;
 }

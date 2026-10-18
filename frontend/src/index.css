@@ -1680,3 +1680,34 @@ button:active > svg.lucide-rotate-cw,
 .btn-refresh:active svg {
   animation: spin 0.6s linear infinite !important;
 }
+
+/* ── Feature Guide & Manual Triggers ── */
+.feature-guide-trigger-btn:hover {
+  background: #DBEAFE !important;
+  border-color: #93C5FD !important;
+  color: #1E40AF !important;
+  transform: translateY(-1px);
+  box-shadow: 0 3px 6px -1px rgba(37, 99, 235, 0.16) !important;
+}
+
+.feature-guide-trigger-btn:active {
+  transform: translateY(0);
+}
+
+.page-help-trigger-btn:hover {
+  background: #DBEAFE !important;
+  border-color: #93C5FD !important;
+  color: #1E40AF !important;
+  transform: translateY(-1px);
+  box-shadow: 0 3px 6px -1px rgba(37, 99, 235, 0.16) !important;
+}
+
+.page-help-trigger-btn:active {
+  transform: translateY(0);
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: scale(0.98); }
+  to { opacity: 1; transform: scale(1); }
+}
+

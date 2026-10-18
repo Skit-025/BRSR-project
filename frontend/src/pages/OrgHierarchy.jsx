@@ -9,6 +9,7 @@ import { useOrgNodes, useOrgPeriods, useCreateNode, useCreatePeriod, useUpdateNo
 import { useAuth } from '../context/AuthContext';
 import { authApi } from '../api/client';
 import Modal from '../components/Modal';
+import PageHelpButton from '../components/PageHelpButton';
 
 const NODE_TYPES = [
   { value: 'group', label: 'Group (Level 1 Root)', cls: 'badge-brand', tier: 1 },
@@ -491,10 +492,11 @@ export default function OrgHierarchy() {
           </div>
           <h1 className="page-title">4-Tier Organization Hierarchy &amp; Reporting Periods</h1>
           <p className="page-subtitle">
-            Define corporate nodes, subsidiaries, business units, and operational reporting periods across Aarohan Group.
+            Define corporate nodes, subsidiaries, business units, and operational reporting periods across MEIL Group.
           </p>
         </div>
         <div className="header-actions">
+          <PageHelpButton title="Hierarchy Guide" route="/org" />
           <button 
             className="btn btn-secondary" 
             onClick={async () => {
@@ -770,7 +772,7 @@ export default function OrgHierarchy() {
                       </div>
                       <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: 16, lineHeight: 1.5 }}>
                         {nodeList.length === 0 
-                          ? 'Start by creating your Root Group Entity (e.g. AAROHAN-GROUP) or subsidiary units to establish statutory audit boundaries.'
+                          ? 'Start by creating your Root Group Entity (e.g. MEIL-GROUP) or subsidiary units to establish statutory audit boundaries.'
                           : 'Try changing your search term or filtering options.'}
                       </p>
                       {nodeList.length === 0 && canCreateUnits && (
@@ -902,7 +904,7 @@ export default function OrgHierarchy() {
                 <div>
                   <h3 style={{ fontSize: '16px', color: '#fff' }}>Add Organization Unit</h3>
                   <p style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-                    Create a new node within Aarohan's 4-tier MEIL hierarchy structure
+                    Create a new node within MEIL's 4-tier hierarchy structure
                   </p>
                 </div>
               </div>
@@ -924,7 +926,7 @@ export default function OrgHierarchy() {
                 <input
                   type="text"
                   className="form-control"
-                  placeholder="e.g. AAROHAN-SOLAR-02, PRJ-SOLAR-PARK, SITE-04"
+                  placeholder="e.g. SUB-OLECTRA, PRJ-SOLAR-PARK, SITE-04"
                   value={nodeForm.code}
                   onChange={(e) => setNodeForm({ ...nodeForm, code: e.target.value })}
                   required

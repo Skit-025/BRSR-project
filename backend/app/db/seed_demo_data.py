@@ -65,24 +65,31 @@ def seed_demo_data():
             db.flush()
         print(f"[OK] Group: {group.name} [{group.code}]")
 
-        # Subsidiary 1: MEIL Hydrocarbons
-        sub1 = db.query(OrgNode).filter(OrgNode.code == "MEIL-HYDRO").first()
+        # Subsidiary 1: Megha Road and Transport Ltd
+        sub1 = db.query(OrgNode).filter(OrgNode.code == "MEGHA-ROAD-TRANS").first()
+        if not sub1:
+            sub1 = db.query(OrgNode).filter(OrgNode.code == "MEIL-HYDRO").first()
         if not sub1:
             sub1 = OrgNode(
-                code="MEIL-HYDRO",
-                name="MEIL Hydrocarbons & Energy Ltd",
+                code="MEGHA-ROAD-TRANS",
+                name="Megha Road and Transport Ltd",
                 type="subsidiary",
                 parent_id=group.id,
-                path=f"{group.path}.HYDRO",
+                path=f"{group.path}.ROAD_TRANS",
                 ownership_pct=100.0,
                 control_type="operational_control",
                 boundary=True,
-                project_type="hydrocarbon",
-                location_state="Gujarat",
+                project_type="road_transport",
+                location_state="Telangana",
                 location_country="India",
                 is_active=True
             )
             db.add(sub1)
+            db.flush()
+        else:
+            sub1.code = "MEGHA-ROAD-TRANS"
+            sub1.name = "Megha Road and Transport Ltd"
+            sub1.project_type = "road_transport"
             db.flush()
         print(f"[OK] Subsidiary: {sub1.name}")
 
@@ -155,9 +162,9 @@ def seed_demo_data():
         demo_users = [
             ("admin@aarohan.in", "system_admin", "System Administrator", None),
             ("group.admin@aarohan.in", "group_admin", "Aditya Sharma (Group ESG Director)", group.id),
-            ("sub.admin@aarohan.in", "subsidiary_admin", "Meera Nair (Subsidiary ESG Manager)", sub1.id),
+            ("sub.admin@aarohan.in", "subsidiary_admin", "Meera Nair (Subsidiary ESG Admin)", sub1.id),
             ("bu.admin@aarohan.in", "bu_admin", "Rajesh V. (Transportation BU Admin)", bu1.id),
-            ("project.user@aarohan.in", "project_admin", "Ravi Kumar (Site Engineer P7)", proj1.id),
+            ("project.user@aarohan.in", "project_admin", "Ravi Kumar (Site Engineer - Zojila Tunnel P7)", proj1.id),
         ]
         for email, role, full_name, node_id in demo_users:
             u = db.query(User).filter(User.email == email).first()

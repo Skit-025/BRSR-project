@@ -106,8 +106,8 @@ export default function Landing() {
       step: 2,
       title: 'Consolidation Tree',
       subtitle: 'Hierarchical Lineage',
-      detail: 'Drilldown traces 187.40 tCO₂e to Aarohan Renewable Energy → Solar EPC BU → 250 MW Odisha Solar Park.',
-      code: 'PATH: AAROHAN-GROUP.AAROHAN-RENEW.AAROHAN-BU-SOLAR.AAROHAN-SOLAR-01',
+      detail: 'Drilldown traces 187.40 tCO₂e to Megha Road and Transport Ltd → Transportation & Tunneling BU → Tunnel Project P7 (Zojila Tunnel).',
+      code: 'PATH: MEIL.ROAD_TRANS.TRANS.ZOJILA_P7',
       tag: '4-Tier Materialized Lineage'
     },
     {

@@ -98,11 +98,13 @@ class OpenRouterProvider(BaseAIProvider):
         )
         messages.append({"role": "user", "content": user_message})
 
+        # NOTE: Gemini is PRIMARY. OpenRouter text models are only reached if Gemini fails.
         models_to_try = [
-            settings.OPENROUTER_MODEL_TEXT,
-            "meta-llama/llama-3.3-70b-instruct:free",  # was: google/gemini-3.8-flash (402 - paid model, no credits)
-            "mistralai/mistral-7b-instruct:free",       # was: google/gemini-3.5-flash (402 - paid model, no credits)
-            "openrouter/auto",                          # was: openrouter/auto (kept - last resort)
+            settings.OPENROUTER_MODEL_TEXT,                         # from .env
+            "nvidia/nemotron-3.5-lightning:free",                   # active free-tier text model
+            "google/gemma-4-26b-a4b-it:free",                       # active free-tier instruction model
+            "google/gemma-4-31b-it:free",                           # active free-tier instruction model
+            "liquid/lfm-2.5-2.6b:free",                             # active free-tier lightweight model
         ]
         models_to_try = list(dict.fromkeys([m for m in models_to_try if m]))
 
@@ -155,13 +157,13 @@ class OpenRouterProvider(BaseAIProvider):
             }
         ]
 
-        # Prioritized vision models on OpenRouter (confirmed active free-tier, queried 2026-10-16)
+        # OpenRouter vision model cascade — ordered by reliability on free tier
+        # NOTE: Gemini handles vision as PRIMARY. OpenRouter is only reached if Gemini fails.
         models_to_try = [
-            settings.OPENROUTER_MODEL_VISION,                    # from .env
-            "google/gemma-4-31b-it:free",                        # was: google/gemini-2.0-flash-exp:free (404 - model retired)
-            "google/gemma-4-26b-a4b-it:free",                   # was: meta-llama/llama-3.2-11b-vision-instruct:free (404 - model retired)
-            "nvidia/nemotron-3.5-super-vl:free",                 # new addition: image+video capable
-            "openrouter/auto",                                   # last resort
+            settings.OPENROUTER_MODEL_VISION,                      # from .env
+            "nvidia/nemotron-3.5-super-vl:free",                   # active free-tier vision model
+            "google/gemma-4-26b-a4b-it:free",                       # active free-tier multimodal
+            "google/gemma-4-31b-it:free",                           # active free-tier multimodal
         ]
         models_to_try = list(dict.fromkeys([m for m in models_to_try if m]))
 

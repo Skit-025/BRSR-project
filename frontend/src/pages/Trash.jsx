@@ -7,6 +7,7 @@ import {
 import { evidenceApi, orgApi } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import Modal from '../components/Modal';
+import PageHelpButton from '../components/PageHelpButton';
 
 export default function Trash() {
   const qc = useQueryClient();
@@ -173,6 +174,7 @@ export default function Trash() {
           </p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <PageHelpButton title="Trash Guide" route="/trash" />
           {currentUser?.role === 'system_admin' && (
             <button
               onClick={() => {

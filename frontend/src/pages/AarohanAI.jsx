@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { aarohanApi, evidenceApi, getFriendlyErrorMessage } from '../api/client';
 import { useAuth } from '../context/AuthContext';
+import PageHelpButton from '../components/PageHelpButton';
 
 // ─── Colour tokens ────────────────────────────────────────────────────────────
 const C = {
@@ -860,7 +861,7 @@ function E2Form({ onRun, loading }) {
 
       <div>
         <Label>Site / Context (optional)</Label>
-        <Inp value={site} onChange={setSite} placeholder="e.g. Odisha Solar Park, Plant Unit 3" />
+        <Inp value={site} onChange={setSite} placeholder="e.g. Tunnel Project P7 (Zojila Tunnel)" />
       </div>
 
       <Divider />
@@ -1179,7 +1180,7 @@ function E7Form({ onRun, loading }) {
       <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: 10 }}>
         <div>
           <Label>Top Contributing Entity</Label>
-          <Inp value={entity} onChange={setEntity} placeholder="e.g. Odisha Wind Farm BU" />
+          <Inp value={entity} onChange={setEntity} placeholder="e.g. Transportation & Tunneling BU" />
         </div>
         <div>
           <Label>Delta (absolute change)</Label>
@@ -2045,8 +2046,11 @@ export default function AarohanAI() {
               Select an engine, fill in the form — no JSON required. Every result is structured, cited, and audit-logged.
             </div>
           </div>
-          <div style={{ padding: '8px 14px', borderRadius: 999, background: meta?.colorLt || C.blueLt, border: `1px solid ${meta?.color || C.blue}33`, color: meta?.color || C.blue, fontWeight: 700, fontSize: 12 }}>
-            {roleMeta?.icon} {roleMeta?.label || role}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <PageHelpButton title="Aarohan AI Guide" route="/aarohan" />
+            <div style={{ padding: '8px 14px', borderRadius: 999, background: meta?.colorLt || C.blueLt, border: `1px solid ${meta?.color || C.blue}33`, color: meta?.color || C.blue, fontWeight: 700, fontSize: 12 }}>
+              {roleMeta?.icon} {roleMeta?.label || role}
+            </div>
           </div>
         </div>
 

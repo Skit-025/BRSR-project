@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { useValueChainPartners, useCreatePartner, useRecordAssessment, useOrgPeriods } from '../hooks/useApi';
 import { useAuth } from '../context/AuthContext';
+import PageHelpButton from '../components/PageHelpButton';
 
 export default function ValueChain() {
   const { user } = useAuth();
@@ -143,7 +144,8 @@ export default function ValueChain() {
           </div>
         </div>
 
-        <div style={{ display: 'flex', gap: 10 }}>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+          <PageHelpButton title="Value Chain Guide" route="/valuechain" />
           <button
             onClick={() => refetch()}
             className="btn btn-secondary"
