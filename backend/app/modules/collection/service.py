@@ -284,6 +284,13 @@ def submit_submission_pack(
 
     db.commit()
     db.refresh(submission)
+
+    try:
+        from app.modules.workflow.notifications import dispatch_workflow_notification
+        dispatch_workflow_notification(db, "PROJECT_SUBMITTED", submission)
+    except Exception as exc:
+        logger.warning("Project submission notification failed: %s", exc)
+
     return submission
 
 

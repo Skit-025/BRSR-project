@@ -13,12 +13,24 @@ from app.db.base import Base, UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMix
 
 
 class UserRole(str, enum.Enum):
-    # ── Final Five Runtime Roles ──────────────────────────────────────────────
-    SYSTEM_ADMIN     = "system_admin"      # Full platform: user mgmt, config, all access
-    GROUP_ADMIN      = "group_admin"       # Group-wide ESG, consolidation, reporting, user mgmt
-    SUBSIDIARY_ADMIN = "subsidiary_admin"  # Subsidiary ESG, BU oversight, subsidiary disclosures
-    BU_ADMIN         = "bu_admin"          # BU ESG + review/approve project submissions
-    PROJECT_ADMIN    = "project_admin"     # Data entry, evidence upload, submit
+    # ── Platform Administrator ────────────────────────────────────────────────
+    SYSTEM_ADMIN          = "system_admin"          # Full platform: user mgmt, config, all access
+
+    # ── Group Tier ────────────────────────────────────────────────────────────
+    GROUP_ADMIN           = "group_admin"           # Verification, approval, governance, period lock
+    GROUP_SUPERVISOR      = "group_supervisor"      # Group operational, consolidation, disclosures, compilation
+
+    # ── Subsidiary Tier ───────────────────────────────────────────────────────
+    SUBSIDIARY_ADMIN      = "subsidiary_admin"      # Verification, approval, BU oversight, scoped governance
+    SUBSIDIARY_SUPERVISOR = "subsidiary_supervisor" # Subsidiary operational, disclosures, consolidation
+
+    # ── Business Unit Tier ────────────────────────────────────────────────────
+    BU_ADMIN              = "bu_admin"              # Verification, approval, project creation, scoped governance
+    BU_SUPERVISOR         = "bu_supervisor"         # BU operational, BU disclosures, consolidation
+
+    # ── Project Tier ──────────────────────────────────────────────────────────
+    PROJECT_ADMIN         = "project_admin"         # Verification, approval of project submissions, scoped governance
+    PROJECT_SUPERVISOR    = "project_supervisor"    # Data entry (Maker), evidence upload, project submission
 
 
 class User(Base, UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin):

@@ -128,7 +128,14 @@ def compile_brsr_report(
 
     section_b = SectionBData()
 
-    # 4. Generate snapshot seal
+    # 4. Calculate reporting coverage
+    from app.modules.consolidation.service import get_reporting_coverage
+    try:
+        cov_info = get_reporting_coverage(db, entity_id, period_id)
+    except Exception:
+        cov_info = None
+
+    # 5. Generate snapshot seal
     report_dict = {
         "entity": node.code,
         "period": period.code,
@@ -138,10 +145,11 @@ def compile_brsr_report(
         "total_scope_2_tco2e": total_scope_2,
         "total_scope_3_tco2e": total_scope_3,
         "total_ghg_emissions_tco2e": total_ghg,
+        "reporting_coverage": cov_info,
     }
-    snapshot_hash = hashlib.sha256(json.dumps(report_dict, sort_keys=True).encode("utf-8")).hexdigest()
+    snapshot_hash = hashlib.sha256(json.dumps(report_dict, sort_keys=True, default=str).encode("utf-8")).hexdigest()
 
-    # 5. Persist Report record
+    # 6. Persist Report record
     report_id = str(uuid.uuid4())
     report_rec = Report(
         id=report_id,
@@ -171,4 +179,6 @@ def compile_brsr_report(
         total_scope_2_tco2e=total_scope_2,
         total_scope_3_tco2e=total_scope_3,
         total_ghg_emissions_tco2e=total_ghg,
+        reporting_coverage=cov_info,
+        is_partially_reported=cov_info.get("is_partially_reported", False) if cov_info else False,
     )

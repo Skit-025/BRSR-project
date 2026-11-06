@@ -43,12 +43,30 @@ const ACTIVE_PERSONAS = [
     route: '/dashboard'
   },
   {
+    roleKey: 'group_supervisor',
+    name: 'Kavita Sen',
+    label: 'Group Supervisor',
+    email: 'group.supervisor@aarohan.in',
+    org: 'Aarohan Infrastructure & Energy Group',
+    color: '#A855F7',
+    route: '/dashboard'
+  },
+  {
     roleKey: 'subsidiary_admin',
     name: 'Meera Nair',
     label: 'Subsidiary Admin',
     email: 'sub.admin@aarohan.in',
     org: 'Megha Road and Transport Ltd',
     color: '#6366F1',
+    route: '/dashboard'
+  },
+  {
+    roleKey: 'subsidiary_supervisor',
+    name: 'Pooja Hegde',
+    label: 'Subsidiary Supervisor',
+    email: 'subsidiary.supervisor@aarohan.in',
+    org: 'Megha Road and Transport Ltd',
+    color: '#818CF8',
     route: '/dashboard'
   },
   {
@@ -61,12 +79,30 @@ const ACTIVE_PERSONAS = [
     route: '/dashboard'
   },
   {
+    roleKey: 'bu_supervisor',
+    name: 'Vikram Rao',
+    label: 'BU Supervisor',
+    email: 'bu.supervisor@aarohan.in',
+    org: 'Transportation & Tunneling',
+    color: '#38BDF8',
+    route: '/dashboard'
+  },
+  {
     roleKey: 'project_admin',
-    name: 'Ravi Kumar',
+    name: 'Sunil Verma',
     label: 'Project Admin',
-    email: 'project.user@aarohan.in',
+    email: 'project.admin@aarohan.in',
     org: 'Tunnel Project P7 (Zojila Tunnel)',
     color: '#059669',
+    route: '/dashboard'
+  },
+  {
+    roleKey: 'project_supervisor',
+    name: 'Ravi Kumar',
+    label: 'Project Supervisor',
+    email: 'project.supervisor@aarohan.in',
+    org: 'Tunnel Project P7 (Zojila Tunnel)',
+    color: '#10B981',
     route: '/dashboard'
   }
 ];

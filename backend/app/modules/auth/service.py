@@ -174,23 +174,29 @@ def delete_user_by_admin(
     if admin_user.role == Role.SYSTEM_ADMIN.value:
         pass
     elif admin_user.role == Role.GROUP_ADMIN.value:
-        if target_user.role != Role.SUBSIDIARY_ADMIN.value:
-            raise PermissionError("Group Admin can only delete Subsidiary Admin accounts.")
+        if target_user.role not in (Role.GROUP_SUPERVISOR.value, Role.SUBSIDIARY_ADMIN.value, Role.SUBSIDIARY_SUPERVISOR.value):
+            raise PermissionError("Group Admin can only delete Group Supervisor, Subsidiary Admin, and Subsidiary Supervisor accounts.")
         if admin_user.org_node_id and target_user.org_node_id:
             if not is_node_descendant(db, str(admin_user.org_node_id), str(target_user.org_node_id)):
                 raise PermissionError("You cannot delete a user outside your authorized organizational scope.")
     elif admin_user.role == Role.SUBSIDIARY_ADMIN.value:
-        if target_user.role != Role.BU_ADMIN.value:
-            raise PermissionError("Subsidiary Admin can only delete BU Admin accounts.")
+        if target_user.role not in (Role.SUBSIDIARY_SUPERVISOR.value, Role.BU_ADMIN.value, Role.BU_SUPERVISOR.value):
+            raise PermissionError("Subsidiary Admin can only delete Subsidiary Supervisor, BU Admin, and BU Supervisor accounts.")
         if admin_user.org_node_id and target_user.org_node_id:
             if not is_node_descendant(db, str(admin_user.org_node_id), str(target_user.org_node_id)):
                 raise PermissionError("You cannot delete a user outside your authorized subsidiary scope.")
     elif admin_user.role == Role.BU_ADMIN.value:
-        if target_user.role != Role.PROJECT_ADMIN.value:
-            raise PermissionError("BU Admin can only delete Project Admin accounts.")
+        if target_user.role not in (Role.BU_SUPERVISOR.value, Role.PROJECT_ADMIN.value, Role.PROJECT_SUPERVISOR.value):
+            raise PermissionError("BU Admin can only delete BU Supervisor, Project Admin, and Project Supervisor accounts.")
         if admin_user.org_node_id and target_user.org_node_id:
             if not is_node_descendant(db, str(admin_user.org_node_id), str(target_user.org_node_id)):
                 raise PermissionError("You cannot delete a user outside your authorized BU scope.")
+    elif admin_user.role == Role.PROJECT_ADMIN.value:
+        if target_user.role != Role.PROJECT_SUPERVISOR.value:
+            raise PermissionError("Project Admin can only delete Project Supervisor accounts.")
+        if admin_user.org_node_id and target_user.org_node_id:
+            if not is_node_descendant(db, str(admin_user.org_node_id), str(target_user.org_node_id)):
+                raise PermissionError("You cannot delete a user outside your authorized project scope.")
     else:
         raise PermissionError(f"Role '{admin_user.role}' is not authorized to delete users.")
 
@@ -382,26 +388,44 @@ HIERARCHICAL_DELEGATION_RULES = {
     # System Admin: unrestricted across platform (can create/delegate any role)
     "system_admin": None,
 
-    # Group Admin: can ONLY add/invite Subsidiary Admin
+    # Group Admin: can create/delegate Group Supervisor, Subsidiary Admin, Subsidiary Supervisor
     "group_admin": {
-        "allowed_roles": ["subsidiary_admin"],
-        "allowed_levels": ["company", "subsidiary"],
+        "allowed_roles": ["group_supervisor", "subsidiary_admin", "subsidiary_supervisor"],
+        "allowed_levels": ["group", "company", "subsidiary"],
     },
 
-    # Subsidiary Admin: can ONLY add/invite BU Admin
+    # Subsidiary Admin: can create/delegate Subsidiary Supervisor, BU Admin, BU Supervisor
     "subsidiary_admin": {
-        "allowed_roles": ["bu_admin"],
-        "allowed_levels": ["business_unit", "bu"],
+        "allowed_roles": ["subsidiary_supervisor", "bu_admin", "bu_supervisor"],
+        "allowed_levels": ["company", "subsidiary", "business_unit", "bu"],
     },
 
-    # BU Admin: can ONLY add/invite Project Admin
+    # BU Admin: can create/delegate BU Supervisor, Project Admin, Project Supervisor
     "bu_admin": {
-        "allowed_roles": ["project_admin"],
+        "allowed_roles": ["bu_supervisor", "project_admin", "project_supervisor"],
+        "allowed_levels": ["business_unit", "bu", "project", "site"],
+    },
+
+    # Project Admin: can create/delegate Project Supervisor
+    "project_admin": {
+        "allowed_roles": ["project_supervisor"],
         "allowed_levels": ["project", "site"],
     },
 
-    # Project Admin: no role creation or delegation
-    "project_admin": {
+    # Supervisors: cannot create or delegate roles
+    "group_supervisor": {
+        "allowed_roles": [],
+        "allowed_levels": [],
+    },
+    "subsidiary_supervisor": {
+        "allowed_roles": [],
+        "allowed_levels": [],
+    },
+    "bu_supervisor": {
+        "allowed_roles": [],
+        "allowed_levels": [],
+    },
+    "project_supervisor": {
         "allowed_roles": [],
         "allowed_levels": [],
     },

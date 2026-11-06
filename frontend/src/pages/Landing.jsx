@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import aarohanLogo from '../assets/AAROHAN LOGO.png';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -22,6 +22,33 @@ export default function Landing() {
   const [activeMainPillar, setActiveMainPillar] = useState('what'); // 'what' | 'why' | 'how'
   const [activeProblemTab, setActiveProblemTab] = useState('spreadsheets');
   const [activeAuditStep, setActiveAuditStep] = useState(1);
+
+  // Smooth scroll handler without hash fragments in URL
+  const scrollToSection = (sectionId) => {
+    const el = document.getElementById(sectionId);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+    if (window.location.hash) {
+      window.history.replaceState(null, '', window.location.pathname + window.location.search);
+    }
+  };
+
+  // Strip any incoming hash from URL immediately on load while smoothly navigating to section
+  useEffect(() => {
+    if (window.location.hash) {
+      const targetId = window.location.hash.replace('#', '');
+      window.history.replaceState(null, '', window.location.pathname + window.location.search);
+      if (targetId) {
+        setTimeout(() => {
+          const el = document.getElementById(targetId);
+          if (el) {
+            el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }
+        }, 120);
+      }
+    }
+  }, []);
   
   // Interactive Calculator State (CEA v19 Emission Factor = 0.716 kgCO2e/kWh)
   const [calcKwh, setCalcKwh] = useState(125000);
@@ -226,13 +253,53 @@ export default function Landing() {
             />
           </div>
 
-          {/* Navigation Links */}
+          {/* Navigation Links (Hash-free smooth scroll) */}
           <nav style={{ display: 'flex', alignItems: 'center', gap: 28, fontSize: 13, fontWeight: 600, color: '#475569' }}>
-            <a href="#what-why-how" style={{ transition: 'color 0.15s' }}>Architecture (What / Why / How)</a>
-            <a href="#calculator" style={{ transition: 'color 0.15s' }}>Statutory Calculator</a>
-            <a href="#metrics" style={{ transition: 'color 0.15s' }}>BRSR Core KPIs</a>
-            <a href="#assurance" style={{ transition: 'color 0.15s' }}>3-Click Audit</a>
-            <a href="#ai-engines" style={{ transition: 'color 0.15s' }}>7 AI Engines</a>
+            <button
+              type="button"
+              onClick={() => scrollToSection('what-why-how')}
+              style={{ background: 'none', border: 'none', padding: 0, font: 'inherit', color: 'inherit', cursor: 'pointer', transition: 'color 0.15s' }}
+              onMouseOver={(e) => { e.currentTarget.style.color = '#0F172A'; }}
+              onMouseOut={(e) => { e.currentTarget.style.color = '#475569'; }}
+            >
+              Architecture (What / Why / How)
+            </button>
+            <button
+              type="button"
+              onClick={() => scrollToSection('calculator')}
+              style={{ background: 'none', border: 'none', padding: 0, font: 'inherit', color: 'inherit', cursor: 'pointer', transition: 'color 0.15s' }}
+              onMouseOver={(e) => { e.currentTarget.style.color = '#0F172A'; }}
+              onMouseOut={(e) => { e.currentTarget.style.color = '#475569'; }}
+            >
+              Statutory Calculator
+            </button>
+            <button
+              type="button"
+              onClick={() => scrollToSection('metrics')}
+              style={{ background: 'none', border: 'none', padding: 0, font: 'inherit', color: 'inherit', cursor: 'pointer', transition: 'color 0.15s' }}
+              onMouseOver={(e) => { e.currentTarget.style.color = '#0F172A'; }}
+              onMouseOut={(e) => { e.currentTarget.style.color = '#475569'; }}
+            >
+              BRSR Core KPIs
+            </button>
+            <button
+              type="button"
+              onClick={() => scrollToSection('assurance')}
+              style={{ background: 'none', border: 'none', padding: 0, font: 'inherit', color: 'inherit', cursor: 'pointer', transition: 'color 0.15s' }}
+              onMouseOver={(e) => { e.currentTarget.style.color = '#0F172A'; }}
+              onMouseOut={(e) => { e.currentTarget.style.color = '#475569'; }}
+            >
+              3-Click Audit
+            </button>
+            <button
+              type="button"
+              onClick={() => scrollToSection('ai-engines')}
+              style={{ background: 'none', border: 'none', padding: 0, font: 'inherit', color: 'inherit', cursor: 'pointer', transition: 'color 0.15s' }}
+              onMouseOver={(e) => { e.currentTarget.style.color = '#0F172A'; }}
+              onMouseOut={(e) => { e.currentTarget.style.color = '#475569'; }}
+            >
+              7 AI Engines
+            </button>
           </nav>
 
           {/* Action Button */}
@@ -372,8 +439,9 @@ export default function Landing() {
             <ArrowRight size={16} />
           </button>
           
-          <a
-            href="#what-why-how"
+          <button
+            type="button"
+            onClick={() => scrollToSection('what-why-how')}
             style={{
               height: 48,
               padding: '0 22px',
@@ -394,7 +462,7 @@ export default function Landing() {
           >
             <Compass size={16} color="#2563EB" />
             <span>Explore Architecture (What / Why / How)</span>
-          </a>
+          </button>
         </div>
 
         {/* ── Hero Metric Counters (4 Clean Light Cards) ────────────────────── */}

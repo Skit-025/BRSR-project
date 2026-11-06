@@ -6,15 +6,18 @@ from app.db.base import Base, UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMix
 
 class SubmissionStatus(str, enum.Enum):
     DRAFT = "DRAFT"
-    SUBMITTED = "SUBMITTED"
-    UNDER_BU_REVIEW = "UNDER_BU_REVIEW"
-    BU_APPROVED = "BU_APPROVED"
-    CALCULATION_PENDING = "CALCULATION_PENDING"   # Spec §22: after BU approval, calc engine queued
-    CALCULATED = "CALCULATED"                      # Spec §22: calc engine has derived GHG/emissions
-    SUBSIDIARY_APPROVED = "SUBSIDIARY_APPROVED"
-    CONSOLIDATED = "CONSOLIDATED"
-    LOCKED = "LOCKED"
-    RETURNED = "RETURNED"
+    SUBMITTED = "SUBMITTED"                           # Stage 1: submitted by Project Supervisor (Pending Project Admin)
+    PROJECT_APPROVED = "PROJECT_APPROVED"             # Stage 2: approved by Project Admin (Eligible for BU)
+    UNDER_BU_REVIEW = "UNDER_BU_REVIEW"               # Stage 3: submitted by BU Supervisor (Pending BU Admin)
+    BU_APPROVED = "BU_APPROVED"                       # Stage 4: approved by BU Admin (Eligible for Subsidiary)
+    CALCULATION_PENDING = "CALCULATION_PENDING"       # Calc engine queued
+    CALCULATED = "CALCULATED"                         # Calc engine completed
+    UNDER_SUBSIDIARY_REVIEW = "UNDER_SUBSIDIARY_REVIEW" # Stage 5: submitted by Subsidiary Supervisor (Pending Sub Admin)
+    SUBSIDIARY_APPROVED = "SUBSIDIARY_APPROVED"       # Stage 6: approved by Subsidiary Admin (Eligible for Group)
+    UNDER_GROUP_REVIEW = "UNDER_GROUP_REVIEW"         # Stage 7: submitted by Group Supervisor (Pending Group Admin)
+    CONSOLIDATED = "CONSOLIDATED"                     # Group consolidated
+    LOCKED = "LOCKED"                                 # Stage 8: approved by Group Admin (Final Seal)
+    RETURNED = "RETURNED"                             # Rejected / Returned for correction
 
 class ValueStatus(str, enum.Enum):
     ACTUAL = "ACTUAL"

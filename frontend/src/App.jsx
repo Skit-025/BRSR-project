@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 // ─── Global Error Boundary ───────────────────────────────────────────────────
@@ -191,12 +191,27 @@ function ProtectedLayout() {
   );
 }
 
+// ─── Proactive Hash Cleaner ──────────────────────────────────────────────────
+// Strips hash fragments (e.g. #metrics) from all URLs across the entire application
+function HashCleaner() {
+  const location = useLocation();
+
+  React.useEffect(() => {
+    if (window.location.hash) {
+      window.history.replaceState(null, '', window.location.pathname + window.location.search);
+    }
+  }, [location]);
+
+  return null;
+}
+
 export default function App() {
   return (
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
           <BrowserRouter>
+            <HashCleaner />
             <Routes>
               {/* Public Routes - Root always directs to Landing page per requirement */}
               <Route path="/" element={<Navigate to="/landing" replace />} />

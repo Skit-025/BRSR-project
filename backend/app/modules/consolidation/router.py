@@ -73,6 +73,26 @@ def trigger_consolidation(
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
+@router.get("/coverage/{entity_id}/{period_id}", response_model=Dict[str, Any])
+def get_entity_reporting_coverage(
+    entity_id: str,
+    period_id: str,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Progressive Reporting Coverage Analysis (Section 4):
+    Returns reporting completeness, contributing approved entities, missing/pending entities,
+    and coverage percentage without blocking higher organizational layers.
+    """
+    assert_user_authorized_for_project(db, current_user, entity_id, "view reporting coverage for this entity")
+    from app.modules.consolidation.service import get_reporting_coverage
+    try:
+        return get_reporting_coverage(db, entity_id=entity_id, period_id=period_id)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
 @router.get("/{entity_id}/{period_id}", response_model=List[ConsolidatedValueRead])
 def get_consolidated_figures(
     entity_id: str,

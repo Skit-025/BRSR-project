@@ -13,22 +13,30 @@ import Modal from '../components/Modal';
 import PageHelpButton from '../components/PageHelpButton';
 import { MOCK_ORG_NODES, MOCK_USERS } from '../mock/mockData';
 
-// All standard roles with display metadata (Five-Role Architecture)
+// All standard roles with display metadata (Eight-Role Hierarchical Architecture)
 export const ROLE_DEFINITIONS = {
-  system_admin: { label: 'System Admin', tier: 'System', level: 0, badge: 'badge-purple', desc: 'Central infrastructure & platform root authority' },
-  group_admin: { label: 'Group Admin', tier: 'Group', level: 1, badge: 'badge-purple', desc: 'Enterprise group ESG governance & consolidation' },
-  subsidiary_admin: { label: 'Subsidiary Admin', tier: 'Subsidiary', level: 2, badge: 'badge-indigo', desc: 'Subsidiary administrator (BRSR sections A, B, C)' },
-  bu_admin: { label: 'BU Admin', tier: 'BU', level: 3, badge: 'badge-sky', desc: 'Business Unit Admin (reviews & approves project data)' },
-  project_admin: { label: 'Project Admin', tier: 'Project', level: 4, badge: 'badge-amber', desc: 'Project site administrator & operational data entry' },
+  system_admin:          { label: 'System Admin',          tier: 'System',     level: 0, badge: 'badge-purple', desc: 'Central infrastructure & platform root authority' },
+  group_admin:           { label: 'Group Admin',           tier: 'Group',      level: 1, badge: 'badge-purple', desc: 'Enterprise group ESG governance & period lock' },
+  group_supervisor:      { label: 'Group Supervisor',      tier: 'Group',      level: 1, badge: 'badge-purple', desc: 'Enterprise group BRSR compilation & consolidation' },
+  subsidiary_admin:      { label: 'Subsidiary Admin',      tier: 'Subsidiary', level: 2, badge: 'badge-indigo', desc: 'Subsidiary verification, review & delegation' },
+  subsidiary_supervisor: { label: 'Subsidiary Supervisor', tier: 'Subsidiary', level: 2, badge: 'badge-indigo', desc: 'Subsidiary operational disclosures & consolidation' },
+  bu_admin:              { label: 'BU Admin',              tier: 'BU',         level: 3, badge: 'badge-sky',    desc: 'Business Unit Admin (reviews & approves project data)' },
+  bu_supervisor:         { label: 'BU Supervisor',         tier: 'BU',         level: 3, badge: 'badge-sky',    desc: 'Business Unit Supervisor (BU disclosures & rollup)' },
+  project_admin:         { label: 'Project Admin',         tier: 'Project',    level: 4, badge: 'badge-amber',  desc: 'Project verification & approval of site data' },
+  project_supervisor:    { label: 'Project Supervisor',    tier: 'Project',    level: 4, badge: 'badge-amber',  desc: 'Project site operational data entry & evidence upload' },
 };
 
 // Default delegable permissions per role
 const ROLE_PERMISSIONS_PREVIEW = {
   system_admin: ['Platform Administration', 'Full System Access', 'Security & Audit Oversight'],
-  group_admin: ['Group ESG Consolidation', 'Subsidiary Admin Delegation', 'BRSR Report Approval', 'Audit Trail Oversight'],
-  subsidiary_admin: ['Subsidiary ESG Governance', 'BU Admin Delegation', 'BRSR Sections A & B', 'Consolidated Review'],
-  bu_admin: ['BU Data Review & Approval', 'Project Admin Delegation', 'Variance Analysis', 'BU Target Management'],
-  project_admin: ['Project Site Governance', 'Monthly Operational Data Entry', 'Evidence Document Upload', 'Pre-Submission Checklist'],
+  group_admin: ['Group ESG Verification', 'Subsidiary Delegation', 'Period Lock', 'Audit Trail Oversight'],
+  group_supervisor: ['Group ESG Consolidation', 'Group Disclosures', 'BRSR Report Compilation', 'Lineage Analysis'],
+  subsidiary_admin: ['Subsidiary ESG Verification', 'BU Delegation', 'Review Submissions', 'Audit Records'],
+  subsidiary_supervisor: ['Subsidiary ESG Operations', 'Subsidiary Disclosures', 'BU Rollup Consolidation'],
+  bu_admin: ['BU Data Review & Approval', 'Project Delegation', 'Segregation of Duties Check', 'Variance Verification'],
+  bu_supervisor: ['BU Operational Disclosures', 'Available Project Rollup', 'BU Evidence Management'],
+  project_admin: ['Project Site Verification', 'Audit Field Vouchers', 'Approve/Reject Submissions'],
+  project_supervisor: ['Project Operational Fact Entry', 'Evidence Document Upload', 'Pre-Submission Checklist'],
 };
 
 export default function UserManagement() {
@@ -241,9 +249,9 @@ export default function UserManagement() {
 
     // If caller has an assigned org node and target is own level, prefill caller node
     if (currentUser?.org_node_id && (
-      (currentRole === 'subsidiary_admin' && roleVal === 'subsidiary_admin') ||
-      (currentRole === 'bu_admin' && roleVal === 'bu_admin') ||
-      (currentRole === 'project_admin' && roleVal === 'project_admin')
+      (['subsidiary_admin', 'subsidiary_supervisor'].includes(currentRole) && ['subsidiary_admin', 'subsidiary_supervisor'].includes(roleVal)) ||
+      (['bu_admin', 'bu_supervisor'].includes(currentRole) && ['bu_admin', 'bu_supervisor'].includes(roleVal)) ||
+      (['project_admin', 'project_supervisor'].includes(currentRole) && ['project_admin', 'project_supervisor'].includes(roleVal))
     )) {
       setInviteOrgNodeId(String(currentUser.org_node_id));
       return;
@@ -294,9 +302,9 @@ export default function UserManagement() {
     if (!roleDef) return;
 
     if (currentUser?.org_node_id && (
-      (currentRole === 'subsidiary_admin' && roleVal === 'subsidiary_admin') ||
-      (currentRole === 'bu_admin' && roleVal === 'bu_admin') ||
-      (currentRole === 'project_admin' && roleVal === 'project_admin')
+      (['subsidiary_admin', 'subsidiary_supervisor'].includes(currentRole) && ['subsidiary_admin', 'subsidiary_supervisor'].includes(roleVal)) ||
+      (['bu_admin', 'bu_supervisor'].includes(currentRole) && ['bu_admin', 'bu_supervisor'].includes(roleVal)) ||
+      (['project_admin', 'project_supervisor'].includes(currentRole) && ['project_admin', 'project_supervisor'].includes(roleVal))
     )) {
       setReqOrgNodeId(String(currentUser.org_node_id));
       return;
@@ -554,9 +562,9 @@ export default function UserManagement() {
   // Filter active users
   const filteredUsers = users.filter((u) => {
     // 1-level down rule for scoped admins
-    if (currentRole === 'group_admin' && u.role !== 'subsidiary_admin') return false;
-    if (currentRole === 'subsidiary_admin' && u.role !== 'bu_admin') return false;
-    if (currentRole === 'bu_admin' && u.role !== 'project_admin') return false;
+    if (currentRole === 'group_admin' && !['subsidiary_admin', 'subsidiary_supervisor'].includes(u.role)) return false;
+    if (currentRole === 'subsidiary_admin' && !['bu_admin', 'bu_supervisor'].includes(u.role)) return false;
+    if (currentRole === 'bu_admin' && !['project_admin', 'project_supervisor'].includes(u.role)) return false;
 
     const matchRole = filterRole === 'ALL' || u.role === filterRole;
     const term = searchTerm.toLowerCase();
@@ -606,13 +614,13 @@ export default function UserManagement() {
   const isSubsidiaryAdmin = currentRole === 'subsidiary_admin';
   const canApproveRequests = ['system_admin', 'group_admin'].includes(currentRole);
 
-  if (currentRole === 'project_admin') {
+  if (['project_admin', 'project_supervisor', 'bu_supervisor', 'subsidiary_supervisor', 'group_supervisor'].includes(currentRole)) {
     return (
       <div style={{ padding: 60, textAlign: 'center' }}>
         <Shield size={48} color="#ef4444" style={{ margin: '0 auto 16px' }} />
         <h2 style={{ color: '#09090b', fontSize: 20 }}>Access Restricted</h2>
         <p style={{ color: '#64748b', maxWidth: 440, margin: '8px auto' }}>
-          Project Admins are operational data contributors and cannot manage user accounts.
+          Your role does not have user management privileges.
         </p>
       </div>
     );
@@ -986,9 +994,9 @@ export default function UserManagement() {
                           ) : isRoot ? (
                             <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Root Protected</span>
                           ) : !(currentRole === 'system_admin' ||
-                              (currentRole === 'group_admin' && u.role === 'subsidiary_admin') ||
-                              (currentRole === 'subsidiary_admin' && u.role === 'bu_admin') ||
-                              (currentRole === 'bu_admin' && u.role === 'project_admin')) ? (
+                              (currentRole === 'group_admin' && ['subsidiary_admin', 'subsidiary_supervisor'].includes(u.role)) ||
+                              (currentRole === 'subsidiary_admin' && ['bu_admin', 'bu_supervisor'].includes(u.role)) ||
+                              (currentRole === 'bu_admin' && ['project_admin', 'project_supervisor'].includes(u.role))) ? (
                             <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>View Only</span>
                           ) : (
                             <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, justifyContent: 'flex-end' }}>
@@ -1621,7 +1629,7 @@ export default function UserManagement() {
             </div>
             <div className="form-group">
               <label className="form-label">
-                Assigned Organizational Unit * {inviteRole === 'subsidiary_admin' ? '(Select Subsidiary)' : inviteRole === 'bu_admin' ? '(Select Business Unit)' : inviteRole === 'project_admin' ? '(Select Project / Site)' : ''}
+                Assigned Organizational Unit * {['subsidiary_admin', 'subsidiary_supervisor'].includes(inviteRole) ? '(Select Subsidiary)' : ['bu_admin', 'bu_supervisor'].includes(inviteRole) ? '(Select Business Unit)' : ['project_admin', 'project_supervisor'].includes(inviteRole) ? '(Select Project / Site)' : ''}
               </label>
               <select
                 className="form-control"
@@ -1629,7 +1637,7 @@ export default function UserManagement() {
                 onChange={(e) => setInviteOrgNodeId(e.target.value)}
                 required
               >
-                <option value="">-- Choose Assigned {inviteRole === 'subsidiary_admin' ? 'Subsidiary' : inviteRole === 'bu_admin' ? 'Business Unit' : inviteRole === 'project_admin' ? 'Project / Site' : 'Unit'} --</option>
+                <option value="">-- Choose Assigned {['subsidiary_admin', 'subsidiary_supervisor'].includes(inviteRole) ? 'Subsidiary' : ['bu_admin', 'bu_supervisor'].includes(inviteRole) ? 'Business Unit' : ['project_admin', 'project_supervisor'].includes(inviteRole) ? 'Project / Site' : 'Unit'} --</option>
                 {eligibleNodesForInviteRole.map(n => (
                   <option key={n.id} value={n.id}>
                     {n.name} ({n.type?.toUpperCase()})

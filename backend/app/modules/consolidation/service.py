@@ -38,8 +38,13 @@ def run_consolidation_engine(
         Submission.period_id == period_id,
         Submission.status.in_([
             SubmissionStatus.SUBMITTED.value,
+            SubmissionStatus.PROJECT_APPROVED.value,
+            SubmissionStatus.UNDER_BU_REVIEW.value,
             SubmissionStatus.BU_APPROVED.value,
+            SubmissionStatus.UNDER_SUBSIDIARY_REVIEW.value,
             SubmissionStatus.SUBSIDIARY_APPROVED.value,
+            SubmissionStatus.UNDER_GROUP_REVIEW.value,
+            SubmissionStatus.CONSOLIDATED.value,
             SubmissionStatus.LOCKED.value
         ])
     ).all()
@@ -214,3 +219,157 @@ def run_consolidation_engine(
         consolidated_metrics_count=consolidated_metrics_count,
         message="Hierarchical boundary consolidation executed successfully."
     )
+
+
+def get_reporting_coverage(
+    db: Session,
+    entity_id: str,
+    period_id: str
+) -> Dict[str, Any]:
+    """
+    Computes progressive reporting coverage for any entity (BU, Subsidiary, Group)
+    over its direct children and reporting tree.
+    Guarantees:
+    - Never fabricates missing entities or missing values.
+    - Accurately tracks submitted, approved, pending, rejected, and missing children.
+    - Calculates reporting coverage percentage: (approved_count / total_children * 100.0).
+    - Preserves traceability to contributing vs missing source records.
+    - Enables progressive consolidation and higher-layer reporting without waiting for 100%.
+    """
+    parent = db.query(OrgNode).filter(OrgNode.id == entity_id, OrgNode.is_deleted == False).first()
+    if not parent:
+        parent = db.query(OrgNode).filter(OrgNode.code == entity_id, OrgNode.is_deleted == False).first()
+    if not parent:
+        raise ValueError(f"Organization entity '{entity_id}' not found.")
+
+    children = db.query(OrgNode).filter(
+        OrgNode.parent_id == parent.id,
+        OrgNode.is_deleted == False
+    ).order_by(OrgNode.name).all()
+
+    total_children = len(children)
+    child_ids = [c.id for c in children]
+
+    submissions = db.query(Submission).filter(
+        Submission.entity_id.in_(child_ids) if child_ids else False,
+        Submission.period_id == period_id,
+        Submission.is_deleted == False
+    ).all() if child_ids else []
+
+    sub_by_child = {str(s.entity_id): s for s in submissions}
+
+    contributing_entities = []
+    missing_entities = []
+
+    submitted_count = 0
+    approved_count = 0
+    pending_count = 0
+    rejected_count = 0
+    not_submitted_count = 0
+
+    APPROVED_STATUSES = {
+        SubmissionStatus.PROJECT_APPROVED.value,
+        SubmissionStatus.UNDER_BU_REVIEW.value,
+        SubmissionStatus.BU_APPROVED.value,
+        SubmissionStatus.UNDER_SUBSIDIARY_REVIEW.value,
+        SubmissionStatus.SUBSIDIARY_APPROVED.value,
+        SubmissionStatus.UNDER_GROUP_REVIEW.value,
+        SubmissionStatus.CONSOLIDATED.value,
+        SubmissionStatus.LOCKED.value,
+        "APPROVED"
+    }
+
+    PENDING_STATUSES = {
+        SubmissionStatus.SUBMITTED.value,
+        SubmissionStatus.DRAFT.value,
+        "PENDING",
+        "BU_REVIEW"
+    }
+
+    REJECTED_STATUSES = {
+        SubmissionStatus.RETURNED.value,
+        "REJECTED",
+        "CHANGES_REQUESTED"
+    }
+
+    for child in children:
+        cid_str = str(child.id)
+        sub = sub_by_child.get(cid_str)
+
+        if sub:
+            submitted_count += 1
+            status_val = sub.status
+            dp_count = len(sub.data_points) if hasattr(sub, "data_points") else 0
+            is_approved = status_val in APPROVED_STATUSES
+            is_pending = status_val in PENDING_STATUSES
+            is_rejected = status_val in REJECTED_STATUSES
+
+            item = {
+                "id": str(child.id),
+                "code": child.code,
+                "name": child.name,
+                "type": child.type,
+                "status": status_val,
+                "version": sub.version,
+                "submitted_at": sub.submitted_at.isoformat() if sub.submitted_at else None,
+                "data_points_count": dp_count,
+                "is_included_in_consolidation": is_approved,
+                "exclusion_reason": None if is_approved else ("Pending Verification" if is_pending else "Returned for Correction")
+            }
+
+            if is_approved:
+                approved_count += 1
+                contributing_entities.append(item)
+            elif is_pending:
+                pending_count += 1
+                missing_entities.append(item)
+            elif is_rejected:
+                rejected_count += 1
+                missing_entities.append(item)
+            else:
+                missing_entities.append(item)
+        else:
+            not_submitted_count += 1
+            missing_entities.append({
+                "id": str(child.id),
+                "code": child.code,
+                "name": child.name,
+                "type": child.type,
+                "status": "NOT_SUBMITTED",
+                "version": 0,
+                "submitted_at": None,
+                "data_points_count": 0,
+                "is_included_in_consolidation": False,
+                "exclusion_reason": "Not Submitted"
+            })
+
+    coverage_pct = round((approved_count / total_children * 100.0), 2) if total_children > 0 else 100.0
+    is_complete = (total_children > 0 and approved_count == total_children)
+
+    return {
+        "entity_id": str(parent.id),
+        "entity_code": parent.code,
+        "entity_name": parent.name,
+        "entity_type": parent.type,
+        "period_id": period_id,
+        "total_children_count": total_children,
+        "submitted_children_count": submitted_count,
+        "approved_children_count": approved_count,
+        "pending_children_count": pending_count,
+        "rejected_children_count": rejected_count,
+        "not_submitted_children_count": not_submitted_count,
+        "included_children_count": len(contributing_entities),
+        "excluded_children_count": len(missing_entities),
+        "coverage_pct": coverage_pct,
+        "is_complete": is_complete,
+        "is_partially_reported": not is_complete,
+        "can_proceed_with_progressive_reporting": approved_count > 0 or total_children == 0,
+        "contributing_entities": contributing_entities,
+        "missing_entities": missing_entities,
+        "progressive_reporting_notice": (
+            f"Progressive reporting active: {approved_count} of {total_children} entities approved ({coverage_pct}% coverage). "
+            f"Missing entities remain identifiable and are excluded from roll-up without fabrication."
+            if not is_complete else
+            f"100% complete: All {total_children} entities approved."
+        )
+    }

@@ -83,10 +83,10 @@ def is_user_authorized_for_project(db: Session, user: User, project_identifier: 
     """
     Validates whether `user` is authorized to access the project specified by `project_identifier` (UUID or code).
     - system_admin: True
-    - project_admin: True ONLY if project is explicitly assigned
-    - bu_admin: True if project is a descendant of their assigned BU
-    - subsidiary_admin: True if project is a descendant of their assigned Subsidiary
-    - group_admin: True if project is a descendant of their assigned Group
+    - project_admin & project_supervisor: True ONLY if project is explicitly assigned
+    - bu_admin & bu_supervisor: True if project is a descendant of their assigned BU
+    - subsidiary_admin & subsidiary_supervisor: True if project is a descendant of their assigned Subsidiary
+    - group_admin & group_supervisor: True if project is a descendant of their assigned Group
     """
     if not project_identifier:
         return False
@@ -98,14 +98,14 @@ def is_user_authorized_for_project(db: Session, user: User, project_identifier: 
     if not project_node:
         return False
 
-    if user.role == Role.PROJECT_ADMIN.value:
+    if user.role in (Role.PROJECT_ADMIN.value, Role.PROJECT_SUPERVISOR.value):
         assigned_identifiers = get_user_assigned_project_ids(db, user)
         return (str(project_node.id) in assigned_identifiers) or (project_node.code in assigned_identifiers)
 
-    # For hierarchical admins:
+    # For hierarchical admins and supervisors:
     if not user.org_node_id:
-        if user.role == Role.GROUP_ADMIN.value:
-            return True  # Root group admin
+        if user.role in (Role.GROUP_ADMIN.value, Role.GROUP_SUPERVISOR.value):
+            return True  # Root group level
         return False
 
     from app.modules.auth.service import is_node_descendant
@@ -141,31 +141,38 @@ def assert_user_authorized_for_project(
 
 def assert_can_create_project(db: Session, user: User, parent_id: Optional[str]) -> OrgNode:
     """
-    Enforces the Strict Project-Creation Permission Matrix (Phase 7.1 — Final Rule):
-    | Role             | Create project | Authorized scope           |
-    |------------------|----------------|----------------------------|
-    | system_admin     | Yes            | Any location on platform   |
-    | bu_admin         | Yes            | Their assigned BU only     |
-    | group_admin      | NO             | Forbidden — must use BU    |
-    | subsidiary_admin | NO             | Forbidden — must use BU    |
-    | project_admin    | NO             | Forbidden entirely         |
+    Enforces the Strict Project-Creation Permission Matrix:
+    | Role                                                    | Create project | Authorized scope           |
+    |---------------------------------------------------------|----------------|----------------------------|
+    | system_admin                                            | Yes            | Any location on platform   |
+    | bu_admin                                                | Yes            | Their assigned BU only     |
+    | bu_supervisor                                           | NO             | Verification Admin only    |
+    | group_admin / group_supervisor                          | NO             | Forbidden — must use BU    |
+    | subsidiary_admin / subsidiary_supervisor                | NO             | Forbidden — must use BU    |
+    | project_admin / project_supervisor                      | NO             | Forbidden entirely         |
     """
-    if user.role == Role.PROJECT_ADMIN.value:
+    if user.role in (Role.PROJECT_ADMIN.value, Role.PROJECT_SUPERVISOR.value):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Project Admins are not permitted to create projects or organizational entities."
+            detail="Project roles are not permitted to create projects or organizational entities."
         )
 
-    if user.role == Role.GROUP_ADMIN.value:
+    if user.role in (Role.GROUP_ADMIN.value, Role.GROUP_SUPERVISOR.value):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Group Admins cannot create projects directly. Projects must be created by a BU Admin under the appropriate Business Unit."
+            detail="Group tier users cannot create projects directly. Projects must be created by a BU Admin under the appropriate Business Unit."
         )
 
-    if user.role == Role.SUBSIDIARY_ADMIN.value:
+    if user.role in (Role.SUBSIDIARY_ADMIN.value, Role.SUBSIDIARY_SUPERVISOR.value):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Subsidiary Admins cannot create projects directly. Projects must be created by a BU Admin under the appropriate Business Unit."
+            detail="Subsidiary tier users cannot create projects directly. Projects must be created by a BU Admin under the appropriate Business Unit."
+        )
+
+    if user.role == Role.BU_SUPERVISOR.value:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="BU Supervisors cannot create projects directly. Projects must be created by a BU Admin."
         )
 
     if user.role == Role.SYSTEM_ADMIN.value:
@@ -216,15 +223,15 @@ def filter_projects_query_for_user(db: Session, query, user: User):
     """
     Applies server-side scope filtering to an OrgNode query.
     - system_admin: unrestricted.
-    - group_admin: projects under their Group hierarchy.
-    - subsidiary_admin: projects under their Subsidiary hierarchy.
-    - bu_admin: projects under their Business Unit hierarchy.
-    - project_admin: ONLY explicitly assigned projects.
+    - group_admin & group_supervisor: projects under their Group hierarchy.
+    - subsidiary_admin & subsidiary_supervisor: projects under their Subsidiary hierarchy.
+    - bu_admin & bu_supervisor: projects under their Business Unit hierarchy.
+    - project_admin & project_supervisor: ONLY explicitly assigned projects.
     """
     if user.role == Role.SYSTEM_ADMIN.value:
         return query
 
-    if user.role == Role.PROJECT_ADMIN.value:
+    if user.role in (Role.PROJECT_ADMIN.value, Role.PROJECT_SUPERVISOR.value):
         assigned_ids = get_user_assigned_project_ids(db, user)
         if not assigned_ids:
             # No active project assignments: return empty result set
@@ -272,10 +279,10 @@ def filter_projects_query_for_user(db: Session, query, user: User):
             return query.filter(conditions[0])
         return query.filter(OrgNode.id == "00000000-0000-0000-0000-000000000000")
 
-    # For group_admin, subsidiary_admin, bu_admin:
+    # For group, subsidiary, bu tiers:
     if not user.org_node_id:
-        if user.role == Role.GROUP_ADMIN.value:
-            return query  # Platform group admin
+        if user.role in (Role.GROUP_ADMIN.value, Role.GROUP_SUPERVISOR.value):
+            return query  # Platform group level
         return query.filter(OrgNode.id == "00000000-0000-0000-0000-000000000000")
 
     from app.modules.auth.service import get_descendant_node_ids
@@ -307,10 +314,10 @@ def validate_role_to_scope(db: Session, role: str, org_node_id: Optional[str]) -
     """
     Enforces the Role-to-Scope Matrix:
     - system_admin: Platform-level assignment (org_node_id may be None or valid)
-    - group_admin: Exactly one assigned Group (type == 'group')
-    - subsidiary_admin: Exactly one assigned Subsidiary (type in ('subsidiary', 'company', 'associate', 'jv'))
-    - bu_admin: Exactly one assigned BU (type in ('business_unit', 'bu'))
-    - project_admin: One or more explicitly assigned Projects (type in ('project', 'site'))
+    - group_admin / group_supervisor: Exactly one assigned Group (type == 'group')
+    - subsidiary_admin / subsidiary_supervisor: Exactly one assigned Subsidiary (type in ('subsidiary', 'company', 'associate', 'jv'))
+    - bu_admin / bu_supervisor: Exactly one assigned BU (type in ('business_unit', 'bu'))
+    - project_admin / project_supervisor: One or more explicitly assigned Projects (type in ('project', 'site'))
 
     Rejects invalid types, non-existent entities, and parent-child hierarchy mismatches.
     """
@@ -330,19 +337,19 @@ def validate_role_to_scope(db: Session, role: str, org_node_id: Optional[str]) -
         raise ValueError(f"Organization node '{org_node_id}' not found.")
 
     node_type = (node.type or "").lower()
-    if role == Role.GROUP_ADMIN.value:
+    if role in (Role.GROUP_ADMIN.value, Role.GROUP_SUPERVISOR.value):
         if node_type != "group":
-            raise ValueError(f"Group Admin must be assigned to an entity of type 'group' (got '{node_type}').")
-    elif role == Role.SUBSIDIARY_ADMIN.value:
+            raise ValueError(f"Group roles must be assigned to an entity of type 'group' (got '{node_type}').")
+    elif role in (Role.SUBSIDIARY_ADMIN.value, Role.SUBSIDIARY_SUPERVISOR.value):
         if node_type not in ("subsidiary", "company", "associate", "jv"):
-            raise ValueError(f"Subsidiary Admin must be assigned to a Subsidiary or Company node (got '{node_type}').")
-    elif role == Role.BU_ADMIN.value:
+            raise ValueError(f"Subsidiary roles must be assigned to a Subsidiary or Company node (got '{node_type}').")
+    elif role in (Role.BU_ADMIN.value, Role.BU_SUPERVISOR.value):
         if node_type not in ("business_unit", "bu"):
-            raise ValueError(f"BU Admin must be assigned to a Business Unit node (got '{node_type}').")
-    elif role == Role.PROJECT_ADMIN.value:
+            raise ValueError(f"BU roles must be assigned to a Business Unit node (got '{node_type}').")
+    elif role in (Role.PROJECT_ADMIN.value, Role.PROJECT_SUPERVISOR.value):
         if node_type not in ("project", "site"):
-            raise ValueError(f"Project Admin must be assigned to a Project or Site node (got '{node_type}').")
+            raise ValueError(f"Project roles must be assigned to a Project or Site node (got '{node_type}').")
     else:
-        raise ValueError(f"Invalid runtime role '{role}'. Must be one of the five final roles.")
+        raise ValueError(f"Invalid runtime role '{role}'.")
 
     return node

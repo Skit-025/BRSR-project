@@ -18,19 +18,29 @@ def process_review(
     action: ReviewActionRequest
 ) -> Review:
     """
-    F16-F19 Four-Eye Workflow Transition Engine:
+    F16-F19 Four-Eye Workflow Transition Engine — Eight-Role Hierarchical Architecture:
     Handles APPROVE and RETURN decisions with SoD enforcement and audit recording.
-    On BU approval, automatically dispatches Celery aggregation job (Spec §22).
+    - Project Admin: SUBMITTED → PROJECT_APPROVED
+    - BU Admin: UNDER_BU_REVIEW (or PROJECT_APPROVED) → BU_APPROVED
+    - Subsidiary Admin: UNDER_SUBSIDIARY_REVIEW (or BU_APPROVED) → SUBSIDIARY_APPROVED
+    - Group Admin: UNDER_GROUP_REVIEW (or SUBSIDIARY_APPROVED) → LOCKED
+    Dispatches notifications and triggers calculations.
     """
     submission = db.query(Submission).filter(Submission.id == submission_id).first()
     if not submission:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Submission pack not found.")
 
-    # 1. Enforce Segregation of Duties
+    # 1. Enforce Segregation of Duties (maker != reviewer)
     enforce_segregation_of_duties(submission, action.reviewer_id)
 
     # 2. Check current state and transitions
     current_stage = submission.status
+    from app.modules.auth.models import User
+    from app.security.rbac import Role
+    reviewer = db.query(User).filter(User.id == action.reviewer_id).first()
+    reviewer_role = reviewer.role if reviewer else None
+
+    event = "PROJECT_APPROVED"
 
     if action.decision == ReviewDecision.RETURN:
         # Mandatory comment on return
@@ -42,19 +52,56 @@ def process_review(
         submission.status = SubmissionStatus.RETURNED.value
         submission.version += 1
 
+        if current_stage in (SubmissionStatus.SUBMITTED.value, SubmissionStatus.PROJECT_APPROVED.value):
+            event = "PROJECT_REJECTED"
+        elif current_stage in (SubmissionStatus.UNDER_BU_REVIEW.value, SubmissionStatus.BU_APPROVED.value):
+            event = "BU_REJECTED"
+        elif current_stage in (SubmissionStatus.UNDER_SUBSIDIARY_REVIEW.value, SubmissionStatus.SUBSIDIARY_APPROVED.value):
+            event = "SUBSIDIARY_REJECTED"
+        elif current_stage in (SubmissionStatus.UNDER_GROUP_REVIEW.value, SubmissionStatus.CONSOLIDATED.value):
+            event = "GROUP_REJECTED"
+        else:
+            event = "PROJECT_REJECTED"
+
     elif action.decision == ReviewDecision.APPROVE:
         # Enforce data quality and evidence gates
         enforce_approval_gates(submission, db)
 
-        if submission.status == SubmissionStatus.SUBMITTED.value:
+        if reviewer_role == Role.PROJECT_ADMIN.value:
+            if submission.status == SubmissionStatus.SUBMITTED.value:
+                submission.status = SubmissionStatus.PROJECT_APPROVED.value
+                event = "PROJECT_APPROVED"
+            else:
+                submission.status = SubmissionStatus.PROJECT_APPROVED.value
+                event = "PROJECT_APPROVED"
+
+        elif reviewer_role == Role.BU_ADMIN.value:
             submission.status = SubmissionStatus.BU_APPROVED.value
-        elif submission.status == SubmissionStatus.BU_APPROVED.value:
+            event = "BU_APPROVED"
+
+        elif reviewer_role == Role.SUBSIDIARY_ADMIN.value:
             submission.status = SubmissionStatus.SUBSIDIARY_APPROVED.value
+            event = "SUBSIDIARY_APPROVED"
+
+        elif reviewer_role == Role.GROUP_ADMIN.value:
+            submission.status = SubmissionStatus.LOCKED.value
+            event = "GROUP_APPROVED"
+
         else:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Cannot approve submission currently in '{submission.status}' status."
-            )
+            # System Admin or generic advancing logic
+            if submission.status == SubmissionStatus.SUBMITTED.value:
+                submission.status = SubmissionStatus.PROJECT_APPROVED.value
+                event = "PROJECT_APPROVED"
+            elif submission.status in (SubmissionStatus.PROJECT_APPROVED.value, SubmissionStatus.UNDER_BU_REVIEW.value):
+                submission.status = SubmissionStatus.BU_APPROVED.value
+                event = "BU_APPROVED"
+            elif submission.status in (SubmissionStatus.BU_APPROVED.value, SubmissionStatus.UNDER_SUBSIDIARY_REVIEW.value):
+                submission.status = SubmissionStatus.SUBSIDIARY_APPROVED.value
+                event = "SUBSIDIARY_APPROVED"
+            else:
+                submission.status = SubmissionStatus.LOCKED.value
+                event = "GROUP_APPROVED"
+
         submission.version += 1
 
     # 3. Record Review Audit Entry
@@ -70,14 +117,21 @@ def process_review(
     db.commit()
     db.refresh(review)
 
-    # 4. Send In-App Notifications (Spec §32)
+    # 4. Send In-App Notifications across all 12 events
     try:
-        _send_review_notification(db, submission, action, current_stage)
+        from app.modules.workflow.notifications import dispatch_workflow_notification
+        dispatch_workflow_notification(
+            db,
+            event=event,
+            submission=submission,
+            comment=action.comment,
+            actor_id=action.reviewer_id
+        )
     except Exception as exc:
         import logging
         logging.getLogger(__name__).warning("Notification dispatch failed (non-critical): %s", exc)
 
-    # 5. Auto-trigger background calculation on approval (Spec §22)
+    # 5. Auto-trigger background calculation on approval
     if action.decision == ReviewDecision.APPROVE:
         try:
             _trigger_calculation_pipeline(db, submission)
@@ -281,31 +335,76 @@ def lock_reporting_period(
 
 def get_review_queue(db: Session, reviewer_user=None) -> List[ReviewQueueItem]:
     """
-    Retrieves submissions awaiting review.
-    Org-scoped: if reviewer_user has org_node_id, filters to their subtree (Spec §36).
+    Retrieves submissions awaiting review — Eight-Role Hierarchical Architecture.
+    - Project Admin: SUBMITTED project packs
+    - BU Admin: UNDER_BU_REVIEW & PROJECT_APPROVED packs in their BU
+    - Subsidiary Admin: UNDER_SUBSIDIARY_REVIEW & BU_APPROVED packs in their Subsidiary
+    - Group Admin: UNDER_GROUP_REVIEW & SUBSIDIARY_APPROVED packs in their Group
+    - System Admin: all pending packs
     """
-    pending_query = db.query(Submission).filter(
-        Submission.status.in_([
+    from app.security.rbac import Role
+    from app.security.scope import get_user_assigned_project_ids
+
+    role = getattr(reviewer_user, "role", None)
+
+    if role == Role.PROJECT_ADMIN.value:
+        pending_statuses = [SubmissionStatus.SUBMITTED.value]
+    elif role == Role.BU_ADMIN.value:
+        pending_statuses = [
+            SubmissionStatus.UNDER_BU_REVIEW.value,
+            SubmissionStatus.PROJECT_APPROVED.value,
+            SubmissionStatus.SUBMITTED.value,  # fallback for direct submission to BU
+        ]
+    elif role == Role.SUBSIDIARY_ADMIN.value:
+        pending_statuses = [
+            SubmissionStatus.UNDER_SUBSIDIARY_REVIEW.value,
+            SubmissionStatus.BU_APPROVED.value,
+        ]
+    elif role == Role.GROUP_ADMIN.value:
+        pending_statuses = [
+            SubmissionStatus.UNDER_GROUP_REVIEW.value,
+            SubmissionStatus.SUBSIDIARY_APPROVED.value,
+        ]
+    elif role == Role.SYSTEM_ADMIN.value or role is None:
+        pending_statuses = [
             SubmissionStatus.SUBMITTED.value,
-            SubmissionStatus.BU_APPROVED.value
-        ])
+            SubmissionStatus.PROJECT_APPROVED.value,
+            SubmissionStatus.UNDER_BU_REVIEW.value,
+            SubmissionStatus.BU_APPROVED.value,
+            SubmissionStatus.UNDER_SUBSIDIARY_REVIEW.value,
+            SubmissionStatus.SUBSIDIARY_APPROVED.value,
+            SubmissionStatus.UNDER_GROUP_REVIEW.value,
+        ]
+    else:
+        # Supervisors do not have an approval queue
+        return []
+
+    pending_query = db.query(Submission).filter(
+        Submission.status.in_(pending_statuses)
     )
 
-    # Subsidiary isolation — filter by ltree subtree of reviewer's scoped node
-    if reviewer_user and reviewer_user.org_node_id:
-        scoped_node = db.query(OrgNode).filter(OrgNode.id == reviewer_user.org_node_id).first()
-        if scoped_node and scoped_node.path:
-            try:
-                from sqlalchemy import text
-                subtree_rows = db.execute(
-                    text("SELECT id::text FROM org_nodes WHERE path <@ :path AND is_deleted = false"),
-                    {"path": scoped_node.path}
-                ).fetchall()
-                allowed_ids = [row[0] for row in subtree_rows]
-                if allowed_ids:
-                    pending_query = pending_query.filter(Submission.entity_id.in_(allowed_ids))
-            except Exception:
-                pass
+    # Scoped isolation
+    if reviewer_user:
+        if reviewer_user.role == Role.PROJECT_ADMIN.value:
+            assigned_ids = get_user_assigned_project_ids(db, reviewer_user)
+            if assigned_ids:
+                pending_query = pending_query.filter(Submission.entity_id.in_(list(assigned_ids)))
+            elif reviewer_user.org_node_id:
+                pending_query = pending_query.filter(Submission.entity_id == str(reviewer_user.org_node_id))
+        elif reviewer_user.org_node_id:
+            scoped_node = db.query(OrgNode).filter(OrgNode.id == reviewer_user.org_node_id).first()
+            if scoped_node and scoped_node.path:
+                try:
+                    from sqlalchemy import text
+                    subtree_rows = db.execute(
+                        text("SELECT id::text FROM org_nodes WHERE path <@ :path AND is_deleted = false"),
+                        {"path": scoped_node.path}
+                    ).fetchall()
+                    allowed_ids = [row[0] for row in subtree_rows]
+                    if allowed_ids:
+                        pending_query = pending_query.filter(Submission.entity_id.in_(allowed_ids))
+                except Exception:
+                    pass
 
     pending = pending_query.all()
     items: List[ReviewQueueItem] = []
