@@ -71,10 +71,14 @@ app.include_router(api_router, prefix=settings.API_V1_STR)
 
 @app.get("/health", tags=["System"])
 def health_check():
+    from app.ai.gateway import ai_gateway
+
     return {
         "status": "healthy",
         "app": settings.APP_NAME,
         "ai_provider": settings.AI_PROVIDER,
+        "ai_provider_fallbacks": settings.AI_PROVIDER_FALLBACKS,
+        "ai_cascade": ai_gateway.get_cascade_status(),
         "auto_fallback_enabled": settings.AI_AUTO_FALLBACK_ON_ERROR
     }
 

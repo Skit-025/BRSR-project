@@ -9,6 +9,24 @@ app/ai/__init__.py
   - Engine 6: Value Chain Partner Screening (E6)
   - Engine 7: 3-Click Explainability & Formula Provenance (E7)
 """
-from app.ai.router import router
-
 __all__ = ["router"]
+
+
+def __getattr__(name):
+    """
+    Lazily expose ``app.ai.router``.
+
+    Importing the router eagerly pulls in every engine, the AI gateway, the ORM
+    models and therefore a live PostgreSQL connection. Keeping this lazy lets
+    lightweight tooling (e.g. scripts/check_ai_providers.py) inspect the AI
+    providers without a database being up.
+    """
+    if name == "router":
+        from app.ai.router import router
+
+        return router
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
+def __dir__():
+    return sorted(set(globals()) | set(__all__))

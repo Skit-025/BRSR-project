@@ -5,7 +5,7 @@ for semantic retrieval. This runs at startup or on demand (admin-triggered).
 
 Current Mode:
   - Phase 1 (Now):   In-memory knowledge base from knowledge.py (no DB needed for MVP).
-  - Phase 2 (Later): Chunk PDF guidance notes → embed via Gemini text-embedding-004
+  - Phase 2 (Later): Chunk PDF guidance notes → embed via Hugging Face, then Gemini
                      → store in PostgreSQL pgvector table `guidance_chunks`.
 """
 from typing import List, Dict

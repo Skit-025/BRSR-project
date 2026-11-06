@@ -43,16 +43,46 @@ class Settings(BaseSettings):
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
 
     # AI Gateway Settings
-    AI_PROVIDER: str = "gemini"  # "gemini" (primary), "openrouter" (backup), "mock"
+    # Cascade order = AI_PROVIDER first, then AI_PROVIDER_FALLBACKS (left to right).
+    AI_PROVIDER: str = "huggingface"  # "huggingface" | "gemini" | "openrouter" | "mock"
+    AI_PROVIDER_FALLBACKS: str = "openrouter,gemini"
+    AI_PROVIDER_COOLDOWN_SECONDS: int = 60
+    AI_PROVIDER_FAILURE_THRESHOLD: int = 2
+
+    # Hugging Face Inference Providers (PRIMARY — https://huggingface.co/settings/tokens)
+    HF_API_KEY: Optional[str] = None
+    HF_TOKEN: Optional[str] = None
+    HF_ROUTER_BASE_URL: str = "https://router.huggingface.co/v1"
+    HF_INFERENCE_BASE_URL: str = "https://router.huggingface.co/hf-inference"
+    HF_MODEL_TEXT: str = "openai/gpt-oss-120b"
+    HF_MODEL_TEXT_FALLBACKS: str = (
+        "Qwen/Qwen3-32B,"
+        "meta-llama/Llama-3.3-70B-Instruct,"
+        "meta-llama/Llama-3.1-8B-Instruct"
+    )
+    HF_MODEL_VISION: str = "Qwen/Qwen3-VL-30B-A3B-Instruct"
+    HF_MODEL_VISION_FALLBACKS: str = (
+        "meta-llama/Llama-4-Scout-17B-16E-Instruct,"
+        "zai-org/GLM-4.5V,"
+        "Qwen/Qwen2.5-VL-7B-Instruct"
+    )
+    HF_EMBEDDING_MODEL: str = "BAAI/bge-base-en-v1.5"
+    HF_PROVIDER: str = ""          # optional pin: "auto" | "fastest" | "groq" | "together" | ...
+    HF_MAX_RETRIES: int = 1         # retries per model on 429/5xx (503 cold-start is transient)
+    HF_TIMEOUT_SECONDS: int = 120   # per HTTP request
+    HF_TOTAL_TIMEOUT_SECONDS: int = 150  # whole HF provider attempt before failing over
+    HF_MAX_TOKENS: int = 4096
+    HF_TEMPERATURE: float = 0.1
+
     GEMINI_API_KEY: Optional[str] = None
     OPENROUTER_API_KEY: Optional[str] = None
-    OPENROUTER_MODEL_TEXT: str = "nvidia/nemotron-3.5-lightning:free"
-    OPENROUTER_MODEL_VISION: str = "nvidia/nemotron-3.5-super-vl:free"
+    OPENROUTER_MODEL_TEXT: str = "openai/gpt-oss-120b"
+    OPENROUTER_MODEL_VISION: str = "google/gemma-3-12b-it"
     AI_FALLBACK_TO_MOCK: bool = True
     AI_AUTO_FALLBACK_ON_ERROR: bool = True
-    AI_MODEL_VISION: str = "gemini-3.8-flash"
-    AI_MODEL_TEXT: str = "gemini-3.8-flash"
-    AI_EMBEDDING_MODEL: str = "models/text-embedding-004"
+    AI_MODEL_VISION: str = "gemini-flash-latest"
+    AI_MODEL_TEXT: str = "gemini-flash-latest"
+    AI_EMBEDDING_MODEL: str = "gemini-embedding-001"
 
     # SMTP Email Configuration (Google Mail / Gmail Provider)
     SMTP_HOST: str = "smtp.gmail.com"

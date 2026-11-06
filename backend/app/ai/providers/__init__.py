@@ -3,6 +3,7 @@ app/ai/providers/__init__.py
 AI providers package root.
 """
 from app.ai.providers.base import BaseAIProvider
+from app.ai.providers.huggingface import HuggingFaceProvider, huggingface_provider
 from app.ai.providers.gemini import GeminiProvider
 from app.ai.providers.claude import ClaudeProvider
 from app.ai.providers.openrouter import OpenRouterProvider
@@ -12,6 +13,8 @@ from app.ai.providers.ocr_local import extract_text_from_pdf_bytes, extract_key_
 
 __all__ = [
     "BaseAIProvider",
+    "HuggingFaceProvider",
+    "huggingface_provider",
     "GeminiProvider",
     "ClaudeProvider",
     "OpenRouterProvider",
