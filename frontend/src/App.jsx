@@ -175,7 +175,7 @@ function ProtectedLayout() {
   }
 
   if (!token || !user) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/landing" replace />;
   }
 
   return (
@@ -191,24 +191,6 @@ function ProtectedLayout() {
   );
 }
 
-function RootRoute() {
-  const { user, token, loading } = useAuth();
-
-  if (loading) {
-    return (
-      <div className="loading-screen">
-        <div className="spinner" />
-      </div>
-    );
-  }
-
-  if (!token || !user) {
-    return <Landing />;
-  }
-
-  return <Navigate to="/dashboard" replace />;
-}
-
 export default function App() {
   return (
     <ErrorBoundary>
@@ -216,8 +198,8 @@ export default function App() {
         <AuthProvider>
           <BrowserRouter>
             <Routes>
-              {/* Public Routes */}
-              <Route path="/" element={<RootRoute />} />
+              {/* Public Routes - Root always directs to Landing page per requirement */}
+              <Route path="/" element={<Navigate to="/landing" replace />} />
               <Route path="/landing" element={<Landing />} />
               <Route path="/login" element={<Login />} />
 
@@ -378,7 +360,7 @@ export default function App() {
               </Route>
 
               {/* Catch-all redirect */}
-              <Route path="*" element={<Navigate to="/" replace />} />
+              <Route path="*" element={<Navigate to="/landing" replace />} />
             </Routes>
           </BrowserRouter>
         </AuthProvider>

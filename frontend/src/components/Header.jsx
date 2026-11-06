@@ -191,7 +191,7 @@ export default function Header({ onToggleSidebar, isSidebarOpen }) {
     } catch (err) {
       console.warn('Logout cleanup notice:', err);
     } finally {
-      navigate('/login', { replace: true });
+      navigate('/landing', { replace: true });
     }
   };
 

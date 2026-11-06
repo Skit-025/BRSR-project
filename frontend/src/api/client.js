@@ -9,10 +9,30 @@ export const api = axios.create({
   timeout: 45_000,
 });
 
-// ── Auth Token Injection ──
+export const purgeAllAuthStorage = () => {
+  ['brsr_token', 'brsr_refresh_token', 'brsr_user', 'brsr_mock_mode', 'brsr_session_expiry'].forEach(k => {
+    try {
+      sessionStorage.removeItem(k);
+      localStorage.removeItem(k);
+    } catch (_) {}
+  });
+};
+
+// ── Auth Token Injection with 45-Minute Session Guard ──
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('brsr_token');
-  if (token) {
+  const token = sessionStorage.getItem('brsr_token');
+  const expiry = sessionStorage.getItem('brsr_session_expiry');
+
+  // If session has exceeded 45 minutes, immediately purge credentials and redirect to /landing
+  if (token && expiry && Date.now() > Number(expiry)) {
+    purgeAllAuthStorage();
+    if (!window.location.pathname.startsWith('/landing') && !window.location.pathname.startsWith('/login')) {
+      window.location.href = '/landing';
+    }
+    return Promise.reject(new Error('Session has expired (45-minute limit). Please log in again.'));
+  }
+
+  if (token && token !== 'mock-session-token') {
     config.headers.Authorization = `Bearer ${token}`;
   }
   return config;
@@ -120,7 +140,7 @@ api.interceptors.response.use(
       !originalRequest.url?.includes('/auth/login') &&
       !originalRequest.url?.includes('/auth/refresh')
     ) {
-      const refreshToken = localStorage.getItem('brsr_refresh_token');
+      const refreshToken = sessionStorage.getItem('brsr_refresh_token');
       if (refreshToken) {
         if (isRefreshing) {
           return new Promise((resolve, reject) => {
@@ -141,9 +161,9 @@ api.interceptors.response.use(
             refresh_token: refreshToken,
           });
           const newToken = data.access_token;
-          localStorage.setItem('brsr_token', newToken);
+          sessionStorage.setItem('brsr_token', newToken);
           if (data.refresh_token) {
-            localStorage.setItem('brsr_refresh_token', data.refresh_token);
+            sessionStorage.setItem('brsr_refresh_token', data.refresh_token);
           }
           api.defaults.headers.common.Authorization = `Bearer ${newToken}`;
           originalRequest.headers.Authorization = `Bearer ${newToken}`;
@@ -151,8 +171,10 @@ api.interceptors.response.use(
           return api(originalRequest);
         } catch (refreshErr) {
           processQueue(refreshErr, null);
-          localStorage.removeItem('brsr_token');
-          localStorage.removeItem('brsr_refresh_token');
+          purgeAllAuthStorage();
+          if (!window.location.pathname.startsWith('/landing') && !window.location.pathname.startsWith('/login')) {
+            window.location.href = '/landing';
+          }
         } finally {
           isRefreshing = false;
         }
@@ -180,9 +202,13 @@ api.interceptors.response.use(
       }
     }
 
-    // If unauthorized, log warning
+    // If unauthorized, clean up session storage and redirect to /landing
     if (err.response?.status === 401 && !err.config?.url?.includes('/auth/login')) {
-      console.warn('Authentication token expired or invalid.');
+      console.warn('Authentication token expired or invalid. Redirecting to landing page.');
+      purgeAllAuthStorage();
+      if (!window.location.pathname.startsWith('/landing') && !window.location.pathname.startsWith('/login')) {
+        window.location.href = '/landing';
+      }
     }
     return Promise.reject(err);
   }
@@ -313,11 +339,11 @@ export const evidenceApi = {
       headers: { 'Content-Type': 'multipart/form-data' },
     }),
   getDownloadUrl: (id) => {
-    const token = localStorage.getItem('brsr_token');
+    const token = sessionStorage.getItem('brsr_token') || localStorage.getItem('brsr_token');
     return `${API_BASE}/evidence/${id}/download${token ? `?token=${encodeURIComponent(token)}` : ''}`;
   },
   getViewUrl: (id) => {
-    const token = localStorage.getItem('brsr_token');
+    const token = sessionStorage.getItem('brsr_token') || localStorage.getItem('brsr_token');
     return `${API_BASE}/evidence/${id}/view${token ? `?token=${encodeURIComponent(token)}` : ''}`;
   },
   delete: (id, password, reason) => api.delete(`/evidence/${id}`, { data: { password, reason } }),

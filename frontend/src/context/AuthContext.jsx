@@ -88,28 +88,102 @@ export const ROLE_META = {
 
 const AuthContext = createContext(null);
 
-export const isMock = () => localStorage.getItem('brsr_mock_mode') === 'true';
+export const SESSION_DURATION_MS = 45 * 60 * 1000; // 45 minutes strictly
+
+const AUTH_KEYS = ['brsr_token', 'brsr_refresh_token', 'brsr_user', 'brsr_mock_mode', 'brsr_session_expiry'];
+
+// Actively purge any legacy keys from localStorage to prevent cross-session contamination (e.g. past Ravi login)
+AUTH_KEYS.forEach((k) => {
+  try { localStorage.removeItem(k); } catch (_) {}
+});
+
+export const clearAuthStorage = () => {
+  AUTH_KEYS.forEach((k) => {
+    try {
+      sessionStorage.removeItem(k);
+      localStorage.removeItem(k);
+    } catch (_) {}
+  });
+};
+
+export const isSessionExpired = () => {
+  const token = sessionStorage.getItem('brsr_token');
+  if (!token) return true;
+
+  // 1. Check explicit session expiry timestamp in sessionStorage (45 mins strictly)
+  const expiry = sessionStorage.getItem('brsr_session_expiry');
+  if (!expiry || Date.now() > Number(expiry)) {
+    return true;
+  }
+
+  // 2. Mock mode session check
+  if (token === 'mock-session-token') {
+    return false;
+  }
+
+  // 3. Inspect JWT exp claim (payload.exp is in seconds)
+  try {
+    const parts = token.split('.');
+    if (parts.length === 3) {
+      const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+      const payload = JSON.parse(decodeURIComponent(atob(base64).split('').map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join('')));
+      if (payload.exp && Date.now() >= payload.exp * 1000) {
+        return true;
+      }
+    }
+  } catch {
+    return true;
+  }
+
+  return false;
+};
+
+export const isMock = () => sessionStorage.getItem('brsr_mock_mode') === 'true';
 
 export function AuthProvider({ children }) {
-  const [mockMode, setMockMode] = useState(() => localStorage.getItem('brsr_mock_mode') === 'true');
+  const [mockMode, setMockMode] = useState(() => {
+    if (isSessionExpired()) {
+      clearAuthStorage();
+      return false;
+    }
+    return sessionStorage.getItem('brsr_mock_mode') === 'true';
+  });
+
+  const [token, setToken] = useState(() => {
+    if (isSessionExpired()) {
+      clearAuthStorage();
+      return '';
+    }
+    return sessionStorage.getItem('brsr_token') || '';
+  });
+
   const [user, setUser] = useState(() => {
+    if (isSessionExpired()) {
+      clearAuthStorage();
+      return null;
+    }
     try {
-      const saved = localStorage.getItem('brsr_user');
+      const saved = sessionStorage.getItem('brsr_user');
       return saved ? JSON.parse(saved) : null;
     } catch {
       return null;
     }
   });
-  const [token, setToken] = useState(() => localStorage.getItem('brsr_token') || '');
+
   const [loading, setLoading] = useState(() => {
-    const saved = localStorage.getItem('brsr_user');
+    if (isSessionExpired()) return false;
+    const saved = sessionStorage.getItem('brsr_user');
     // If cached session exists, render immediately; only block if token exists with NO cached profile
-    return !saved && !!localStorage.getItem('brsr_token');
+    return !saved && !!sessionStorage.getItem('brsr_token');
   });
 
   useEffect(() => {
     if (token) {
-      if (localStorage.getItem('brsr_mock_mode') === 'true' || token === 'mock-session-token') {
+      if (isSessionExpired()) {
+        logout();
+        return;
+      }
+      if (sessionStorage.getItem('brsr_mock_mode') === 'true' || token === 'mock-session-token') {
         setMockMode(true);
         setLoading(false);
         return;
@@ -117,13 +191,12 @@ export function AuthProvider({ children }) {
       authApi.getMe()
         .then((res) => {
           setUser(res.data);
-          localStorage.setItem('brsr_user', JSON.stringify(res.data));
+          sessionStorage.setItem('brsr_user', JSON.stringify(res.data));
         })
         .catch((err) => {
-          console.warn('Session check failed or expired:', err.message);
-          if (err.response?.status === 401) {
-            logout();
-          }
+          console.warn('Session check failed (server closed, rebooted, or token expired):', err?.message);
+          // If server was closed or restarted, immediately invalidate session and redirect to /landing
+          logout();
         })
         .finally(() => setLoading(false));
     } else {
@@ -131,24 +204,59 @@ export function AuthProvider({ children }) {
     }
   }, [token]);
 
+  // ─── Proactive Session Expiry Check (every 10s + tab focus/visibility) ─────────
+  useEffect(() => {
+    if (!token) return;
+
+    const checkSession = () => {
+      if (isSessionExpired()) {
+        console.warn('Session expired after 45 minutes. Redirecting to landing page.');
+        logout();
+      }
+    };
+
+    checkSession();
+    const interval = setInterval(checkSession, 10000);
+
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        checkSession();
+      }
+    };
+
+    window.addEventListener('focus', checkSession);
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', checkSession);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+  }, [token]);
+
   const login = async (identifier, password) => {
     const cleanId = (identifier || '').trim();
     const cleanPwd = (password || '').trim();
     setMockMode(false);
-    localStorage.removeItem('brsr_mock_mode');
+    clearAuthStorage();
     const res = await authApi.login({
       username: cleanId,
       email: cleanId,
       password: cleanPwd
     });
     const { access_token, refresh_token, user: loggedUser } = res.data;
+    
+    // Set strict 45-minute expiration timestamp
+    const expiryTime = Date.now() + SESSION_DURATION_MS;
+    sessionStorage.setItem('brsr_session_expiry', String(expiryTime));
+
     setToken(access_token);
     setUser(loggedUser);
-    localStorage.setItem('brsr_token', access_token);
+    sessionStorage.setItem('brsr_token', access_token);
     if (refresh_token) {
-      localStorage.setItem('brsr_refresh_token', refresh_token);
+      sessionStorage.setItem('brsr_refresh_token', refresh_token);
     }
-    localStorage.setItem('brsr_user', JSON.stringify(loggedUser));
+    sessionStorage.setItem('brsr_user', JSON.stringify(loggedUser));
     return loggedUser;
   };
 
@@ -162,17 +270,20 @@ export function AuthProvider({ children }) {
       is_mfa_enabled: false,
       is_mock_mode: true
     };
+    const expiryTime = Date.now() + SESSION_DURATION_MS;
+    sessionStorage.setItem('brsr_session_expiry', String(expiryTime));
+
     setMockMode(true);
     setToken('mock-session-token');
     setUser(demoAdmin);
-    localStorage.setItem('brsr_mock_mode', 'true');
-    localStorage.setItem('brsr_token', 'mock-session-token');
-    localStorage.setItem('brsr_user', JSON.stringify(demoAdmin));
+    sessionStorage.setItem('brsr_mock_mode', 'true');
+    sessionStorage.setItem('brsr_token', 'mock-session-token');
+    sessionStorage.setItem('brsr_user', JSON.stringify(demoAdmin));
   };
 
   const exitMockMode = () => {
     setMockMode(false);
-    localStorage.removeItem('brsr_mock_mode');
+    clearAuthStorage();
     logout();
   };
 
@@ -180,10 +291,10 @@ export function AuthProvider({ children }) {
     setToken('');
     setUser(null);
     setMockMode(false);
-    localStorage.removeItem('brsr_token');
-    localStorage.removeItem('brsr_refresh_token');
-    localStorage.removeItem('brsr_user');
-    localStorage.removeItem('brsr_mock_mode');
+    clearAuthStorage();
+    if (!window.location.pathname.startsWith('/landing')) {
+      window.location.href = '/landing';
+    }
   };
 
   // ─── RBAC helpers ─────────────────────────────────────────────────────────

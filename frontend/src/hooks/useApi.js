@@ -25,7 +25,7 @@ import * as MockApi from '../mock/useMockApi';
 
 /** Returns true when the app is running in demo/mock mode */
 function isMock() {
-  return localStorage.getItem('brsr_mock_mode') === 'true';
+  return sessionStorage.getItem('brsr_mock_mode') === 'true';
 }
 
 

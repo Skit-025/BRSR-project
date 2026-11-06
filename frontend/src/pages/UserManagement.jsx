@@ -92,7 +92,7 @@ export default function UserManagement() {
     queryKey: ['org-nodes-list'],
     staleTime: 60_000,
     queryFn: async () => {
-      if (localStorage.getItem('brsr_mock_mode') === 'true') return MOCK_ORG_NODES;
+      if (sessionStorage.getItem('brsr_mock_mode') === 'true') return MOCK_ORG_NODES;
       try {
         const res = await orgApi.getNodes();
         return res.data;
@@ -129,7 +129,7 @@ export default function UserManagement() {
     refetchInterval: 4_000,
     refetchOnWindowFocus: true,
     queryFn: async () => {
-      if (localStorage.getItem('brsr_mock_mode') === 'true') return MOCK_USERS;
+      if (sessionStorage.getItem('brsr_mock_mode') === 'true') return MOCK_USERS;
       try {
         const res = await authApi.getScopedUsers();
         return res.data;
@@ -152,7 +152,7 @@ export default function UserManagement() {
     refetchInterval: 4_000,
     refetchOnWindowFocus: true,
     queryFn: async () => {
-      if (localStorage.getItem('brsr_mock_mode') === 'true') return [];
+      if (sessionStorage.getItem('brsr_mock_mode') === 'true') return [];
       try {
         const res = await authApi.getInvitations();
         return res.data;
@@ -169,7 +169,7 @@ export default function UserManagement() {
     refetchInterval: 4_000,
     refetchOnWindowFocus: true,
     queryFn: async () => {
-      if (localStorage.getItem('brsr_mock_mode') === 'true') return [];
+      if (sessionStorage.getItem('brsr_mock_mode') === 'true') return [];
       try {
         const res = await authApi.listUserRequests();
         return res.data;
@@ -189,7 +189,7 @@ export default function UserManagement() {
     refetchInterval: 6_000,
     refetchOnWindowFocus: true,
     queryFn: async () => {
-      if (localStorage.getItem('brsr_mock_mode') === 'true') return [];
+      if (sessionStorage.getItem('brsr_mock_mode') === 'true') return [];
       try {
         const res = await authApi.getAdminAuditLog(50);
         return res.data;
@@ -333,7 +333,7 @@ export default function UserManagement() {
   // Invite Mutation
   const inviteMutation = useMutation({
     mutationFn: async (payload) => {
-      if (localStorage.getItem('brsr_mock_mode') === 'true') {
+      if (sessionStorage.getItem('brsr_mock_mode') === 'true') {
         await new Promise(r => setTimeout(r, 600));
         return {
           data: {
