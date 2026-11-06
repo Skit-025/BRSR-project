@@ -263,6 +263,24 @@ export const dashboardsApi = {
     if (entityId) params.entity_id = entityId;
     return api.get('/dashboards/summary', { params });
   },
+  getGroupOverview: (periodId, entityId) => {
+    const params = {};
+    if (periodId) params.period_id = periodId;
+    if (entityId) params.entity_id = entityId;
+    return api.get('/dashboards/group-overview', { params });
+  },
+  getOverviewDesign: (periodId, entityId) => {
+    const params = {};
+    if (periodId) params.period_id = periodId;
+    if (entityId) params.entity_id = entityId;
+    return api.get('/dashboards/overview', { params });
+  },
+  getCommandCenter: (periodId, entityId) => {
+    const params = {};
+    if (periodId) params.period_id = periodId;
+    if (entityId) params.entity_id = entityId;
+    return api.get('/dashboards/command-center', { params });
+  },
 };
 
 // ─────────────────────────────────────────────────────────────────

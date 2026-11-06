@@ -54,6 +54,11 @@ def run_cleanup(dry_run: bool = True):
             "sub.admin@aarohan.in",
             "bu.admin@aarohan.in",
             "project.user@aarohan.in",
+            "project.supervisor@aarohan.in",
+            "project.admin@aarohan.in",
+            "group.supervisor@aarohan.in",
+            "bu.supervisor@aarohan.in",
+            "subsidiary.supervisor@aarohan.in",
             "adityastar537@gmail.com",
             "admin@meil.in",
             "sub.manager@meil.in",
@@ -299,6 +304,12 @@ def run_cleanup(dry_run: bool = True):
             print(f"Deleted {del_vr} validation results.")
             del_ve = db.query(ValidationException).filter(ValidationException.submission_id.in_(list(test_sub_ids))).delete(synchronize_session=False)
             print(f"Deleted {del_ve} validation exceptions.")
+
+            # Delete evidence links referencing test data points
+            test_dp_ids = [str(r[0]) for r in db.query(DataPoint.id).filter(DataPoint.submission_id.in_(list(test_sub_ids))).all()]
+            if test_dp_ids:
+                del_dp_links = db.query(EvidenceLink).filter(EvidenceLink.data_point_id.in_(test_dp_ids)).delete(synchronize_session=False)
+                print(f"Deleted {del_dp_links} evidence links on test data points.")
 
         # 5. Data Points
         if test_sub_ids:

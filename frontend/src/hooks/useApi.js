@@ -49,6 +49,30 @@ export const useDashboardSummary = (periodId, entityId, opts) => {
   });
 };
 
+export const useGroupOverview = (periodId, entityId, opts) => {
+  return useQuery({
+    queryKey: ['group-overview', periodId, entityId],
+    queryFn: () => dashboardsApi.getGroupOverview(periodId, entityId).then(r => r.data),
+    ...opts,
+  });
+};
+
+export const useGroupOverviewDesign = (periodId, entityId, opts) => {
+  return useQuery({
+    queryKey: ['group-overview-design', periodId, entityId],
+    queryFn: () => dashboardsApi.getOverviewDesign(periodId, entityId).then(r => r.data),
+    ...opts,
+  });
+};
+
+export const useCommandCenter = (periodId, entityId, opts) => {
+  return useQuery({
+    queryKey: ['command-center', periodId, entityId],
+    queryFn: () => dashboardsApi.getCommandCenter(periodId, entityId).then(r => r.data),
+    ...opts,
+  });
+};
+
 // ── Org Hierarchy & Periods ──
 export const useOrgNodes = (opts) => {
   if (isMock()) return MockApi.useMockOrgNodes();

@@ -11,6 +11,7 @@ import { useAuth } from '../context/AuthContext';
 import { useOrgPeriods, useOrgNodes, useDashboardSummary } from '../hooks/useApi';
 import DataLineageDrawer from '../components/DataLineageDrawer';
 import ProjectSummary from './ProjectSummary';
+import GroupCommandCenter from './GroupCommandCenter';
 import PageHelpButton from '../components/PageHelpButton';
 
 function EnterpriseDashboard() {
@@ -1217,10 +1218,11 @@ function EnterpriseDashboard() {
 export default function Dashboard() {
   const { user } = useAuth();
 
-  // Phase 11: Project Admin sees project BRSR disclosure as their Overview
-  if (user?.role === 'project_admin') {
+  // Phase 11: Project Admin & Project Supervisor see project BRSR disclosure as their Overview
+  if (user?.role === 'project_admin' || user?.role === 'project_supervisor') {
     return <ProjectSummary key={user?.id || 'project_admin'} />;
   }
 
-  return <EnterpriseDashboard key={user?.id || 'enterprise_dashboard'} />;
+  // Executive Command Center for Group Admin & Group Supervisor (and system / subsidiary executives)
+  return <GroupCommandCenter key={user?.id || 'group_command_center'} />;
 }

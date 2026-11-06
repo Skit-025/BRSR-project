@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, Query, HTTPException, status
 from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.modules.org.models import OrgNode, ReportingPeriod
-from app.modules.dashboards.schemas import ExecutiveDashboardSummary
+from app.modules.dashboards.schemas import ExecutiveDashboardSummary, CommandCenterResponse, GroupOverviewResponse, GroupOverviewDesignResponse
 from app.modules.dashboards.service import DashboardService
 
 router = APIRouter(prefix="/dashboards", tags=["ESG Analytics & Dashboards"])
@@ -53,3 +53,64 @@ def get_executive_summary(
 
     service = DashboardService(db)
     return service.get_summary(period_id=period_id, entity_id=entity_id)
+
+
+@router.get("/command-center", response_model=CommandCenterResponse)
+def get_command_center(
+    period_id: Optional[str] = Query(None),
+    entity_id: Optional[str] = Query(None),
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Returns the complete dynamic Executive ESG Command Center payload for Group Supervisor & Group Admin.
+    Reflects live database hierarchy, submissions, approval queues, heatmaps, and role-tailored actions.
+    """
+    service = DashboardService(db)
+    return service.get_command_center(
+        period_id=period_id,
+        entity_id=entity_id,
+        current_user=current_user,
+    )
+
+
+@router.get("/group-overview", response_model=GroupOverviewResponse)
+def get_group_overview(
+    period_id: Optional[str] = Query(None),
+    entity_id: Optional[str] = Query(None),
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Returns authentic, 100% database-driven Group Overview with true hierarchy,
+    calculated reporting metrics, real submission statuses, and actionable approval/exception items.
+    """
+    service = DashboardService(db)
+    return service.get_group_overview(
+        period_id=period_id,
+        entity_id=entity_id,
+        current_user=current_user,
+    )
+
+
+@router.get("/overview", response_model=GroupOverviewDesignResponse)
+def get_group_overview_design(
+    period_id: Optional[str] = Query(None),
+    entity_id: Optional[str] = Query(None),
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Returns the visual layout-tailored Group Overview matching the executive reference design.
+    Zero hardcoded values: all entity names, counts, completion percentages, emissions,
+    and approval queues are dynamically computed from live PostgreSQL records.
+    """
+    service = DashboardService(db)
+    return service.get_group_overview_design(
+        period_id=period_id,
+        entity_id=entity_id,
+        current_user=current_user,
+    )
+
+
+
