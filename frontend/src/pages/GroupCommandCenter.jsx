@@ -228,12 +228,13 @@ function TrendAreaChart({ trendPoints = [] }) {
         {/* Y Axis Guide Lines & Labels */}
         {[0, 0.5, 1.0].map((ratio, idx) => {
           const y = chartH - ratio * (chartH - 10);
-          const valLabel = Math.round((ratio * scaleMax) / 1000);
+          const valNum = ratio * scaleMax;
+          const valLabel = scaleMax >= 1000 ? `${Math.round(valNum / 1000)}K` : `${Math.round(valNum)}t`;
           return (
             <g key={idx}>
               <line x1={paddingLeft} y1={y} x2={width} y2={y} stroke="#F1F5F9" strokeWidth="1" strokeDasharray="3 3" />
               <text x={paddingLeft - 6} y={y + 3} textAnchor="end" fontSize="9" fill="#94A3B8" fontWeight="500">
-                {valLabel > 0 ? `${valLabel}K` : '0K'}
+                {valLabel}
               </text>
             </g>
           );
@@ -473,10 +474,16 @@ export default function GroupCommandCenter() {
               {kpiCompletion.subtext}
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
-              <span style={{ fontSize: 11, fontWeight: 700, color: '#16A34A' }}>
-                {kpiCompletion.trend || '↑ +4%'}
+              <span style={{
+                fontSize: 10.5,
+                fontWeight: 600,
+                color: kpiCompletion.value > 0 ? '#15803D' : '#64748B',
+                background: kpiCompletion.value > 0 ? '#DCFCE7' : '#F1F5F9',
+                padding: '2px 8px',
+                borderRadius: 12
+              }}>
+                {kpiCompletion.value > 0 ? `${Math.round(kpiCompletion.value)}% Complete` : 'Baseline (0%)'}
               </span>
-              <Sparkline color="#10B981" points={[10, 14, 12, 16, 15, 20, 22]} width={40} height={14} />
             </div>
           </div>
         </div>
@@ -512,10 +519,17 @@ export default function GroupCommandCenter() {
               {kpiEmissions.value}
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
-              <span style={{ fontSize: 11, fontWeight: 700, color: '#16A34A' }}>
-                {kpiEmissions.trend || '↑ +6%'}
+              <span style={{
+                fontSize: 10,
+                fontWeight: 600,
+                color: '#15803D',
+                background: '#F0FDF4',
+                border: '1px solid #BBF7D0',
+                padding: '1.5px 7px',
+                borderRadius: 12
+              }}>
+                CEA / BEE Statutory Std
               </span>
-              <Sparkline color="#10B981" points={[14, 12, 18, 17, 21, 23, 26]} width={40} height={14} />
             </div>
           </div>
         </div>
@@ -551,10 +565,16 @@ export default function GroupCommandCenter() {
               {kpiBus.value}
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
-              <span style={{ fontSize: 11, fontWeight: 700, color: '#2563EB' }}>
-                {kpiBus.trend || '↑ +2%'}
+              <span style={{
+                fontSize: 10.5,
+                fontWeight: 600,
+                color: '#1D4ED8',
+                background: '#EFF6FF',
+                padding: '2px 8px',
+                borderRadius: 12
+              }}>
+                {kpiBus.subtext || 'In Group Scope'}
               </span>
-              <Sparkline color="#3B82F6" points={[12, 14, 15, 14, 18, 19, 21]} width={40} height={14} />
             </div>
           </div>
         </div>
@@ -590,10 +610,16 @@ export default function GroupCommandCenter() {
               {kpiProjects.value}
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
-              <span style={{ fontSize: 11, fontWeight: 700, color: '#9333EA' }}>
-                {kpiProjects.trend || '↑ +3%'}
+              <span style={{
+                fontSize: 10.5,
+                fontWeight: 600,
+                color: '#7E22CE',
+                background: '#FAF5FF',
+                padding: '2px 8px',
+                borderRadius: 12
+              }}>
+                {kpiProjects.subtext || 'Across BUs'}
               </span>
-              <Sparkline color="#A855F7" points={[15, 16, 18, 17, 21, 23, 25]} width={40} height={14} />
             </div>
           </div>
         </div>
@@ -629,10 +655,16 @@ export default function GroupCommandCenter() {
               {kpiPending.value}
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
-              <span style={{ fontSize: 11, color: '#64748B' }}>
-                {kpiPending.subtext}
+              <span style={{
+                fontSize: 10.5,
+                fontWeight: 600,
+                color: Number(kpiPending.value) > 0 ? '#B45309' : '#15803D',
+                background: Number(kpiPending.value) > 0 ? '#FEF3C7' : '#DCFCE7',
+                padding: '2px 8px',
+                borderRadius: 12
+              }}>
+                {kpiPending.subtext || 'Across Hierarchy'}
               </span>
-              <Sparkline color="#F59E0B" points={[18, 16, 17, 19, 15, 14, 12]} width={40} height={14} />
             </div>
           </div>
         </div>
@@ -1124,98 +1156,124 @@ export default function GroupCommandCenter() {
                 />
               ))}
 
-              {/* Subsidiary Bars */}
-              {(subsidiaryPerf.slice(0, 4) || []).map((sub, idx) => {
-                const compHeight = Math.max(sub.completion_percentage, 4);
+              {/* Subsidiary Bars & Emissions Markers */}
+              {(() => {
+                const maxSubEmiss = Math.max(...(subsidiaryPerf || []).map(s => s.emissions_tco2e || 0), 10);
+                const rightAxisMax = maxSubEmiss >= 10000 ? Math.ceil(maxSubEmiss / 10000) * 10000
+                                   : maxSubEmiss >= 1000 ? Math.ceil(maxSubEmiss / 1000) * 1000
+                                   : maxSubEmiss >= 100 ? Math.ceil(maxSubEmiss / 50) * 50
+                                   : Math.ceil(maxSubEmiss / 10) * 10;
 
-                return (
-                  <div
-                    key={sub.id || idx}
-                    style={{
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                      position: 'relative',
-                      width: 44,
-                      height: '100%',
-                      justifyContent: 'flex-end'
-                    }}
-                  >
-                    {/* Floating Purple Emissions Badge */}
-                    <div style={{
-                      position: 'absolute',
-                      top: `${Math.max(100 - compHeight - 14, 5)}%`,
-                      background: '#F3E8FF',
-                      border: '1px solid #E9D5FF',
-                      borderRadius: 10,
-                      padding: '1px 6px',
-                      fontSize: 9.5,
-                      fontWeight: 700,
-                      color: '#9333EA',
-                      whiteSpace: 'nowrap',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 2,
-                      zIndex: 2,
-                      boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
-                    }}>
-                      <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#9333EA' }} />
-                      <span>{sub.emissions_badge}</span>
-                    </div>
+                return (subsidiaryPerf.slice(0, 4) || []).map((sub, idx) => {
+                  const compHeight = Math.max(sub.completion_percentage, 4);
+                  const emissHeight = rightAxisMax > 0 ? Math.min(Math.max((sub.emissions_tco2e / rightAxisMax) * 100, 6), 92) : 6;
 
-                    {/* Column Bar (Light Blue) */}
-                    <div style={{
-                      width: 32,
-                      height: `${compHeight}%`,
-                      background: '#93C5FD',
-                      borderRadius: '6px 6px 0 0',
-                      display: 'flex',
-                      alignItems: 'flex-start',
-                      justifyContent: 'center',
-                      paddingTop: 4,
-                      transition: 'height 0.4s ease'
-                    }}>
-                      <span style={{ fontSize: 10, fontWeight: 700, color: '#1E3A8A' }}>
-                        {Math.round(sub.completion_percentage)}%
-                      </span>
-                    </div>
+                  return (
+                    <div
+                      key={sub.id || idx}
+                      style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        position: 'relative',
+                        width: 48,
+                        height: '100%',
+                        justifyContent: 'flex-end'
+                      }}
+                    >
+                      {/* Floating Purple Emissions Badge scaled to Right Axis */}
+                      <div style={{
+                        position: 'absolute',
+                        bottom: `calc(${emissHeight}% - 10px)`,
+                        background: '#FAF5FF',
+                        border: '1px solid #D8B4FE',
+                        borderRadius: 10,
+                        padding: '1px 6px',
+                        fontSize: 9.5,
+                        fontWeight: 700,
+                        color: '#7E22CE',
+                        whiteSpace: 'nowrap',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 2,
+                        zIndex: 3,
+                        boxShadow: '0 1px 3px rgba(126,34,206,0.15)'
+                      }}>
+                        <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#9333EA' }} />
+                        <span>{sub.emissions_badge}</span>
+                      </div>
 
-                    {/* Short Entity Name below X axis */}
-                    <div style={{
-                      position: 'absolute',
-                      bottom: -22,
-                      fontSize: 10,
-                      fontWeight: 600,
-                      color: '#475569',
-                      textAlign: 'center',
-                      width: 54,
-                      whiteSpace: 'nowrap',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis'
-                    }} title={sub.name}>
-                      {sub.short_name}
+                      {/* Column Bar (Light Blue) scaled to Left Axis */}
+                      <div style={{
+                        width: 32,
+                        height: `${compHeight}%`,
+                        background: '#93C5FD',
+                        borderRadius: '6px 6px 0 0',
+                        display: 'flex',
+                        alignItems: 'flex-start',
+                        justifyContent: 'center',
+                        paddingTop: 4,
+                        transition: 'height 0.4s ease'
+                      }}>
+                        <span style={{ fontSize: 10, fontWeight: 700, color: '#1E3A8A' }}>
+                          {Math.round(sub.completion_percentage)}%
+                        </span>
+                      </div>
+
+                      {/* Short Entity Name below X axis */}
+                      <div style={{
+                        position: 'absolute',
+                        bottom: -22,
+                        fontSize: 10,
+                        fontWeight: 600,
+                        color: '#475569',
+                        textAlign: 'center',
+                        width: 58,
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis'
+                      }} title={sub.name}>
+                        {sub.short_name}
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                });
+              })()}
             </div>
 
-            {/* Right Y Axis (Emissions) */}
-            <div style={{
-              display: 'flex',
-              flexDirection: 'column',
-              justifyContent: 'space-between',
-              fontSize: 10,
-              fontWeight: 500,
-              color: '#94A3B8',
-              paddingLeft: 8,
-              paddingBottom: 24
-            }}>
-              <span>150K</span>
-              <span>100K</span>
-              <span>50K</span>
-              <span>0K</span>
-            </div>
+            {/* Right Y Axis (Emissions dynamically scaled) */}
+            {(() => {
+              const maxSubEmiss = Math.max(...(subsidiaryPerf || []).map(s => s.emissions_tco2e || 0), 10);
+              const rightAxisMax = maxSubEmiss >= 10000 ? Math.ceil(maxSubEmiss / 10000) * 10000
+                                 : maxSubEmiss >= 1000 ? Math.ceil(maxSubEmiss / 1000) * 1000
+                                 : maxSubEmiss >= 100 ? Math.ceil(maxSubEmiss / 50) * 50
+                                 : Math.ceil(maxSubEmiss / 10) * 10;
+
+              const fmtAxis = (val) => {
+                if (val >= 1000) return `${Math.round(val / 1000)}K`;
+                if (val === 0) return '0';
+                return `${Math.round(val)}t`;
+              };
+
+              return (
+                <div style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  justifyContent: 'space-between',
+                  fontSize: 10,
+                  fontWeight: 500,
+                  color: '#94A3B8',
+                  paddingLeft: 8,
+                  paddingBottom: 24
+                }}>
+                  <span>{fmtAxis(rightAxisMax)}</span>
+                  <span>{fmtAxis(rightAxisMax * 0.75)}</span>
+                  <span>{fmtAxis(rightAxisMax * 0.5)}</span>
+                  <span>{fmtAxis(rightAxisMax * 0.25)}</span>
+                  <span>0</span>
+                </div>
+              );
+            })()}
           </div>
         </div>
 

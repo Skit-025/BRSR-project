@@ -1431,52 +1431,110 @@ class DashboardService:
         # Reporting completion %
         completion_pct = round((approved_subs / max(len(period_subs), 1)) * 100.0, 1) if len(period_subs) > 0 else 0.0
 
-        # 6. Real Emissions Calculation
-        # Query consolidated values specifically for the Group root entity to prevent multi-level duplicate counting.
-        # Only genuine GHG emission metrics (ENV-GHG-*) in tCO₂e are included.
-        cvs = []
-        if period_uuid and root_node:
-            cvs = (
+        # 6. Real Emissions Calculation (Indian Statutory Standards: CEA / BEE PAT / MoPNG PPAC / DGCA)
+        # Factors:
+        # - High Speed Diesel (HSD): 0.00268 tCO2e/litre (BEE PAT Manual 2023 / MoPNG PPAC)
+        # - Grid Electricity: 0.716 tCO2e/MWh (CEA Indian Power Sector Baseline Ver. 19/20)
+        # - Road Diesel Car Travel: 0.000171 tCO2e/km (MoPNG / IPCC 2006 Indian Road Fleet)
+        # - Domestic Commercial Aviation: 0.000255 tCO2e/passenger-km (DGCA India / DEFRA)
+        # - Operational Solid Waste: 0.450 tCO2e/tonne (CPHEEO / MoEFCC Indian MSW)
+        EF_DIESEL_HSD = 0.00268
+        EF_CEA_GRID   = 0.716
+        EF_ROAD_KM    = 0.000171
+        EF_AIR_PKM    = 0.000255
+        EF_WASTE_TON  = 0.450
+
+        def calculate_emissions_for_entity_ids(target_entity_ids: List[Any]):
+            """Computes genuine Scope 1, 2, 3 emissions for given entity IDs in current period."""
+            if not target_entity_ids or not period_uuid:
+                return 0.0, 0.0, 0.0
+
+            # 1. Check if verified consolidated values exist for the target entities
+            cons_records = (
                 self.db.query(ConsolidatedValue)
                 .filter(
                     ConsolidatedValue.period_id == period_uuid,
-                    ConsolidatedValue.entity_id == root_node.id,
+                    ConsolidatedValue.entity_id.in_(target_entity_ids),
                     ConsolidatedValue.is_deleted == False
                 )
                 .all()
             )
 
-        s1_val = sum(float(c.value or 0.0) for c in cvs if c.metric_code in ["ENV-GHG-001", "ENV-SCOPE1"] or c.metric_code.startswith("ENV-GHG-001"))
-        s2_val = sum(float(c.value or 0.0) for c in cvs if c.metric_code in ["ENV-GHG-002", "ENV-SCOPE2"] or c.metric_code.startswith("ENV-GHG-002"))
-        s3_val = sum(float(c.value or 0.0) for c in cvs if c.metric_code in ["ENV-GHG-003", "ENV-SCOPE3"] or c.metric_code.startswith("ENV-GHG-003"))
+            s1 = sum(float(c.value or 0.0) for c in cons_records if c.metric_code in ["ENV-GHG-001", "ENV-SCOPE1"] or c.metric_code.startswith("ENV-GHG-001"))
+            s2 = sum(float(c.value or 0.0) for c in cons_records if c.metric_code in ["ENV-GHG-002", "ENV-SCOPE2"] or c.metric_code.startswith("ENV-GHG-002"))
+            s3 = sum(float(c.value or 0.0) for c in cons_records if c.metric_code in ["ENV-GHG-003", "ENV-SCOPE3"] or c.metric_code.startswith("ENV-GHG-003"))
 
-        if s1_val == 0.0 and s2_val == 0.0 and s3_val == 0.0 and period_subs:
-            # Fallback: check if approved submissions have computed GHG data points
-            sub_ids = [s.id for s in period_subs if "APPROV" in s.status or s.status in ["CONSOLIDATED", "LOCKED"]]
-            if sub_ids:
-                dps = self.db.query(DataPoint).filter(DataPoint.submission_id.in_(sub_ids), DataPoint.is_deleted == False).all()
-                for dp in dps:
-                    val = float(dp.normalized_value or dp.value_numeric or 0.0)
-                    if dp.metric_code in ["ENV-GHG-001", "ENV-SCOPE1"] or dp.metric_code.startswith("ENV-GHG-001"):
-                        s1_val += val
-                    elif dp.metric_code in ["ENV-GHG-002", "ENV-SCOPE2"] or dp.metric_code.startswith("ENV-GHG-002"):
-                        s2_val += val
-                    elif dp.metric_code in ["ENV-GHG-003", "ENV-SCOPE3"] or dp.metric_code.startswith("ENV-GHG-003"):
-                        s3_val += val
+            # 2. If consolidated values are not yet published, calculate from submitted data points using statutory Indian factors
+            if s1 == 0.0 and s2 == 0.0 and s3 == 0.0:
+                rel_subs = (
+                    self.db.query(Submission)
+                    .filter(
+                        Submission.period_id == period_uuid,
+                        Submission.entity_id.in_(target_entity_ids),
+                        Submission.is_deleted == False
+                    )
+                    .all()
+                )
+                sub_ids = [s.id for s in rel_subs]
+                if sub_ids:
+                    dps = self.db.query(DataPoint).filter(DataPoint.submission_id.in_(sub_ids), DataPoint.is_deleted == False).all()
+                    for dp in dps:
+                        val = float(dp.normalized_value or dp.value_numeric or 0.0)
+                        code = dp.metric_code or ""
+                        if code in ["ENV-ENERGY-002", "ENV-ENERGY-003"]:  # Fuel / Diesel in Litres
+                            s1 += val * EF_DIESEL_HSD
+                        elif code == "ENV-ENERGY-001":  # Electricity in kWh
+                            s2 += (val / 1000.0) * EF_CEA_GRID
+                        elif code == "ENV-TRAV-001":  # Road Conveyance in km
+                            s3 += val * EF_ROAD_KM
+                        elif code == "ENV-TRAV-002":  # Air Travel in passenger-km
+                            s3 += val * EF_AIR_PKM
+                        elif code == "ENV-WASTE-001":  # Waste in tonnes
+                            s3 += val * EF_WASTE_TON
 
-        total_emissions = round(s1_val + s2_val + s3_val, 1)
+            return round(s1, 2), round(s2, 2), round(s3, 2)
+
+        # All entities in Group
+        all_group_node_ids = [n.id for n in self.db.query(OrgNode).filter(OrgNode.is_deleted == False).all()]
+        s1_val, s2_val, s3_val = calculate_emissions_for_entity_ids(all_group_node_ids)
+        total_emissions = round(s1_val + s2_val + s3_val, 2)
+
         s1_pct = round((s1_val / total_emissions) * 100.0, 1) if total_emissions > 0 else 0.0
         s2_pct = round((s2_val / total_emissions) * 100.0, 1) if total_emissions > 0 else 0.0
         s3_pct = round((s3_val / total_emissions) * 100.0, 1) if total_emissions > 0 else 0.0
 
-        trend_points = [
-            EmissionsTrendPoint(quarter="Q1", period_code="Q1 FY26", value=round(total_emissions * 0.85, 1) if total_emissions > 0 else 0.0, display_value=f"{int(total_emissions * 0.85 / 1000)}K" if total_emissions >= 1000 else f"{int(total_emissions * 0.85)}"),
-            EmissionsTrendPoint(quarter="Q2", period_code="Q2 FY26", value=round(total_emissions * 0.90, 1) if total_emissions > 0 else 0.0, display_value=f"{int(total_emissions * 0.90 / 1000)}K" if total_emissions >= 1000 else f"{int(total_emissions * 0.90)}"),
-            EmissionsTrendPoint(quarter="Q3", period_code="Q3 FY26", value=round(total_emissions * 0.96, 1) if total_emissions > 0 else 0.0, display_value=f"{int(total_emissions * 0.96 / 1000)}K" if total_emissions >= 1000 else f"{int(total_emissions * 0.96)}"),
-            EmissionsTrendPoint(quarter="Q4", period_code="Q4 FY26", value=total_emissions, display_value=f"{int(total_emissions / 1000)}K" if total_emissions >= 1000 else f"{int(total_emissions)}"),
-        ]
+        # Emissions trend: Query actual historical periods if present; never fabricate fake multipliers
+        past_periods = (
+            self.db.query(ReportingPeriod)
+            .filter(ReportingPeriod.is_deleted == False)
+            .order_by(ReportingPeriod.start_date.asc())
+            .all()
+        )
+        trend_points: List[EmissionsTrendPoint] = []
+        if len(past_periods) > 1:
+            for p in past_periods[-4:]:
+                p_s1, p_s2, p_s3 = calculate_emissions_for_entity_ids(all_group_node_ids)
+                p_tot = round(p_s1 + p_s2 + p_s3, 1)
+                trend_points.append(
+                    EmissionsTrendPoint(
+                        quarter=p.code[:4],
+                        period_code=p.code,
+                        value=p_tot,
+                        display_value=f"{int(p_tot)} t" if p_tot < 1000 else f"{int(p_tot/1000)}K"
+                    )
+                )
+        else:
+            # Baseline single period
+            trend_points = [
+                EmissionsTrendPoint(
+                    quarter="M03",
+                    period_code=period_code,
+                    value=total_emissions,
+                    display_value=f"{int(total_emissions)} t" if total_emissions < 1000 else f"{int(total_emissions/1000)}K"
+                )
+            ]
 
-        # 7. Level Completion (4 Gauges)
+        # 7. Level Completion (4 Gauges) with genuine database totals
         group_comp = 1 if any("APPROV" in s.status for s in period_subs if str(s.entity_id) == str(root_node.id)) else 0
         group_gauge = LevelCompletionGauge(
             level="Group",
@@ -1495,23 +1553,23 @@ class DashboardService:
             color="#3B82F6",
         )
 
-        bu_entities_subs = [s for s in period_subs if self.db.query(OrgNode).filter(OrgNode.id == s.entity_id, OrgNode.type == "business_unit").count() > 0]
-        bu_comp = sum(1 for s in bu_entities_subs if "APPROV" in s.status or s.status in ["CONSOLIDATED", "LOCKED"])
+        bu_all_nodes = self.db.query(OrgNode).filter(OrgNode.type == "business_unit", OrgNode.is_deleted == False).all()
+        bu_comp = sum(1 for bu in bu_all_nodes if str(bu.id) in sub_map and ("APPROV" in sub_map[str(bu.id)].status or sub_map[str(bu.id)].status in ["CONSOLIDATED", "LOCKED"]))
         bu_gauge = LevelCompletionGauge(
             level="BU",
-            percentage=round((bu_comp / max(len(bu_entities_subs), 1)) * 100.0, 1) if len(bu_entities_subs) > 0 else 0.0,
+            percentage=round((bu_comp / max(len(bu_all_nodes), 1)) * 100.0, 1) if bu_all_nodes else 0.0,
             completed_count=bu_comp,
-            total_count=max(len(bu_entities_subs), 1),
+            total_count=len(bu_all_nodes),
             color="#60A5FA",
         )
 
-        proj_entities_subs = [s for s in period_subs if self.db.query(OrgNode).filter(OrgNode.id == s.entity_id, OrgNode.type == "project").count() > 0]
-        proj_comp = sum(1 for s in proj_entities_subs if "APPROV" in s.status or s.status in ["CONSOLIDATED", "LOCKED"])
+        proj_all_nodes = self.db.query(OrgNode).filter(OrgNode.type == "project", OrgNode.is_deleted == False).all()
+        proj_comp = sum(1 for prj in proj_all_nodes if str(prj.id) in sub_map and ("APPROV" in sub_map[str(prj.id)].status or sub_map[str(prj.id)].status in ["CONSOLIDATED", "LOCKED"]))
         proj_gauge = LevelCompletionGauge(
             level="Project",
-            percentage=round((proj_comp / max(len(proj_entities_subs), 1)) * 100.0, 1) if len(proj_entities_subs) > 0 else 0.0,
+            percentage=round((proj_comp / max(len(proj_all_nodes), 1)) * 100.0, 1) if proj_all_nodes else 0.0,
             completed_count=proj_comp,
-            total_count=max(len(proj_entities_subs), 1),
+            total_count=len(proj_all_nodes),
             color="#F59E0B",
         )
 
@@ -1612,8 +1670,17 @@ class DashboardService:
             if len(short_n) > 12:
                 short_n = short_n.split(" ")[0]
 
-            sub_emiss = round(total_emissions * (0.35 if "Megha Road" in sub.name else (0.25 if "Olectra" in sub.name else 0.1)), 1) if total_emissions > 0 else 0.0
-            badge_str = f"{int(sub_emiss / 1000)}K" if sub_emiss >= 1000 else f"{int(sub_emiss)}"
+            # Calculate genuine emissions for this specific subsidiary (and its descendant BUs & Projects)
+            sub_descendant_ids = [sub.id]
+            for bu_obj in child_bus:
+                sub_descendant_ids.append(bu_obj.id)
+                bu_prjs = self.db.query(OrgNode.id).filter(OrgNode.parent_id == bu_obj.id, OrgNode.is_deleted == False).all()
+                for prj_tuple in bu_prjs:
+                    sub_descendant_ids.append(prj_tuple[0])
+
+            sub_s1, sub_s2, sub_s3 = calculate_emissions_for_entity_ids(sub_descendant_ids)
+            sub_emiss = round(sub_s1 + sub_s2 + sub_s3, 1)
+            badge_str = f"{int(sub_emiss)} t" if sub_emiss < 1000 else f"{int(sub_emiss / 1000)}K t"
 
             subsidiary_performance_list.append(
                 SubsidiaryPerformanceMetric(
@@ -1633,7 +1700,7 @@ class DashboardService:
             code=root_node.code or "MEIL-GROUP",
             percentage=completion_pct,
             completed_count=approved_subs,
-            total_count=len(period_subs),
+            total_count=total_reporting_entities,
             subsidiaries=subsidiary_hierarchy_list,
         )
 
@@ -1667,11 +1734,12 @@ class DashboardService:
         ]
 
         # 10. Quick Insight Text
+        active_pend_levels = len([p for p in action_summaries if p.count > 0]) or 1
         if completion_pct > 0:
             insight_str = f"Group reporting is on track with {completion_pct}% completion, with {pending_subs} approvals pending across the hierarchy."
             insight_tone = "success"
-        elif pending_subs > 0:
-            insight_str = f"Reporting cycle is active with {pending_subs} submissions currently awaiting approval in {period_code}."
+        elif (pending_subs + returned_subs) > 0:
+            insight_str = f"Reporting cycle is active with {pending_subs + returned_subs} submissions currently awaiting approval/resubmission in {period_code}."
             insight_tone = "info"
         elif returned_subs > 0:
             insight_str = f"Attention required: {returned_subs} submission has been returned for submitter correction."
@@ -1688,16 +1756,16 @@ class DashboardService:
             kpi_completion=KpiMetricCard(
                 value=completion_pct,
                 label="Reporting Completion",
-                subtext=f"{approved_subs} / {max(len(period_subs), 1)} Entities",
-                trend="↑ +4%",
+                subtext=f"{approved_subs} / {total_reporting_entities} Entities",
+                trend="Baseline" if not period_subs else f"{completion_pct}%",
                 trend_direction="up",
                 is_available=True,
             ),
             kpi_emissions=KpiMetricCard(
-                value=f"{int(total_emissions):,}" if total_emissions > 0 else "0",
+                value=f"{int(total_emissions):,}" if total_emissions >= 1 else f"{total_emissions:.1f}",
                 label="Total Emissions ( tCO₂e )",
-                subtext="Scope 1 + 2 + 3" if total_emissions > 0 else "Awaiting submissions",
-                trend="↑ +6%" if total_emissions > 0 else "0%",
+                subtext="CEA Baseline / BEE PAT Std",
+                trend="Statutory" if total_emissions > 0 else "0%",
                 trend_direction="up",
                 is_available=total_emissions > 0,
             ),
@@ -1705,7 +1773,7 @@ class DashboardService:
                 value=total_bus,
                 label="Business Units",
                 subtext="In Group Scope",
-                trend="↑ +2%",
+                trend=f"{total_bus} BUs Active",
                 trend_direction="up",
                 is_available=True,
             ),
@@ -1713,15 +1781,15 @@ class DashboardService:
                 value=total_projects,
                 label="Projects",
                 subtext="Across BUs",
-                trend="↑ +3%",
+                trend=f"{total_projects} Sites",
                 trend_direction="up",
                 is_available=True,
             ),
             kpi_pending=KpiMetricCard(
                 value=pending_subs + returned_subs,
                 label="Pending Approvals",
-                subtext="Across 5 Levels",
-                trend="Active",
+                subtext=f"Across {active_pend_levels} Levels",
+                trend="Action Needed" if (pending_subs + returned_subs) > 0 else "All Clear",
                 trend_direction="up",
                 is_available=True,
             ),
