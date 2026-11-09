@@ -387,7 +387,8 @@ def calculate_scope3_waste(
             })
             continue
 
-        qty_t = Decimal(str(ws.get("quantity_t", 0)))
+        qty_raw = ws.get("quantity_t") if ws.get("quantity_t") is not None else (ws.get("tonnes") if ws.get("tonnes") is not None else ws.get("quantity", 0))
+        qty_t = Decimal(str(qty_raw))
         factor_val = factor_meta["factor"]          # tCO2e per tonne
         ws_tco2e = qty_t * factor_val
 
