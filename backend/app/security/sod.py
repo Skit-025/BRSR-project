@@ -34,11 +34,14 @@ def enforce_maker_checker(maker_id: str, checker_id: str, context: str = "") -> 
 
 # ── Role-based SoD checks ─────────────────────────────────────────────────────
 def assert_can_submit(role: str) -> None:
-    """Supervisors (and system_admin / project_admin for compatibility) may submit operational data entries."""
+    """Supervisors and ESG Managers (and system_admin / project_admin for compatibility) may submit operational data entries."""
     allowed = {
         Role.PROJECT_SUPERVISOR.value,
+        Role.BU_ESG_MANAGER.value,
         Role.BU_SUPERVISOR.value,
+        Role.SUBSIDIARY_ESG_MANAGER.value,
         Role.SUBSIDIARY_SUPERVISOR.value,
+        Role.GROUP_ESG_MANAGER.value,
         Role.GROUP_SUPERVISOR.value,
         Role.PROJECT_ADMIN.value,
         Role.SYSTEM_ADMIN.value,
@@ -46,7 +49,7 @@ def assert_can_submit(role: str) -> None:
     if role not in allowed:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"Role '{role}' is not permitted to submit data. Operational submissions are performed by Supervisors.",
+            detail=f"Role '{role}' is not permitted to submit data. Operational submissions are performed by Supervisors and ESG Managers.",
         )
 
 
@@ -77,11 +80,14 @@ def assert_can_lock_period(role: str) -> None:
 
 
 def assert_can_run_consolidation(role: str) -> None:
-    """Group Supervisor, Group Admin, Subsidiary Supervisor, BU Supervisor, and System Admin may trigger consolidation runs."""
+    """Group ESG Manager, Group Admin, Subsidiary ESG Manager, BU ESG Manager, and System Admin may trigger consolidation runs."""
     allowed = {
+        Role.GROUP_ESG_MANAGER.value,
         Role.GROUP_SUPERVISOR.value,
         Role.GROUP_ADMIN.value,
+        Role.SUBSIDIARY_ESG_MANAGER.value,
         Role.SUBSIDIARY_SUPERVISOR.value,
+        Role.BU_ESG_MANAGER.value,
         Role.BU_SUPERVISOR.value,
         Role.SYSTEM_ADMIN.value,
     }
@@ -93,8 +99,9 @@ def assert_can_run_consolidation(role: str) -> None:
 
 
 def assert_can_compile_report(role: str) -> None:
-    """Group Supervisor, Group Admin, and System Admin may compile BRSR reports."""
+    """Group ESG Manager, Group Admin, and System Admin may compile BRSR reports."""
     allowed = {
+        Role.GROUP_ESG_MANAGER.value,
         Role.GROUP_SUPERVISOR.value,
         Role.GROUP_ADMIN.value,
         Role.SYSTEM_ADMIN.value,

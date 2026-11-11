@@ -598,8 +598,15 @@ def update_period(
     if not period:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Reporting period not found.")
 
-    if period_in.status is not None:
+    old_status = period.status
+
+    # Translate is_locked convenience field → status when no explicit status provided
+    if period_in.is_locked is not None and period_in.status is None:
+        from app.modules.org.models import PeriodStatus
+        period.status = PeriodStatus.LOCKED.value if period_in.is_locked else PeriodStatus.OPEN.value
+    elif period_in.status is not None:
         period.status = period_in.status.value
+
     if period_in.start_date is not None:
         period.start_date = period_in.start_date
     if period_in.end_date is not None:
@@ -609,6 +616,29 @@ def update_period(
 
     db.commit()
     db.refresh(period)
+
+    # Audit log when lock state changes
+    if period.status != old_status:
+        try:
+            from app.modules.audit.service import AuditService
+            from app.modules.audit.schemas import AuditLogCreate
+            action = "PERIOD_LOCKED" if period.status == "LOCKED" else "PERIOD_UNLOCKED"
+            AuditService(db).log_event(
+                AuditLogCreate(
+                    action=action,
+                    target_type="REPORTING_PERIOD",
+                    target_id=str(period.id),
+                    actor_id=str(current_user.id),
+                    actor_email=current_user.email,
+                    actor_role=current_user.role,
+                    changes={"status": {"before": old_status, "after": period.status}},
+                    details={"code": period.code, "financial_year": period.financial_year},
+                    ip_address="0.0.0.0"
+                )
+            )
+        except Exception:
+            pass  # Audit failure must never block the lock operation
+
     return period
 
 

@@ -238,6 +238,9 @@ def test_hierarchical_trash_visibility_rules():
     grp_admin, grp_token = create_test_user(
         db, f"grp_{suffix}@test.com", Role.GROUP_ADMIN.value, nodes["group"].id, "GrpPass123!"
     )
+    grp_esg_mgr, grp_esg_token = create_test_user(
+        db, f"grp_esg_{suffix}@test.com", Role.GROUP_ESG_MANAGER.value, nodes["group"].id, "GrpEsgPass123!"
+    )
     sub_admin_a, sub_a_token = create_test_user(
         db, f"sub_a_{suffix}@test.com", Role.SUBSIDIARY_ADMIN.value, nodes["sub_a"].id, "SubPass123!"
     )
@@ -425,6 +428,9 @@ def test_subsidiary_admin_user_creation_approval_workflow():
     grp_admin, grp_token = create_test_user(
         db, f"grp_{suffix}@test.com", Role.GROUP_ADMIN.value, nodes["group"].id, "GrpPass123!"
     )
+    grp_esg_mgr, grp_esg_token = create_test_user(
+        db, f"grp_esg_{suffix}@test.com", Role.GROUP_ESG_MANAGER.value, nodes["group"].id, "GrpEsgPass123!"
+    )
     sub_admin_a, sub_a_token = create_test_user(
         db, f"sub_a_{suffix}@test.com", Role.SUBSIDIARY_ADMIN.value, nodes["sub_a"].id, "SubPass123!"
     )
@@ -476,10 +482,17 @@ def test_subsidiary_admin_user_creation_approval_workflow():
     assert res_self_approve.status_code in (400, 403)
     assert "cannot approve" in res_self_approve.json()["detail"].lower()
 
-    # 5. Group Admin approves the pending request
-    res_approve = client.post(
+    # 5. Group Admin approval attempted -> rejected (user appointment reserved for Group ESG Manager)
+    res_grp_admin_approve = client.post(
         f"/api/v1/auth/admin/user-requests/{req_id}/approve",
         headers={"Authorization": f"Bearer {grp_token}"}
+    )
+    assert res_grp_admin_approve.status_code in (400, 403)
+
+    # Group ESG Manager approves the pending request
+    res_approve = client.post(
+        f"/api/v1/auth/admin/user-requests/{req_id}/approve",
+        headers={"Authorization": f"Bearer {grp_esg_token}"}
     )
     assert res_approve.status_code == 200
     approve_data = res_approve.json()
@@ -521,7 +534,7 @@ def test_subsidiary_admin_user_creation_approval_workflow():
     res_reject = client.post(
         f"/api/v1/auth/admin/user-requests/{req2_id}/reject",
         json={"rejection_reason": "Position already filled by internal transfer."},
-        headers={"Authorization": f"Bearer {grp_token}"}
+        headers={"Authorization": f"Bearer {grp_esg_token}"}
     )
     assert res_reject.status_code == 200
     assert res_reject.json()["status"] == "REJECTED"

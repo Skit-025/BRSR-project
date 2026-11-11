@@ -16,10 +16,12 @@ class ConsolidatedValueRead(BaseModel):
     entity_id: str
     period_id: str
     metric_code: str
-    value: float
+    value: Optional[float] = None
     unit: str
     method: str
     share_pct: float
+    status: str = "CALCULATED"
+    status_reason: Optional[str] = None
     child_contributions: List[Dict[str, Any]] = []
 
 class ConsolidationRunRequest(BaseModel):

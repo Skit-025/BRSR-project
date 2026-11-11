@@ -16,24 +16,32 @@ import { MOCK_ORG_NODES, MOCK_USERS } from '../mock/mockData';
 // All standard roles with display metadata (Eight-Role Hierarchical Architecture)
 export const ROLE_DEFINITIONS = {
   system_admin:          { label: 'System Admin',          tier: 'System',     level: 0, badge: 'badge-purple', desc: 'Central infrastructure & platform root authority' },
-  group_admin:           { label: 'Group Admin',           tier: 'Group',      level: 1, badge: 'badge-purple', desc: 'Enterprise group ESG governance & period lock' },
-  group_supervisor:      { label: 'Group Supervisor',      tier: 'Group',      level: 1, badge: 'badge-purple', desc: 'Enterprise group BRSR compilation & consolidation' },
+  group_admin:           { label: 'Group Admin',           tier: 'Group',      level: 1, badge: 'badge-purple', desc: 'Enterprise group ESG governance & period lock (user appointment reserved for Group ESG Manager)' },
+  group_esg_manager:     { label: 'Group ESG Manager',     tier: 'Group',      level: 1, badge: 'badge-purple', desc: 'Enterprise group BRSR compilation, consolidation & user governance' },
   subsidiary_admin:      { label: 'Subsidiary Admin',      tier: 'Subsidiary', level: 2, badge: 'badge-indigo', desc: 'Subsidiary verification, review & delegation' },
-  subsidiary_supervisor: { label: 'Subsidiary Supervisor', tier: 'Subsidiary', level: 2, badge: 'badge-indigo', desc: 'Subsidiary operational disclosures & consolidation' },
+  subsidiary_esg_manager: { label: 'Subsidiary ESG Manager', tier: 'Subsidiary', level: 2, badge: 'badge-indigo', desc: 'Subsidiary operational disclosures & consolidation' },
   bu_admin:              { label: 'BU Admin',              tier: 'BU',         level: 3, badge: 'badge-sky',    desc: 'Business Unit Admin (reviews & approves project data)' },
-  bu_supervisor:         { label: 'BU Supervisor',         tier: 'BU',         level: 3, badge: 'badge-sky',    desc: 'Business Unit Supervisor (BU disclosures & rollup)' },
+  bu_esg_manager:        { label: 'BU ESG Manager',        tier: 'BU',         level: 3, badge: 'badge-sky',    desc: 'Business Unit ESG Manager (BU disclosures & rollup)' },
   project_admin:         { label: 'Project Admin',         tier: 'Project',    level: 4, badge: 'badge-amber',  desc: 'Project verification & approval of site data' },
   project_supervisor:    { label: 'Project Supervisor',    tier: 'Project',    level: 4, badge: 'badge-amber',  desc: 'Project site operational data entry & evidence upload' },
+
+  // Backward compatibility alias definitions (hidden from creation/delegation pickers)
+  group_supervisor:      { label: 'Group ESG Manager',     tier: 'Group',      level: 1, badge: 'badge-purple', desc: 'Enterprise group BRSR compilation, consolidation & user governance', isLegacy: true },
+  subsidiary_supervisor: { label: 'Subsidiary ESG Manager', tier: 'Subsidiary', level: 2, badge: 'badge-indigo', desc: 'Subsidiary operational disclosures & consolidation', isLegacy: true },
+  bu_supervisor:         { label: 'BU ESG Manager',        tier: 'BU',         level: 3, badge: 'badge-sky',    desc: 'Business Unit ESG Manager (BU disclosures & rollup)', isLegacy: true },
 };
 
 // Default delegable permissions per role
 const ROLE_PERMISSIONS_PREVIEW = {
   system_admin: ['Platform Administration', 'Full System Access', 'Security & Audit Oversight'],
-  group_admin: ['Group ESG Verification', 'Subsidiary Delegation', 'Period Lock', 'Audit Trail Oversight'],
-  group_supervisor: ['Group ESG Consolidation', 'Group Disclosures', 'BRSR Report Compilation', 'Lineage Analysis'],
+  group_admin: ['Group ESG Verification', 'Period Lock', 'Audit Trail Oversight'],
+  group_esg_manager: ['User Governance & Appointment', 'Group ESG Consolidation', 'Group Disclosures', 'BRSR Report Compilation'],
+  group_supervisor: ['User Governance & Appointment', 'Group ESG Consolidation', 'Group Disclosures', 'BRSR Report Compilation'],
   subsidiary_admin: ['Subsidiary ESG Verification', 'BU Delegation', 'Review Submissions', 'Audit Records'],
+  subsidiary_esg_manager: ['Subsidiary ESG Operations', 'Subsidiary Disclosures', 'BU Rollup Consolidation'],
   subsidiary_supervisor: ['Subsidiary ESG Operations', 'Subsidiary Disclosures', 'BU Rollup Consolidation'],
   bu_admin: ['BU Data Review & Approval', 'Project Delegation', 'Segregation of Duties Check', 'Variance Verification'],
+  bu_esg_manager: ['BU Operational Disclosures', 'Available Project Rollup', 'BU Evidence Management'],
   bu_supervisor: ['BU Operational Disclosures', 'Available Project Rollup', 'BU Evidence Management'],
   project_admin: ['Project Site Verification', 'Audit Field Vouchers', 'Approve/Reject Submissions'],
   project_supervisor: ['Project Operational Fact Entry', 'Evidence Document Upload', 'Pre-Submission Checklist'],
@@ -210,10 +218,27 @@ export default function UserManagement() {
   // Filtered Roles caller is allowed to invite/delegate
   const allowedRolesForInvite = useMemo(() => {
     const roles = manageableRoles || [];
-    return roles.filter(r => ROLE_DEFINITIONS[r]).map(r => ({
-      value: r,
-      ...ROLE_DEFINITIONS[r]
-    }));
+    // Canonical mapping from legacy aliases to canonical ESG Manager roles
+    const canonicalMap = {
+      group_supervisor: 'group_esg_manager',
+      subsidiary_supervisor: 'subsidiary_esg_manager',
+      bu_supervisor: 'bu_esg_manager'
+    };
+    const canonicalRoles = roles.map(r => canonicalMap[r] || r);
+    const seenLabels = new Set();
+    const result = [];
+    for (const r of canonicalRoles) {
+      const def = ROLE_DEFINITIONS[r];
+      if (!def || def.isLegacy) continue;
+      // Guarantee no duplicate role labels ever render in delegation pickers
+      if (seenLabels.has(def.label)) continue;
+      seenLabels.add(def.label);
+      result.push({
+        value: r,
+        ...def
+      });
+    }
+    return result;
   }, [manageableRoles]);
 
   // Determine allowed nodes for the selected invite role
@@ -249,8 +274,8 @@ export default function UserManagement() {
 
     // If caller has an assigned org node and target is own level, prefill caller node
     if (currentUser?.org_node_id && (
-      (['subsidiary_admin', 'subsidiary_supervisor'].includes(currentRole) && ['subsidiary_admin', 'subsidiary_supervisor'].includes(roleVal)) ||
-      (['bu_admin', 'bu_supervisor'].includes(currentRole) && ['bu_admin', 'bu_supervisor'].includes(roleVal)) ||
+      (['subsidiary_admin', 'subsidiary_esg_manager', 'subsidiary_supervisor'].includes(currentRole) && ['subsidiary_admin', 'subsidiary_esg_manager', 'subsidiary_supervisor'].includes(roleVal)) ||
+      (['bu_admin', 'bu_esg_manager', 'bu_supervisor'].includes(currentRole) && ['bu_admin', 'bu_esg_manager', 'bu_supervisor'].includes(roleVal)) ||
       (['project_admin', 'project_supervisor'].includes(currentRole) && ['project_admin', 'project_supervisor'].includes(roleVal))
     )) {
       setInviteOrgNodeId(String(currentUser.org_node_id));
@@ -302,8 +327,8 @@ export default function UserManagement() {
     if (!roleDef) return;
 
     if (currentUser?.org_node_id && (
-      (['subsidiary_admin', 'subsidiary_supervisor'].includes(currentRole) && ['subsidiary_admin', 'subsidiary_supervisor'].includes(roleVal)) ||
-      (['bu_admin', 'bu_supervisor'].includes(currentRole) && ['bu_admin', 'bu_supervisor'].includes(roleVal)) ||
+      (['subsidiary_admin', 'subsidiary_esg_manager', 'subsidiary_supervisor'].includes(currentRole) && ['subsidiary_admin', 'subsidiary_esg_manager', 'subsidiary_supervisor'].includes(roleVal)) ||
+      (['bu_admin', 'bu_esg_manager', 'bu_supervisor'].includes(currentRole) && ['bu_admin', 'bu_esg_manager', 'bu_supervisor'].includes(roleVal)) ||
       (['project_admin', 'project_supervisor'].includes(currentRole) && ['project_admin', 'project_supervisor'].includes(roleVal))
     )) {
       setReqOrgNodeId(String(currentUser.org_node_id));
@@ -562,8 +587,9 @@ export default function UserManagement() {
   // Filter active users
   const filteredUsers = users.filter((u) => {
     // 1-level down rule for scoped admins
-    if (currentRole === 'group_admin' && !['subsidiary_admin', 'subsidiary_supervisor'].includes(u.role)) return false;
-    if (currentRole === 'subsidiary_admin' && !['bu_admin', 'bu_supervisor'].includes(u.role)) return false;
+    if (['group_esg_manager', 'group_supervisor'].includes(currentRole) && !['subsidiary_admin', 'subsidiary_esg_manager', 'subsidiary_supervisor'].includes(u.role)) return false;
+    if (currentRole === 'group_admin') return false; // Group Admin user management access removed
+    if (currentRole === 'subsidiary_admin' && !['bu_admin', 'bu_esg_manager', 'bu_supervisor'].includes(u.role)) return false;
     if (currentRole === 'bu_admin' && !['project_admin', 'project_supervisor'].includes(u.role)) return false;
 
     const matchRole = filterRole === 'ALL' || u.role === filterRole;
@@ -612,15 +638,17 @@ export default function UserManagement() {
 
   // Whether current user is a subsidiary_admin (request workflow) or approver
   const isSubsidiaryAdmin = currentRole === 'subsidiary_admin';
-  const canApproveRequests = ['system_admin', 'group_admin'].includes(currentRole);
+  const canApproveRequests = ['system_admin', 'group_esg_manager', 'group_supervisor'].includes(currentRole);
 
-  if (['project_admin', 'project_supervisor', 'bu_supervisor', 'subsidiary_supervisor', 'group_supervisor'].includes(currentRole)) {
+  if (['project_admin', 'project_supervisor', 'bu_supervisor', 'bu_esg_manager', 'subsidiary_supervisor', 'subsidiary_esg_manager', 'group_admin'].includes(currentRole)) {
     return (
       <div style={{ padding: 60, textAlign: 'center' }}>
         <Shield size={48} color="#ef4444" style={{ margin: '0 auto 16px' }} />
         <h2 style={{ color: '#09090b', fontSize: 20 }}>Access Restricted</h2>
         <p style={{ color: '#64748b', maxWidth: 440, margin: '8px auto' }}>
-          Your role does not have user management privileges.
+          {currentRole === 'group_admin'
+            ? 'User creation, appointment, and role delegation features are reserved exclusively for the Group ESG Manager. Group Admin focuses on governance, verification, and audit sign-off.'
+            : 'Your role does not have user management privileges.'}
         </p>
       </div>
     );
@@ -676,7 +704,7 @@ export default function UserManagement() {
             >
               <UserPlus size={14} />
               <span>
-                {currentRole === 'group_admin' ? '+ Invite Subsidiary Admin' :
+                {['group_esg_manager', 'group_supervisor'].includes(currentRole) ? '+ Appoint / Invite Subsidiary User' :
                  currentRole === 'subsidiary_admin' ? '+ Invite BU Admin' :
                  currentRole === 'bu_admin' ? '+ Invite Project Admin' :
                  '+ Add Administrator'}
@@ -911,7 +939,7 @@ export default function UserManagement() {
                 onChange={(e) => setFilterRole(e.target.value)}
               >
                 <option value="ALL">All Roles</option>
-                {Object.entries(ROLE_DEFINITIONS).map(([val, def]) => (
+                {Object.entries(ROLE_DEFINITIONS).filter(([_, def]) => !def.isLegacy).map(([val, def]) => (
                   <option key={val} value={val}>{def.label}</option>
                 ))}
               </select>
@@ -994,8 +1022,8 @@ export default function UserManagement() {
                           ) : isRoot ? (
                             <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Root Protected</span>
                           ) : !(currentRole === 'system_admin' ||
-                              (currentRole === 'group_admin' && ['subsidiary_admin', 'subsidiary_supervisor'].includes(u.role)) ||
-                              (currentRole === 'subsidiary_admin' && ['bu_admin', 'bu_supervisor'].includes(u.role)) ||
+                              (['group_esg_manager', 'group_supervisor'].includes(currentRole) && ['subsidiary_admin', 'subsidiary_esg_manager', 'subsidiary_supervisor'].includes(u.role)) ||
+                              (currentRole === 'subsidiary_admin' && ['bu_admin', 'bu_esg_manager', 'bu_supervisor'].includes(u.role)) ||
                               (currentRole === 'bu_admin' && ['project_admin', 'project_supervisor'].includes(u.role))) ? (
                             <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>View Only</span>
                           ) : (
@@ -1629,7 +1657,7 @@ export default function UserManagement() {
             </div>
             <div className="form-group">
               <label className="form-label">
-                Assigned Organizational Unit * {['subsidiary_admin', 'subsidiary_supervisor'].includes(inviteRole) ? '(Select Subsidiary)' : ['bu_admin', 'bu_supervisor'].includes(inviteRole) ? '(Select Business Unit)' : ['project_admin', 'project_supervisor'].includes(inviteRole) ? '(Select Project / Site)' : ''}
+                Assigned Organizational Unit * {['subsidiary_admin', 'subsidiary_esg_manager', 'subsidiary_supervisor'].includes(inviteRole) ? '(Select Subsidiary)' : ['bu_admin', 'bu_esg_manager', 'bu_supervisor'].includes(inviteRole) ? '(Select Business Unit)' : ['project_admin', 'project_supervisor'].includes(inviteRole) ? '(Select Project / Site)' : ''}
               </label>
               <select
                 className="form-control"
@@ -1637,7 +1665,7 @@ export default function UserManagement() {
                 onChange={(e) => setInviteOrgNodeId(e.target.value)}
                 required
               >
-                <option value="">-- Choose Assigned {['subsidiary_admin', 'subsidiary_supervisor'].includes(inviteRole) ? 'Subsidiary' : ['bu_admin', 'bu_supervisor'].includes(inviteRole) ? 'Business Unit' : ['project_admin', 'project_supervisor'].includes(inviteRole) ? 'Project / Site' : 'Unit'} --</option>
+                <option value="">-- Choose Assigned {['subsidiary_admin', 'subsidiary_esg_manager', 'subsidiary_supervisor'].includes(inviteRole) ? 'Subsidiary' : ['bu_admin', 'bu_esg_manager', 'bu_supervisor'].includes(inviteRole) ? 'Business Unit' : ['project_admin', 'project_supervisor'].includes(inviteRole) ? 'Project / Site' : 'Unit'} --</option>
                 {eligibleNodesForInviteRole.map(n => (
                   <option key={n.id} value={n.id}>
                     {n.name} ({n.type?.toUpperCase()})
@@ -1752,7 +1780,7 @@ export default function UserManagement() {
               style={{ border: '1px solid rgba(239,68,68,0.4)' }}
             />
             <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: 4 }}>
-              Only System Admin or Group Admin can deactivate accounts. Password verification is mandatory.
+              Only System Admin or Group ESG Manager can deactivate accounts. Password verification is mandatory.
             </div>
           </div>
 
@@ -1849,7 +1877,7 @@ export default function UserManagement() {
               style={{ border: '1px solid rgba(239,68,68,0.5)' }}
             />
             <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: 4 }}>
-              System Admin or Group Admin password verification is mandatory for user deletion.
+              System Admin or Group ESG Manager password verification is mandatory for user deletion.
             </div>
           </div>
 

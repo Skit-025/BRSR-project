@@ -187,21 +187,52 @@ class _FakeProvider:
         return {"ok": True}
 
 
-def test_gateway_uses_huggingface_first_then_falls_back(monkeypatch):
+def test_gateway_uses_openrouter_as_primary(monkeypatch):
+    """Verify that OpenRouter is preferred primary and HF is not invoked when OpenRouter succeeds."""
     gateway = AIGateway()
-    hf_provider = _FakeProvider(fail=True)
-    gemini = _FakeProvider()
+    hf_provider = _FakeProvider()
     openrouter = _FakeProvider()
     gateway._providers.update(
-        {"huggingface": hf_provider, "gemini": gemini, "openrouter": openrouter}
+        {"openrouter": openrouter, "huggingface": hf_provider}
     )
+    monkeypatch.setattr(gateway, "_resolve_order", lambda: [
+        ("openrouter", openrouter),
+        ("huggingface", hf_provider),
+    ])
 
     raw, used, is_mock = gateway._call_provider_cascade(
         "generate_json", prompt="ping", schema_dict={}
     )
 
     assert not is_mock
-    assert used.startswith("openrouter")  # default cascade: huggingface -> openrouter -> gemini
+    assert used.startswith("openrouter")
+    assert openrouter.calls == 1
+    assert hf_provider.calls == 0
+
+
+def test_gateway_falls_back_to_huggingface_when_prior_fail(monkeypatch):
+    """Verify that when OpenRouter and Gemini fail, cascade reaches Hugging Face."""
+    gateway = AIGateway()
+    hf_provider = _FakeProvider()
+    gemini = _FakeProvider(fail=True)
+    openrouter = _FakeProvider(fail=True)
+    gateway._providers.update(
+        {"openrouter": openrouter, "gemini": gemini, "huggingface": hf_provider}
+    )
+    monkeypatch.setattr(gateway, "_resolve_order", lambda: [
+        ("openrouter", openrouter),
+        ("gemini", gemini),
+        ("huggingface", hf_provider),
+    ])
+
+    raw, used, is_mock = gateway._call_provider_cascade(
+        "generate_json", prompt="ping", schema_dict={}
+    )
+
+    assert not is_mock
+    assert used.startswith("huggingface")
+    assert openrouter.calls == 1
+    assert gemini.calls == 1
     assert hf_provider.calls == 1
 
 

@@ -23,8 +23,8 @@ export default function Sidebar({ isOpen = false, onClose }) {
   const entityOptions = useMemo(() => {
     if (!nodes || nodes.length === 0) return [];
 
-    // Project Admin: ONLY their assigned project node!
-    if (user?.role === 'project_admin') {
+    // Project Level: ONLY their assigned project node!
+    if (['project_admin', 'project_supervisor'].includes(user?.role)) {
       const assignedId = user.assigned_project_id || user.org_node_id;
       const assignedNode = nodes.find(n => String(n.id) === String(assignedId) || n.code === assignedId);
       if (assignedNode) {
@@ -33,15 +33,15 @@ export default function Sidebar({ isOpen = false, onClose }) {
       return [];
     }
 
-    // BU Admin: their BU + projects under their BU
-    if (user?.role === 'bu_admin' && user?.org_node_id) {
+    // BU Level: their BU + projects under their BU
+    if (['bu_admin', 'bu_supervisor', 'bu_esg_manager'].includes(user?.role) && user?.org_node_id) {
       const buId = String(user.org_node_id);
       return nodes.filter(n => String(n.id) === buId || String(n.parent_id) === buId)
                   .map(n => ({ id: n.id, label: n.name, type: n.type }));
     }
 
-    // Subsidiary Admin: their Subsidiary + BUs + projects under it
-    if (user?.role === 'subsidiary_admin' && user?.org_node_id) {
+    // Subsidiary Level: their Subsidiary + BUs + projects under it
+    if (['subsidiary_admin', 'subsidiary_supervisor', 'subsidiary_esg_manager'].includes(user?.role) && user?.org_node_id) {
       const subId = String(user.org_node_id);
       const subBUs = new Set(nodes.filter(n => String(n.parent_id) === subId).map(n => String(n.id)));
       return nodes.filter(n => String(n.id) === subId || subBUs.has(String(n.id)) || subBUs.has(String(n.parent_id)))
@@ -78,12 +78,19 @@ export default function Sidebar({ isOpen = false, onClose }) {
     const overviewLabel = (() => {
       switch (user?.role) {
         case 'subsidiary_admin':
+        case 'subsidiary_supervisor':
+        case 'subsidiary_esg_manager':
           return 'Subsidiary Overview';
         case 'bu_admin':
+        case 'bu_supervisor':
+        case 'bu_esg_manager':
           return 'BU Overview';
         case 'project_admin':
+        case 'project_supervisor':
           return 'Project Overview';
         case 'group_admin':
+        case 'group_supervisor':
+        case 'group_esg_manager':
         case 'system_admin':
         default:
           return 'Group Overview';
@@ -139,10 +146,10 @@ export default function Sidebar({ isOpen = false, onClose }) {
           { to: '/aarohan', label: 'Ask AAROHAN AI', icon: Command },
         ]
       },
-      (hasPermission('user:manage') || hasPermission('users:manage_scoped') || ['system_admin', 'group_admin', 'subsidiary_admin', 'bu_admin'].includes(user?.role) || hasPermission('consolidation:read') || hasPermission('evidence:read')) && {
+      (hasPermission('user:manage') || hasPermission('users:manage_scoped') || ['system_admin', 'group_esg_manager', 'group_supervisor', 'subsidiary_admin', 'bu_admin'].includes(user?.role) || hasPermission('consolidation:read') || hasPermission('evidence:read')) && {
         section: 'ADMINISTRATION',
         items: [
-          ['system_admin', 'group_admin', 'subsidiary_admin', 'bu_admin'].includes(user?.role) && { to: '/admin/users', label: 'User Governance', icon: Settings },
+          ['system_admin', 'group_esg_manager', 'group_supervisor', 'subsidiary_admin', 'bu_admin'].includes(user?.role) && { to: '/admin/users', label: 'User Governance', icon: Settings },
           (hasPermission('period:lock') || ['system_admin', 'group_admin', 'subsidiary_admin'].includes(user?.role)) && { to: '/periods', label: 'FY & Periods', icon: CalendarRange },
           hasPermission('consolidation:read') && { to: '/admin/jobs', label: 'Pipeline Tasks', icon: RefreshCw },
           { to: '/trash', label: 'Trash Can', icon: Trash2 },

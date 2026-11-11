@@ -16,7 +16,7 @@ def test_hierarchical_consolidation_and_jv_boundary_math():
     # 1. Create Subsidiary Parent Node
     sub_res = client.post("/api/v1/org/nodes", json={
         "code": f"SUB-INFRA-{suffix}",
-        "name": "MEIL Infrastructure Holdings",
+        "name": f"MEIL Infrastructure Holdings {suffix}",
         "type": "subsidiary",
         "ownership_pct": 100.0,
         "control_type": "operational_control",
@@ -29,7 +29,7 @@ def test_hierarchical_consolidation_and_jv_boundary_math():
     # 2. Create Child 1: Wholly owned Project (100% operational control)
     p1_res = client.post("/api/v1/org/nodes", json={
         "code": f"PRJ-A-{suffix}",
-        "name": "Highway Corridor Unit A",
+        "name": f"Highway Corridor Unit {suffix}",
         "type": "project",
         "parent_id": sub_node["id"],
         "ownership_pct": 100.0,
@@ -43,7 +43,7 @@ def test_hierarchical_consolidation_and_jv_boundary_math():
     # 3. Create Child 2: Joint Venture Project (51% equity share)
     p2_res = client.post("/api/v1/org/nodes", json={
         "code": f"PRJ-B-JV-{suffix}",
-        "name": "Tunnel JV Consortium B",
+        "name": f"Tunnel JV Consortium {suffix}",
         "type": "project",
         "parent_id": sub_node["id"],
         "ownership_pct": 51.0,
@@ -64,6 +64,8 @@ def test_hierarchical_consolidation_and_jv_boundary_math():
         "status": "OPEN"
     })
     period = period_res.json()
+    if isinstance(period, list):
+        period = period[0]
 
     # 5. Enter & Submit data for Project A (120 MWh)
     s1_res = client.post("/api/v1/collection/save", json={

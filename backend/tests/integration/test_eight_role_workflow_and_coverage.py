@@ -205,39 +205,47 @@ def test_bu_progressive_reporting_coverage_50_projects_30_approved():
 
         # Bind bu.supervisor to this BU for scope authorization
         bu_sup = db.query(User).filter_by(email="bu.supervisor@aarohan.in").first()
+        orig_bu_org_id = str(bu_sup.org_node_id) if bu_sup.org_node_id else "19ad9e6d-0a65-46b0-9fc2-84ed086a6de3"
         bu_sup.org_node_id = bu.id
 
         db.commit()
         bu_id = str(bu.id)
         period_id = str(period.id)
 
-    # Check reporting coverage analysis
-    token = get_token("bu.supervisor@aarohan.in")
-    res = client.get(
-        f"/api/v1/consolidation/coverage/{bu_id}/{period_id}",
-        headers={"Authorization": f"Bearer {token}"},
-    )
-    assert res.status_code == 200
-    cov = res.json()
+    try:
+        # Check reporting coverage analysis
+        token = get_token("bu.supervisor@aarohan.in")
+        res = client.get(
+            f"/api/v1/consolidation/coverage/{bu_id}/{period_id}",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert res.status_code == 200
+        cov = res.json()
 
-    assert cov["total_children_count"] == 50
-    assert cov["approved_children_count"] == 30
-    assert cov["coverage_pct"] == 60.0
-    assert cov["is_complete"] is False
-    assert cov["can_proceed_with_progressive_reporting"] is True
-    assert len(cov["contributing_entities"]) == 30
-    assert len(cov["missing_entities"]) == 20
+        assert cov["total_children_count"] == 50
+        assert cov["approved_children_count"] == 30
+        assert cov["coverage_pct"] == 60.0
+        assert cov["is_complete"] is False
+        assert cov["can_proceed_with_progressive_reporting"] is True
+        assert len(cov["contributing_entities"]) == 30
+        assert len(cov["missing_entities"]) == 20
 
-    # Ensure BU consolidation executes on the actual 30 approved records
-    with SessionLocal() as db:
-        res_calc = run_consolidation_engine(db, period_id=period_id, root_node_id=bu_id)
-        assert res_calc.consolidated_metrics_count >= 1
-        assert res_calc.consolidated_nodes_count >= 1
-        # Check rolled up value for BU: 30 projects * 100 kWh = 3000.0 kWh
-        from app.modules.consolidation.models import ConsolidatedValue
-        bu_val = db.query(ConsolidatedValue).filter_by(entity_id=bu_id, period_id=period_id, metric_code="ENV-ENERGY-001").first()
-        assert bu_val is not None
-        assert bu_val.value == 3000.0
+        # Ensure BU consolidation executes on the actual 30 approved records
+        with SessionLocal() as db:
+            res_calc = run_consolidation_engine(db, period_id=period_id, root_node_id=bu_id)
+            assert res_calc.consolidated_metrics_count >= 1
+            assert res_calc.consolidated_nodes_count >= 1
+            # Check rolled up value for BU: 30 projects * 100 kWh = 3000.0 kWh
+            from app.modules.consolidation.models import ConsolidatedValue
+            bu_val = db.query(ConsolidatedValue).filter_by(entity_id=bu_id, period_id=period_id, metric_code="ENV-ENERGY-001").first()
+            assert bu_val is not None
+            assert bu_val.value == 3000.0
+    finally:
+        with SessionLocal() as db_restore:
+            u = db_restore.query(User).filter_by(email="bu.supervisor@aarohan.in").first()
+            if u:
+                u.org_node_id = orig_bu_org_id
+                db_restore.commit()
 
 
 def test_subsidiary_progressive_reporting_coverage_80_bus_20_approved():
@@ -305,37 +313,45 @@ def test_subsidiary_progressive_reporting_coverage_80_bus_20_approved():
 
         # Bind subsidiary.supervisor to this Subsidiary for scope authorization
         sub_sup = db.query(User).filter_by(email="subsidiary.supervisor@aarohan.in").first()
+        orig_sub_org_id = str(sub_sup.org_node_id) if sub_sup.org_node_id else "b5bf5b6a-0039-4a54-b74a-dd8dc5596250"
         sub_sup.org_node_id = sub_org.id
 
         db.commit()
         sub_org_id = str(sub_org.id)
         period_id = str(period.id)
 
-    token = get_token("subsidiary.supervisor@aarohan.in")
-    res = client.get(
-        f"/api/v1/consolidation/coverage/{sub_org_id}/{period_id}",
-        headers={"Authorization": f"Bearer {token}"},
-    )
-    assert res.status_code == 200
-    cov = res.json()
+    try:
+        token = get_token("subsidiary.supervisor@aarohan.in")
+        res = client.get(
+            f"/api/v1/consolidation/coverage/{sub_org_id}/{period_id}",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert res.status_code == 200
+        cov = res.json()
 
-    assert cov["total_children_count"] == 80
-    assert cov["approved_children_count"] == 20
-    assert cov["coverage_pct"] == 25.0
-    assert cov["is_complete"] is False
-    assert cov["can_proceed_with_progressive_reporting"] is True
-    assert len(cov["contributing_entities"]) == 20
-    assert len(cov["missing_entities"]) == 60
+        assert cov["total_children_count"] == 80
+        assert cov["approved_children_count"] == 20
+        assert cov["coverage_pct"] == 25.0
+        assert cov["is_complete"] is False
+        assert cov["can_proceed_with_progressive_reporting"] is True
+        assert len(cov["contributing_entities"]) == 20
+        assert len(cov["missing_entities"]) == 60
 
-    # Ensure subsidiary consolidation executes on the actual 20 approved records
-    with SessionLocal() as db:
-        res_calc = run_consolidation_engine(db, period_id=period_id, root_node_id=sub_org_id)
-        assert res_calc.consolidated_metrics_count >= 1
-        assert res_calc.consolidated_nodes_count >= 1
-        from app.modules.consolidation.models import ConsolidatedValue
-        sub_val = db.query(ConsolidatedValue).filter_by(entity_id=sub_org_id, period_id=period_id, metric_code="ENV-WATER-001").first()
-        assert sub_val is not None
-        assert sub_val.value == 10000.0
+        # Ensure subsidiary consolidation executes on the actual 20 approved records
+        with SessionLocal() as db:
+            res_calc = run_consolidation_engine(db, period_id=period_id, root_node_id=sub_org_id)
+            assert res_calc.consolidated_metrics_count >= 1
+            assert res_calc.consolidated_nodes_count >= 1
+            from app.modules.consolidation.models import ConsolidatedValue
+            sub_val = db.query(ConsolidatedValue).filter_by(entity_id=sub_org_id, period_id=period_id, metric_code="ENV-WATER-001").first()
+            assert sub_val is not None
+            assert sub_val.value == 10000.0
+    finally:
+        with SessionLocal() as db_restore:
+            u = db_restore.query(User).filter_by(email="subsidiary.supervisor@aarohan.in").first()
+            if u:
+                u.org_node_id = orig_sub_org_id
+                db_restore.commit()
 
 
 def test_stage1_to_stage8_hierarchical_workflow_end_to_end():

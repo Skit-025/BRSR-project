@@ -25,9 +25,18 @@ function EnterpriseDashboard() {
   const [lineageDrawerOpen, setLineageDrawerOpen] = useState(false);
   const [lineageMetricCode, setLineageMetricCode] = useState('ENV-ENERGY-001');
 
+  const isBUUser = ['bu_admin', 'bu_supervisor', 'bu_esg_manager'].includes(user?.role);
+  const isSubUser = ['subsidiary_admin', 'subsidiary_supervisor', 'subsidiary_esg_manager'].includes(user?.role);
+  const isProjUser = ['project_admin', 'project_supervisor'].includes(user?.role);
+
+  const userScopedNode = React.useMemo(() => {
+    if (!user?.org_node_id) return null;
+    return nodes.find(n => String(n.id) === String(user.org_node_id));
+  }, [nodes, user?.org_node_id]);
+
   const rootNode = React.useMemo(() => {
     if (user?.org_node_id) {
-      const userNode = nodes.find(n => n.id === user.org_node_id);
+      const userNode = nodes.find(n => String(n.id) === String(user.org_node_id));
       if (userNode) return userNode;
     }
     return nodes.find(n => n.code === 'MEIL-GROUP') || nodes.find(n => n.type === 'group' || n.is_root) || nodes[0];
@@ -36,7 +45,31 @@ function EnterpriseDashboard() {
   const activePeriodId = selectedPeriodId || periods.find(p => p.code === 'FY2025-26-M03')?.id || periods[0]?.id;
   const activeEntityId = selectedEntityId || rootNode?.id;
 
-  const selectedNode = nodes.find(n => n.id === activeEntityId) || rootNode;
+  const selectedNode = nodes.find(n => String(n.id) === String(activeEntityId)) || rootNode;
+
+  const overviewTitle = React.useMemo(() => {
+    if (isBUUser) {
+      return selectedNode?.name ? `${selectedNode.name} — BU Overview` : 'BU Overview';
+    }
+    if (isSubUser) {
+      return selectedNode?.name ? `${selectedNode.name} — Subsidiary Overview` : 'Subsidiary Overview';
+    }
+    if (isProjUser) {
+      return selectedNode?.name ? `${selectedNode.name} — Project Overview` : 'Project Overview';
+    }
+    return selectedNode?.name ? `${selectedNode.name} — Overview` : 'Overview';
+  }, [isBUUser, isSubUser, isProjUser, selectedNode]);
+
+  const overviewSubtitle = React.useMemo(() => {
+    const firstName = user?.full_name?.split(' ')[0] || 'Team';
+    if (isBUUser) {
+      return `Good morning, ${firstName}. Here's the current ESG reporting status across your Business Unit and projects.`;
+    }
+    if (isSubUser) {
+      return `Good morning, ${firstName}. Here's the current ESG reporting status across your Subsidiary and operating units.`;
+    }
+    return `Good morning, ${firstName}. Here's the current ESG reporting status across your organization.`;
+  }, [isBUUser, isSubUser, user]);
   const isRailwayProject = Boolean(
     selectedNode &&
     (
@@ -177,14 +210,14 @@ function EnterpriseDashboard() {
               margin: '0 0 4px',
               letterSpacing: '-0.02em'
             }}>
-              Overview
+              {overviewTitle}
             </h1>
             <p style={{
               fontSize: 13,
               color: '#64748B',
               margin: 0
             }}>
-              Good morning, {user?.full_name?.split(' ')[0] || 'Aditya'}. Here's the current ESG reporting status across your organization.
+              {overviewSubtitle}
             </p>
           </div>
 
@@ -252,32 +285,76 @@ function EnterpriseDashboard() {
                   maxWidth: '240px'
                 }}
               >
-                {/* Enterprise Group */}
-                {nodes.filter(n => n.type === 'group' || n.is_root).map(g => (
-                  <option key={g.id} value={g.id}>{g.name} (GROUP)</option>
-                ))}
-
-                {/* Subsidiaries */}
-                {nodes.filter(n => n.type === 'subsidiary').length > 0 && (
-                  <optgroup label="Subsidiaries">
-                    {nodes.filter(n => n.type === 'subsidiary').map(s => (
-                      <option key={s.id} value={s.id}>{s.name} (SUBSIDIARY)</option>
-                    ))}
-                  </optgroup>
+                {isProjUser && userScopedNode && (
+                  <option value={userScopedNode.id}>{userScopedNode.name} (Project)</option>
                 )}
 
-                {/* Business Units and their nested Projects */}
-                {nodes.filter(n => ['business_unit', 'bu'].includes(n.type?.toLowerCase())).map(bu => {
-                  const buProjects = nodes.filter(p => ['project', 'site', 'plant'].includes(p.type?.toLowerCase()) && p.parent_id === bu.id);
-                  return (
-                    <optgroup key={bu.id} label={`BU: ${bu.name}`}>
-                      <option value={bu.id}>{bu.name} (Entire BU)</option>
-                      {buProjects.map(p => (
-                        <option key={p.id} value={p.id}>↳ Project: {p.name}</option>
-                      ))}
-                    </optgroup>
-                  );
-                })}
+                {isBUUser && (
+                  <>
+                    {userScopedNode && (
+                      <optgroup label={`BU: ${userScopedNode.name}`}>
+                        <option value={userScopedNode.id}>{userScopedNode.name} (Entire BU)</option>
+                        {nodes
+                          .filter(p => ['project', 'site', 'plant'].includes(p.type?.toLowerCase()) && String(p.parent_id) === String(userScopedNode.id))
+                          .map(p => (
+                            <option key={p.id} value={p.id}>↳ Project: {p.name}</option>
+                          ))}
+                      </optgroup>
+                    )}
+                  </>
+                )}
+
+                {isSubUser && (
+                  <>
+                    {userScopedNode && (
+                      <option value={userScopedNode.id}>{userScopedNode.name} (Entire Subsidiary)</option>
+                    )}
+                    {nodes
+                      .filter(bu => ['business_unit', 'bu'].includes(bu.type?.toLowerCase()) && String(bu.parent_id) === String(userScopedNode?.id))
+                      .map(bu => {
+                        const buProjects = nodes.filter(p => ['project', 'site', 'plant'].includes(p.type?.toLowerCase()) && String(p.parent_id) === String(bu.id));
+                        return (
+                          <optgroup key={bu.id} label={`BU: ${bu.name}`}>
+                            <option value={bu.id}>{bu.name} (Entire BU)</option>
+                            {buProjects.map(p => (
+                              <option key={p.id} value={p.id}>↳ Project: {p.name}</option>
+                            ))}
+                          </optgroup>
+                        );
+                      })}
+                  </>
+                )}
+
+                {!isBUUser && !isSubUser && !isProjUser && (
+                  <>
+                    {/* Enterprise Group */}
+                    {nodes.filter(n => n.type === 'group' || n.is_root).map(g => (
+                      <option key={g.id} value={g.id}>{g.name} (GROUP)</option>
+                    ))}
+
+                    {/* Subsidiaries */}
+                    {nodes.filter(n => n.type === 'subsidiary').length > 0 && (
+                      <optgroup label="Subsidiaries">
+                        {nodes.filter(n => n.type === 'subsidiary').map(s => (
+                          <option key={s.id} value={s.id}>{s.name} (SUBSIDIARY)</option>
+                        ))}
+                      </optgroup>
+                    )}
+
+                    {/* Business Units and their nested Projects */}
+                    {nodes.filter(n => ['business_unit', 'bu'].includes(n.type?.toLowerCase())).map(bu => {
+                      const buProjects = nodes.filter(p => ['project', 'site', 'plant'].includes(p.type?.toLowerCase()) && p.parent_id === bu.id);
+                      return (
+                        <optgroup key={bu.id} label={`BU: ${bu.name}`}>
+                          <option value={bu.id}>{bu.name} (Entire BU)</option>
+                          {buProjects.map(p => (
+                            <option key={p.id} value={p.id}>↳ Project: {p.name}</option>
+                          ))}
+                        </optgroup>
+                      );
+                    })}
+                  </>
+                )}
               </select>
             </div>
 
@@ -1218,11 +1295,21 @@ function EnterpriseDashboard() {
 export default function Dashboard() {
   const { user } = useAuth();
 
-  // Phase 11: Project Admin & Project Supervisor see project BRSR disclosure as their Overview
-  if (user?.role === 'project_admin' || user?.role === 'project_supervisor') {
-    return <ProjectSummary key={user?.id || 'project_admin'} />;
+  // 1. Project Level: Project Admin & Project Supervisor see their Project Overview
+  if (['project_admin', 'project_supervisor'].includes(user?.role)) {
+    return <ProjectSummary key={user?.id || 'project_overview'} />;
   }
 
-  // Executive Command Center for Group Admin & Group Supervisor (and system / subsidiary executives)
+  // 2. Business Unit Level: BU Admin & BU Supervisor / BU ESG Manager see their BU Overview
+  if (['bu_admin', 'bu_supervisor', 'bu_esg_manager'].includes(user?.role)) {
+    return <EnterpriseDashboard key={user?.id || 'bu_overview'} />;
+  }
+
+  // 3. Subsidiary Level: Subsidiary Admin & Subsidiary Supervisor / Subsidiary ESG Manager see their Subsidiary Overview
+  if (['subsidiary_admin', 'subsidiary_supervisor', 'subsidiary_esg_manager'].includes(user?.role)) {
+    return <EnterpriseDashboard key={user?.id || 'subsidiary_overview'} />;
+  }
+
+  // 4. Group Level: Group Admin, Group Supervisor / Group ESG Manager & System Admin see the Group Command Center Overview
   return <GroupCommandCenter key={user?.id || 'group_command_center'} />;
 }

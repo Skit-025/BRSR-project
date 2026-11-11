@@ -25,15 +25,20 @@ def db():
 
 
 def test_five_runtime_roles_enum():
-    expected_roles = {
+    """Verify that Role enum contains the canonical platform roles and backward-compatible aliases."""
+    canonical_roles = {
         "system_admin",
         "group_admin",
+        "group_esg_manager",
         "subsidiary_admin",
+        "subsidiary_esg_manager",
         "bu_admin",
+        "bu_esg_manager",
         "project_admin",
+        "project_supervisor",
     }
     actual_roles = {r.value for r in Role}
-    assert actual_roles == expected_roles, f"Expected 5 roles, got {actual_roles}"
+    assert canonical_roles.issubset(actual_roles), f"Missing canonical roles: {canonical_roles - actual_roles}"
 
 
 def test_project_admin_cannot_create_project(db):

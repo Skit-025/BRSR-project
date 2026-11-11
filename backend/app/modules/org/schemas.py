@@ -1,6 +1,6 @@
 from typing import Optional, List
 from datetime import date, datetime
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, model_validator
 from app.modules.org.models import NodeType, ControlType, ProjectType, PeriodType, PeriodStatus
 
 class OrgNodeCreate(BaseModel):
@@ -40,6 +40,9 @@ class ReportingPeriodUpdate(BaseModel):
     start_date: Optional[date] = None
     end_date: Optional[date] = None
     admin_password: Optional[str] = None
+    # Convenience field: frontend sends { is_locked: true/false }.
+    # Translated to status=LOCKED / status=OPEN by the update endpoint.
+    is_locked: Optional[bool] = None
 
 
 class OrgNodeRead(BaseModel):
@@ -93,6 +96,14 @@ class ReportingPeriodRead(BaseModel):
     start_date: date
     end_date: date
     status: str
+    # Computed convenience field for the frontend (p.is_locked check in PeriodManagement.jsx)
+    is_locked: bool = False
+
+    @model_validator(mode='after')
+    def compute_is_locked(self) -> 'ReportingPeriodRead':
+        """Derive is_locked from status so the frontend receives a boolean."""
+        self.is_locked = (self.status == PeriodStatus.LOCKED.value)
+        return self
 
 class MetricApplicabilityRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)

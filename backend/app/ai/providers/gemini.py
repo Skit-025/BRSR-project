@@ -2,6 +2,7 @@ import json
 import base64
 import logging
 from typing import Dict, Any, Optional
+from app.ai.circuit_breaker import is_network_error
 from app.ai.providers.base import BaseAIProvider
 from app.config.settings import settings
 
@@ -9,12 +10,18 @@ logger = logging.getLogger(__name__)
 
 class GeminiProvider(BaseAIProvider):
     """
-    Google Gemini Provider using the new google-genai SDK.
-    Supports native high-resolution vision parsing, long context, and forced JSON output.
+    Google Gemini Provider using the google-genai SDK.
+    Configured with verified active models (gemini-3-flash-preview, gemini-flash-lite-latest, etc.)
+    avoiding deprecated and discontinued endpoints.
     """
 
-    # Used only if the configured model is unavailable/retired/overloaded
-    FALLBACK_MODELS = ("gemini-flash-latest", "gemini-2.5-flash", "gemini-2.0-flash", "models/gemini-flash-latest")
+    # Active operational fallback models verified live
+    FALLBACK_MODELS = (
+        "gemini-3-flash-preview",
+        "gemini-flash-lite-latest",
+        "gemini-3.1-flash-lite-preview",
+        "gemini-flash-latest"
+    )
 
     def __init__(self, api_key: Optional[str] = None):
         self.api_key = api_key or settings.GEMINI_API_KEY
@@ -42,7 +49,7 @@ class GeminiProvider(BaseAIProvider):
         return list(dict.fromkeys([m for m in models if m]))
 
     def _generate_with_fallback(self, configured: str, build_contents, build_config):
-        """Runs generate_content across the model cascade, tolerating 503/retired models."""
+        """Runs generate_content across the model cascade, tolerating transient 503/retired models."""
         last_error = None
         for model in self._models_to_try(configured):
             try:
@@ -56,6 +63,9 @@ class GeminiProvider(BaseAIProvider):
             except Exception as e:
                 last_error = e
                 logger.warning(f"Gemini model '{model}' failed: {e}. Trying next Gemini model.")
+                if is_network_error(e):
+                    logger.warning(f"Gemini network/DNS failure detected on '{model}'. Skipping remaining models for shared host.")
+                    raise e
         raise RuntimeError(f"All Gemini models failed. Last error: {last_error}")
 
     def _clean_json_text(self, text: Optional[str]) -> str:
@@ -63,7 +73,6 @@ class GeminiProvider(BaseAIProvider):
             raise ValueError("Empty or blocked response received from Gemini.")
         cleaned = text.strip()
         if cleaned.startswith("```"):
-            # Strip markdown code block markers
             lines = cleaned.split("\n", 1)
             cleaned = lines[1] if len(lines) > 1 else ""
             if "```" in cleaned:

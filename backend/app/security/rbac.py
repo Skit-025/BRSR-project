@@ -18,20 +18,23 @@ class Role(str, Enum):
     SYSTEM_ADMIN          = "system_admin"          # Sole authority: platform mgmt, all access
 
     # ── Group Tier ────────────────────────────────────────────────────────────
-    GROUP_ADMIN           = "group_admin"           # Verification, approval, governance, period lock
-    GROUP_SUPERVISOR      = "group_supervisor"      # Group operational, consolidation, disclosures, compilation
+    GROUP_ADMIN           = "group_admin"           # Verification, approval, governance, period lock (user appointment removed)
+    GROUP_ESG_MANAGER     = "group_esg_manager"     # Group operational, consolidation, disclosures, compilation, user creation & appointment
+    GROUP_SUPERVISOR      = "group_supervisor"      # Backward-compatible alias for Group ESG Manager
 
     # ── Subsidiary Tier ───────────────────────────────────────────────────────
     SUBSIDIARY_ADMIN      = "subsidiary_admin"      # Verification, approval, BU oversight, scoped governance
-    SUBSIDIARY_SUPERVISOR = "subsidiary_supervisor" # Subsidiary operational, disclosures, consolidation
+    SUBSIDIARY_ESG_MANAGER = "subsidiary_esg_manager" # Subsidiary operational, disclosures, consolidation
+    SUBSIDIARY_SUPERVISOR = "subsidiary_supervisor" # Backward-compatible alias for Subsidiary ESG Manager
 
     # ── Business Unit Tier ────────────────────────────────────────────────────
     BU_ADMIN              = "bu_admin"              # Verification, approval, project creation, scoped governance
-    BU_SUPERVISOR         = "bu_supervisor"         # BU operational, BU disclosures, consolidation
+    BU_ESG_MANAGER        = "bu_esg_manager"        # BU operational, BU disclosures, consolidation
+    BU_SUPERVISOR         = "bu_supervisor"         # Backward-compatible alias for BU ESG Manager
 
     # ── Project Tier ──────────────────────────────────────────────────────────
     PROJECT_ADMIN         = "project_admin"         # Verification, approval of project submissions, scoped governance
-    PROJECT_SUPERVISOR    = "project_supervisor"    # Data entry (Maker), evidence upload, project submission
+    PROJECT_SUPERVISOR    = "project_supervisor"    # Data entry (Maker), evidence upload, project submission (stays Supervisor)
 
 
 class Permission(str, Enum):
@@ -104,7 +107,7 @@ ROLE_PERMISSIONS: dict[Role, Set[Permission]] = {
     # ── System Admin: full access (all permissions) ───────────────────────────
     Role.SYSTEM_ADMIN: set(Permission),
 
-    # ── Group Admin: verification, governance, approvals, period lock ────────
+    # ── Group Admin: verification, governance, approvals, period lock (user appointment removed)
     Role.GROUP_ADMIN: {
         Permission.AI_E1_USE, Permission.AI_E2_USE, Permission.AI_E3_USE,
         Permission.AI_E4_USE, Permission.AI_E5_USE, Permission.AI_E6_USE,
@@ -119,11 +122,29 @@ ROLE_PERMISSIONS: dict[Role, Set[Permission]] = {
         Permission.GROUP_DISCLOSURE_READ,
         Permission.REPORT_READ, Permission.REPORT_LINEAGE,
         Permission.PERIOD_LOCK, Permission.AUDIT_READ, Permission.ASSURANCE_WRITE,
+    },
+
+    # ── Group ESG Manager: group operational, consolidation, disclosures, compile, user creation & appointment
+    Role.GROUP_ESG_MANAGER: {
+        Permission.AI_E1_USE, Permission.AI_E2_USE, Permission.AI_E3_USE,
+        Permission.AI_E4_USE, Permission.AI_E5_USE, Permission.AI_E6_USE,
+        Permission.AI_E7_USE,
+        Permission.ORG_READ,
+        Permission.METRIC_READ, Permission.FORM_MASTER,
+        Permission.SUBMISSION_READ,
+        Permission.EVIDENCE_READ,
+        Permission.CONSOLIDATION_RUN, Permission.CONSOLIDATION_READ,
+        Permission.CALC_RUN,
+        Permission.BU_DISCLOSURE_READ,
+        Permission.SUBSIDIARY_DISCLOSURE_READ,
+        Permission.GROUP_DISCLOSURE_WRITE, Permission.GROUP_DISCLOSURE_READ,
+        Permission.REPORT_COMPILE, Permission.REPORT_READ, Permission.REPORT_LINEAGE,
+        Permission.AUDIT_READ,
         Permission.USERS_MANAGE_SCOPED,
         Permission.USER_MANAGE, Permission.USER_CREATE, Permission.USER_DELETE,
     },
 
-    # ── Group Supervisor: group operational, consolidation, disclosures, compile
+    # ── Group Supervisor: backward-compatible alias for Group ESG Manager
     Role.GROUP_SUPERVISOR: {
         Permission.AI_E1_USE, Permission.AI_E2_USE, Permission.AI_E3_USE,
         Permission.AI_E4_USE, Permission.AI_E5_USE, Permission.AI_E6_USE,
@@ -139,6 +160,8 @@ ROLE_PERMISSIONS: dict[Role, Set[Permission]] = {
         Permission.GROUP_DISCLOSURE_WRITE, Permission.GROUP_DISCLOSURE_READ,
         Permission.REPORT_COMPILE, Permission.REPORT_READ, Permission.REPORT_LINEAGE,
         Permission.AUDIT_READ,
+        Permission.USERS_MANAGE_SCOPED,
+        Permission.USER_MANAGE, Permission.USER_CREATE, Permission.USER_DELETE,
     },
 
     # ── Subsidiary Admin: verification, BU oversight, approvals, scoped user mgmt
@@ -158,7 +181,24 @@ ROLE_PERMISSIONS: dict[Role, Set[Permission]] = {
         Permission.USERS_MANAGE_SCOPED,
     },
 
-    # ── Subsidiary Supervisor: subsidiary operational, disclosures, consolidation
+    # ── Subsidiary ESG Manager: subsidiary operational, disclosures, consolidation
+    Role.SUBSIDIARY_ESG_MANAGER: {
+        Permission.AI_E1_USE, Permission.AI_E2_USE, Permission.AI_E3_USE,
+        Permission.AI_E4_USE, Permission.AI_E5_USE, Permission.AI_E6_USE,
+        Permission.AI_E7_USE,
+        Permission.ORG_READ,
+        Permission.METRIC_READ,
+        Permission.SUBMISSION_READ,
+        Permission.EVIDENCE_READ,
+        Permission.CONSOLIDATION_RUN, Permission.CONSOLIDATION_READ,
+        Permission.CALC_RUN,
+        Permission.BU_DISCLOSURE_READ,
+        Permission.SUBSIDIARY_DISCLOSURE_WRITE, Permission.SUBSIDIARY_DISCLOSURE_READ,
+        Permission.REPORT_READ, Permission.REPORT_LINEAGE,
+        Permission.AUDIT_READ,
+    },
+
+    # ── Subsidiary Supervisor: backward-compatible alias for Subsidiary ESG Manager
     Role.SUBSIDIARY_SUPERVISOR: {
         Permission.AI_E1_USE, Permission.AI_E2_USE, Permission.AI_E3_USE,
         Permission.AI_E4_USE, Permission.AI_E5_USE, Permission.AI_E6_USE,
@@ -191,7 +231,23 @@ ROLE_PERMISSIONS: dict[Role, Set[Permission]] = {
         Permission.USERS_MANAGE_SCOPED,
     },
 
-    # ── BU Supervisor: BU operational, BU disclosures, consolidation, calc
+    # ── BU ESG Manager: BU operational, BU disclosures, consolidation, calc
+    Role.BU_ESG_MANAGER: {
+        Permission.AI_E1_USE, Permission.AI_E2_USE, Permission.AI_E3_USE,
+        Permission.AI_E6_USE, Permission.AI_E7_USE,
+        Permission.ORG_READ,
+        Permission.METRIC_READ,
+        Permission.FORM_SUBMIT,
+        Permission.SUBMISSION_CREATE, Permission.SUBMISSION_READ, Permission.SUBMISSION_SUBMIT,
+        Permission.EVIDENCE_UPLOAD, Permission.EVIDENCE_READ, Permission.SPREADSHEET_UPLOAD,
+        Permission.CONSOLIDATION_READ, Permission.CONSOLIDATION_RUN,
+        Permission.CALC_RUN,
+        Permission.BU_DISCLOSURE_WRITE, Permission.BU_DISCLOSURE_READ,
+        Permission.REPORT_READ, Permission.REPORT_LINEAGE,
+        Permission.AUDIT_READ,
+    },
+
+    # ── BU Supervisor: backward-compatible alias for BU ESG Manager
     Role.BU_SUPERVISOR: {
         Permission.AI_E1_USE, Permission.AI_E2_USE, Permission.AI_E3_USE,
         Permission.AI_E6_USE, Permission.AI_E7_USE,
@@ -221,7 +277,7 @@ ROLE_PERMISSIONS: dict[Role, Set[Permission]] = {
         Permission.USERS_MANAGE_SCOPED,
     },
 
-    # ── Project Supervisor: data entry (Maker), evidence upload, project submission
+    # ── Project Supervisor: data entry (Maker), evidence upload, project submission (stays Supervisor)
     Role.PROJECT_SUPERVISOR: {
         Permission.AI_E1_USE, Permission.AI_E2_USE, Permission.AI_E3_USE, Permission.AI_E6_USE,
         Permission.ORG_READ,
@@ -239,40 +295,58 @@ ROLE_PERMISSIONS: dict[Role, Set[Permission]] = {
 ROLE_SCOPE_TIER: dict[Role, str] = {
     Role.SYSTEM_ADMIN:          "system",
     Role.GROUP_ADMIN:           "group",
+    Role.GROUP_ESG_MANAGER:     "group",
     Role.GROUP_SUPERVISOR:      "group",
     Role.SUBSIDIARY_ADMIN:      "subsidiary",
+    Role.SUBSIDIARY_ESG_MANAGER: "subsidiary",
     Role.SUBSIDIARY_SUPERVISOR: "subsidiary",
     Role.BU_ADMIN:              "bu",
+    Role.BU_ESG_MANAGER:        "bu",
     Role.BU_SUPERVISOR:         "bu",
     Role.PROJECT_ADMIN:         "project",
     Role.PROJECT_SUPERVISOR:    "project",
 }
 
-# Roles that can MANAGE USERS within their scope (Admins only)
+# Roles that can MANAGE USERS within their scope (Group ESG Manager, Admins except Group Admin)
 ROLES_THAT_CAN_MANAGE_USERS_SCOPED: set[str] = {
     "system_admin",
-    "group_admin",
+    "group_esg_manager",
+    "group_supervisor",
     "subsidiary_admin",
     "bu_admin",
     "project_admin",
 }
 
-# Roles each admin tier can create/assign (strict one-level-down hierarchy)
-# system_admin → all roles
-# group_admin → group_supervisor, subsidiary_admin, subsidiary_supervisor
-# subsidiary_admin → subsidiary_supervisor, bu_admin, bu_supervisor
-# bu_admin → bu_supervisor, project_admin, project_supervisor
+# Roles each tier can create/assign
+# system_admin → all canonical roles
+# group_admin → [] (user creation and appointment removed)
+# group_esg_manager → subsidiary_admin, subsidiary_esg_manager
+# subsidiary_admin → subsidiary_esg_manager, bu_admin, bu_esg_manager
+# bu_admin → bu_esg_manager, project_admin, project_supervisor
 # project_admin → project_supervisor
-# supervisors cannot create users
+# project_supervisor cannot create users
 MANAGEABLE_ROLES_BY_ROLE: dict[str, list[str]] = {
-    "system_admin":          [r.value for r in Role],
-    "group_admin":           ["group_supervisor", "subsidiary_admin", "subsidiary_supervisor"],
-    "subsidiary_admin":      ["subsidiary_supervisor", "bu_admin", "bu_supervisor"],
-    "bu_admin":              ["bu_supervisor", "project_admin", "project_supervisor"],
-    "project_admin":         ["project_supervisor"],
-    "group_supervisor":      [],
+    "system_admin": [
+        "system_admin",
+        "group_admin",
+        "group_esg_manager",
+        "subsidiary_admin",
+        "subsidiary_esg_manager",
+        "bu_admin",
+        "bu_esg_manager",
+        "project_admin",
+        "project_supervisor",
+    ],
+    "group_admin":           [],
+    "group_esg_manager":     ["subsidiary_admin", "subsidiary_esg_manager"],
+    "group_supervisor":      ["subsidiary_admin", "subsidiary_esg_manager"],
+    "subsidiary_admin":      ["subsidiary_esg_manager", "bu_admin", "bu_esg_manager"],
+    "subsidiary_esg_manager": [],
     "subsidiary_supervisor": [],
+    "bu_admin":              ["bu_esg_manager", "project_admin", "project_supervisor"],
+    "bu_esg_manager":        [],
     "bu_supervisor":         [],
+    "project_admin":         ["project_supervisor"],
     "project_supervisor":    [],
 }
 

@@ -852,9 +852,9 @@ class DashboardService:
         user_name = getattr(current_user, "full_name", "Aditya S.") if current_user else "Aditya S."
 
         role_specific_data = {}
-        if user_role == "group_supervisor":
+        if user_role in ("group_esg_manager", "group_supervisor"):
             role_specific_data = {
-                "role": "group_supervisor",
+                "role": user_role,
                 "incoming_approved_subsidiary_reports": 18,
                 "pending_group_disclosures": 4,
                 "group_report_status": "IN_PROGRESS",
@@ -1280,9 +1280,10 @@ class DashboardService:
 
         # 8. Role Context
         user_role = getattr(current_user, "role", "group_admin") if current_user else "group_admin"
-        is_sup = user_role == "group_supervisor"
+        is_sup = user_role in ("group_esg_manager", "group_supervisor")
         role_context = {
             "role": user_role,
+            "is_group_esg_manager": is_sup,
             "is_group_supervisor": is_sup,
             "is_group_admin": not is_sup,
             "can_prepare": is_sup,

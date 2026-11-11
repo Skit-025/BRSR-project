@@ -28,6 +28,7 @@ from app.modules.snapshots.models import ReportSnapshot
 from app.modules.notifications.models import Notification
 from app.modules.calc.models import CalculationLog
 from app.modules.disclosures.models import CalculationJob
+from app.ai.models import AIRun
 
 def run_cleanup(dry_run: bool = True):
     db = SessionLocal()
@@ -279,6 +280,7 @@ def run_cleanup(dry_run: bool = True):
             storage_vaults = [
                 os.path.join(backend_dir, "..", "storage", "evidence_vault"),
                 os.path.join(backend_dir, "storage", "evidence_vault"),
+                os.path.join(backend_dir, "backend", "storage", "evidence_vault"),
             ]
             for ev in test_ev:
                 base_fname = os.path.basename(ev.storage_key)
@@ -292,6 +294,28 @@ def run_cleanup(dry_run: bool = True):
 
             del_ev = db.query(EvidenceFile).filter(EvidenceFile.id.in_(list(test_ev_ids))).delete(synchronize_session=False)
             print(f"Deleted {del_ev} evidence files.")
+
+            # Clean orphaned files in test vaults not present in preserved files
+            for vault in storage_vaults:
+                if os.path.exists(vault):
+                    for fname in os.listdir(vault):
+                        if fname not in PRESERVED_FILES:
+                            full_p = os.path.join(vault, fname)
+                            try:
+                                if os.path.isfile(full_p):
+                                    os.remove(full_p)
+                            except Exception:
+                                pass
+
+            # Remove accidental nested backend/backend directory if empty or test artifact
+            accidental_nested = os.path.join(backend_dir, "backend")
+            if os.path.exists(accidental_nested):
+                import shutil
+                try:
+                    shutil.rmtree(accidental_nested, ignore_errors=True)
+                    print("Removed accidental nested backend/backend test artifact directory.")
+                except Exception:
+                    pass
 
         # 3. Reviews
         if test_review_ids:
@@ -363,6 +387,13 @@ def run_cleanup(dry_run: bool = True):
             del_not = db.query(Notification).filter(Notification.id.in_(list(test_notif_ids))).delete(synchronize_session=False)
             print(f"Deleted {del_not} notifications.")
 
+        # 11b. Test AI Runs
+        del_ai = db.query(AIRun).filter(
+            (AIRun.input_ref.in_(["GENERAL", "GENERAL-QUERY", "test_file_id", "test_input", "TEST"])) |
+            (AIRun.reviewer_id.in_(list(test_user_ids)))
+        ).delete(synchronize_session=False)
+        print(f"Deleted {del_ai} test AI runs.")
+
         # 12. User Role Assignments
         del_ura = db.query(UserRoleAssignment).filter(
             (UserRoleAssignment.user_id.in_(list(test_user_ids))) |
@@ -392,6 +423,37 @@ def run_cleanup(dry_run: bool = True):
         if test_period_ids:
             del_per = db.query(ReportingPeriod).filter(ReportingPeriod.id.in_(list(test_period_ids))).delete(synchronize_session=False)
             print(f"Deleted {del_per} test reporting periods.")
+
+        # 17. Verify and restore canonical demo account scopes if cleared by cascade
+        CANONICAL_DEMO_SCOPE = {
+            "bu.supervisor@aarohan.in": ("bu_esg_manager", "19ad9e6d-0a65-46b0-9fc2-84ed086a6de3"),
+            "bu.admin@aarohan.in": ("bu_admin", "19ad9e6d-0a65-46b0-9fc2-84ed086a6de3"),
+            "subsidiary.supervisor@aarohan.in": ("subsidiary_esg_manager", "b5bf5b6a-0039-4a54-b74a-dd8dc5596250"),
+            "sub.admin@aarohan.in": ("subsidiary_admin", "b5bf5b6a-0039-4a54-b74a-dd8dc5596250"),
+            "group.supervisor@aarohan.in": ("group_esg_manager", "5f011418-17c5-4f9c-a037-e9c4272b4a1c"),
+            "group.admin@aarohan.in": ("group_admin", "5f011418-17c5-4f9c-a037-e9c4272b4a1c"),
+            "project.supervisor@aarohan.in": ("project_supervisor", "4cf5fec9-cbef-439b-a991-aefc391a56e8"),
+            "project.admin@aarohan.in": ("project_admin", "4cf5fec9-cbef-439b-a991-aefc391a56e8"),
+        }
+        for email, (can_role, can_node_id) in CANONICAL_DEMO_SCOPE.items():
+            u = db.query(User).filter(User.email.ilike(email)).first()
+            if u:
+                if not u.org_node_id:
+                    u.org_node_id = can_node_id
+                    print(f"Restored org_node_id on canonical demo user {email} -> {can_node_id}")
+                ura = db.query(UserRoleAssignment).filter(
+                    UserRoleAssignment.user_id == u.id,
+                    UserRoleAssignment.is_active == True
+                ).first()
+                if ura and not ura.entity_id:
+                    ura.entity_id = can_node_id
+                elif not ura:
+                    db.add(UserRoleAssignment(
+                        user_id=u.id,
+                        role=can_role,
+                        entity_id=can_node_id,
+                        is_active=True
+                    ))
 
         db.commit()
         print("\n[PURGE COMPLETE] All test data has been successfully removed!")

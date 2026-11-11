@@ -44,8 +44,8 @@ class Settings(BaseSettings):
 
     # AI Gateway Settings
     # Cascade order = AI_PROVIDER first, then AI_PROVIDER_FALLBACKS (left to right).
-    AI_PROVIDER: str = "huggingface"  # "huggingface" | "gemini" | "openrouter" | "mock"
-    AI_PROVIDER_FALLBACKS: str = "openrouter,gemini"
+    AI_PROVIDER: str = "openrouter"  # "openrouter" | "gemini" | "huggingface" | "mock"
+    AI_PROVIDER_FALLBACKS: str = "gemini,huggingface"
     AI_PROVIDER_COOLDOWN_SECONDS: int = 60
     AI_PROVIDER_FAILURE_THRESHOLD: int = 2
 
@@ -80,8 +80,8 @@ class Settings(BaseSettings):
     OPENROUTER_MODEL_VISION: str = "google/gemma-3-12b-it"
     AI_FALLBACK_TO_MOCK: bool = True
     AI_AUTO_FALLBACK_ON_ERROR: bool = True
-    AI_MODEL_VISION: str = "gemini-flash-latest"
-    AI_MODEL_TEXT: str = "gemini-flash-latest"
+    AI_MODEL_VISION: str = "gemini-3-flash-preview"
+    AI_MODEL_TEXT: str = "gemini-3-flash-preview"
     AI_EMBEDDING_MODEL: str = "gemini-embedding-001"
 
     # SMTP Email Configuration (Google Mail / Gmail Provider)

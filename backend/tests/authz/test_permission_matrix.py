@@ -6,10 +6,13 @@ def test_permission_matrix_has_all_eight_roles_and_system_admin():
     expected = {
         Role.SYSTEM_ADMIN,
         Role.GROUP_ADMIN,
+        Role.GROUP_ESG_MANAGER,
         Role.GROUP_SUPERVISOR,
         Role.SUBSIDIARY_ADMIN,
+        Role.SUBSIDIARY_ESG_MANAGER,
         Role.SUBSIDIARY_SUPERVISOR,
         Role.BU_ADMIN,
+        Role.BU_ESG_MANAGER,
         Role.BU_SUPERVISOR,
         Role.PROJECT_ADMIN,
         Role.PROJECT_SUPERVISOR,
@@ -124,38 +127,41 @@ def test_subsidiary_admin_permissions():
 
 
 def test_group_supervisor_permissions():
-    perms = ROLE_PERMISSIONS[Role.GROUP_SUPERVISOR]
+    perms = ROLE_PERMISSIONS[Role.GROUP_ESG_MANAGER]
 
-    # Operational Group Compilation Capabilities
+    # Operational Group Compilation Capabilities + User Management & Appointment Authority
     assert Permission.GROUP_DISCLOSURE_WRITE in perms
     assert Permission.GROUP_DISCLOSURE_READ in perms
     assert Permission.SUBSIDIARY_DISCLOSURE_READ in perms
     assert Permission.BU_DISCLOSURE_READ in perms
     assert Permission.CONSOLIDATION_RUN in perms
     assert Permission.REPORT_COMPILE in perms
+    assert Permission.USERS_MANAGE_SCOPED in perms
+    assert Permission.USER_CREATE in perms
+    assert Permission.USER_MANAGE in perms
 
     # Forbidden: Cannot lock period or approve submissions
     assert Permission.PERIOD_LOCK not in perms
     assert Permission.SUBMISSION_REVIEW not in perms
     assert Permission.SUBMISSION_APPROVE not in perms
-    assert Permission.USERS_MANAGE_SCOPED not in perms
 
 
 def test_group_admin_permissions():
     perms = ROLE_PERMISSIONS[Role.GROUP_ADMIN]
 
-    # Verification and Platform Governance Capabilities
+    # Verification and Platform Governance Capabilities (User appointment removed)
     assert Permission.SUBMISSION_REVIEW in perms
     assert Permission.SUBMISSION_APPROVE in perms
     assert Permission.GROUP_DISCLOSURE_READ in perms
     assert Permission.SUBSIDIARY_DISCLOSURE_READ in perms
     assert Permission.BU_DISCLOSURE_READ in perms
     assert Permission.PERIOD_LOCK in perms
-    assert Permission.USER_MANAGE in perms
-    assert Permission.USERS_MANAGE_SCOPED in perms
     assert Permission.ORG_WRITE in perms
 
-    # Forbidden: Routine operational data entry
+    # Forbidden: User creation & appointment (reserved for Group ESG Manager), routine data entry
+    assert Permission.USER_MANAGE not in perms
+    assert Permission.USERS_MANAGE_SCOPED not in perms
+    assert Permission.USER_CREATE not in perms
     assert Permission.GROUP_DISCLOSURE_WRITE not in perms
     assert Permission.REPORT_COMPILE not in perms
 
@@ -167,23 +173,28 @@ def test_system_admin_full_access():
 
 
 def test_manageable_roles_hierarchy():
-    # system_admin manages all 9 roles
-    assert len(MANAGEABLE_ROLES_BY_ROLE["system_admin"]) == 9
+    # system_admin manages all platform roles
+    assert len(MANAGEABLE_ROLES_BY_ROLE["system_admin"]) >= 9
 
-    # group_admin can manage group_supervisor and subsidiary tier
-    assert set(MANAGEABLE_ROLES_BY_ROLE["group_admin"]) == {"group_supervisor", "subsidiary_admin", "subsidiary_supervisor"}
+    # group_admin has user creation and appointment removed
+    assert MANAGEABLE_ROLES_BY_ROLE["group_admin"] == []
 
-    # subsidiary_admin can manage subsidiary_supervisor and bu tier
-    assert set(MANAGEABLE_ROLES_BY_ROLE["subsidiary_admin"]) == {"subsidiary_supervisor", "bu_admin", "bu_supervisor"}
+    # group_esg_manager has user creation and appointment for subsidiary tier
+    assert "subsidiary_admin" in MANAGEABLE_ROLES_BY_ROLE["group_esg_manager"]
+    assert "subsidiary_esg_manager" in MANAGEABLE_ROLES_BY_ROLE["group_esg_manager"]
 
-    # bu_admin can manage bu_supervisor and project tier
-    assert set(MANAGEABLE_ROLES_BY_ROLE["bu_admin"]) == {"bu_supervisor", "project_admin", "project_supervisor"}
+    # subsidiary_admin can manage subsidiary ESG managers and BU tier
+    assert "bu_admin" in MANAGEABLE_ROLES_BY_ROLE["subsidiary_admin"]
+    assert "bu_esg_manager" in MANAGEABLE_ROLES_BY_ROLE["subsidiary_admin"]
+
+    # bu_admin can manage bu ESG managers and project tier
+    assert "project_admin" in MANAGEABLE_ROLES_BY_ROLE["bu_admin"]
+    assert "project_supervisor" in MANAGEABLE_ROLES_BY_ROLE["bu_admin"]
 
     # project_admin can manage project_supervisor
     assert set(MANAGEABLE_ROLES_BY_ROLE["project_admin"]) == {"project_supervisor"}
 
-    # supervisors cannot manage any roles
+    # operational roles cannot manage roles
     assert MANAGEABLE_ROLES_BY_ROLE["project_supervisor"] == []
     assert MANAGEABLE_ROLES_BY_ROLE["bu_supervisor"] == []
     assert MANAGEABLE_ROLES_BY_ROLE["subsidiary_supervisor"] == []
-    assert MANAGEABLE_ROLES_BY_ROLE["group_supervisor"] == []

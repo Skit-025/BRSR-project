@@ -93,9 +93,9 @@ def test_command_center_group_admin_payload(client, db):
 
 
 def test_command_center_group_supervisor_role_specific(client, db):
-    """Verifies that Group Supervisor receives operational role-tailored actions."""
-    sup_user = db.query(User).filter(User.role == "group_supervisor").first()
-    assert sup_user is not None, "Group Supervisor user should exist"
+    """Verifies that Group ESG Manager receives operational role-tailored actions."""
+    sup_user = db.query(User).filter(User.role.in_(("group_esg_manager", "group_supervisor"))).first()
+    assert sup_user is not None, "Group ESG Manager user should exist"
 
     sup_token = create_access_token(
         subject=str(sup_user.id),
@@ -111,7 +111,7 @@ def test_command_center_group_supervisor_role_specific(client, db):
     data = response.json()
 
     role_spec = data["kpi_cards"]["role_specific"]
-    assert role_spec.get("role") == "group_supervisor"
+    assert role_spec.get("role") in ("group_esg_manager", "group_supervisor")
     assert role_spec.get("action_button_label") == "Prepare Group BRSR Report →"
     assert role_spec.get("can_prepare_report") is True
 

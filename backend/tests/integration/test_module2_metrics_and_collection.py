@@ -41,7 +41,7 @@ def test_dynamic_form_generation_and_collection():
     # 1. Create site node
     node_payload = {
         "code": f"SITE-TEST-{suffix}",
-        "name": "Solar Park Phase 1",
+        "name": f"Solar Park Phase {suffix}",
         "type": "project",
         "ownership_pct": 100.0,
         "control_type": "operational_control",
@@ -65,6 +65,8 @@ def test_dynamic_form_generation_and_collection():
     res_period = client.post("/api/v1/org/periods", json=period_payload)
     assert res_period.status_code == 201
     period = res_period.json()
+    if isinstance(period, list):
+        period = period[0]
 
     # 3. Dynamic Form Engine (F06)
     res_form = client.get(f"/api/v1/forms/{site['id']}/{period['id']}")

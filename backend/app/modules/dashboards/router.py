@@ -3,6 +3,7 @@ app/modules/dashboards/router.py
 FastAPI router for executive dashboards, KPI cards, and ESG Data Quality scores.
 """
 from typing import Optional
+import uuid
 from fastapi import APIRouter, Depends, Query, HTTPException, status
 from sqlalchemy.orm import Session
 from app.db.session import get_db
@@ -28,9 +29,24 @@ def get_executive_summary(
     """
     Returns top-level executive metrics, submission progress, ESG Data Quality score, and principle cards.
     """
-    # Scope default for project_admin
-    if not entity_id and current_user.role == Role.PROJECT_ADMIN.value and current_user.org_node_id:
-        entity_id = str(current_user.org_node_id)
+    # Scope default for scoped roles (project, BU, subsidiary)
+    if not entity_id and current_user.role not in (
+        Role.SYSTEM_ADMIN.value,
+        Role.GROUP_ADMIN.value,
+        Role.GROUP_SUPERVISOR.value,
+        Role.GROUP_ESG_MANAGER.value,
+    ):
+        from app.security.scope import get_user_effective_scope_node_ids
+        eff_ids = get_user_effective_scope_node_ids(db, current_user)
+        for eid in eff_ids:
+            try:
+                uuid.UUID(str(eid))
+                entity_id = str(eid)
+                break
+            except (ValueError, AttributeError, TypeError):
+                pass
+        if not entity_id and current_user.org_node_id:
+            entity_id = str(current_user.org_node_id)
 
     # Resolve default period if not provided
     if not period_id:

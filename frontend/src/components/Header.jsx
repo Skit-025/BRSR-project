@@ -43,9 +43,9 @@ const ACTIVE_PERSONAS = [
     route: '/dashboard'
   },
   {
-    roleKey: 'group_supervisor',
+    roleKey: 'group_esg_manager',
     name: 'Kavita Sen',
-    label: 'Group Supervisor',
+    label: 'Group ESG Manager',
     email: 'group.supervisor@aarohan.in',
     org: 'Aarohan Infrastructure & Energy Group',
     color: '#A855F7',
@@ -61,9 +61,9 @@ const ACTIVE_PERSONAS = [
     route: '/dashboard'
   },
   {
-    roleKey: 'subsidiary_supervisor',
+    roleKey: 'subsidiary_esg_manager',
     name: 'Pooja Hegde',
-    label: 'Subsidiary Supervisor',
+    label: 'Subsidiary ESG Manager',
     email: 'subsidiary.supervisor@aarohan.in',
     org: 'Megha Road and Transport Ltd',
     color: '#818CF8',
@@ -79,9 +79,9 @@ const ACTIVE_PERSONAS = [
     route: '/dashboard'
   },
   {
-    roleKey: 'bu_supervisor',
+    roleKey: 'bu_esg_manager',
     name: 'Vikram Rao',
-    label: 'BU Supervisor',
+    label: 'BU ESG Manager',
     email: 'bu.supervisor@aarohan.in',
     org: 'Transportation & Tunneling',
     color: '#38BDF8',

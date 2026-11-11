@@ -3,6 +3,7 @@ import base64
 import logging
 from typing import Dict, Any, Optional, List
 import httpx
+from app.ai.circuit_breaker import is_network_error
 from app.ai.providers.base import BaseAIProvider
 from app.ai.providers.json_util import parse_json_robust as _parse_json_robust
 from app.config.settings import settings
@@ -80,6 +81,9 @@ class OpenRouterProvider(BaseAIProvider):
             except Exception as e:
                 logger.warning(f"OpenRouter text model '{model}' failed: {e}. Trying fallback...")
                 last_error = e
+                if is_network_error(e):
+                    logger.warning(f"OpenRouter network/DNS failure detected on '{model}'. Skipping remaining models for shared host.")
+                    raise e
 
         raise RuntimeError(f"All OpenRouter text models failed. Last error: {last_error}")
 
@@ -143,6 +147,9 @@ class OpenRouterProvider(BaseAIProvider):
             except Exception as e:
                 logger.warning(f"OpenRouter vision model '{model}' failed: {e}. Trying fallback...")
                 last_error = e
+                if is_network_error(e):
+                    logger.warning(f"OpenRouter network/DNS failure detected on '{model}'. Skipping remaining models for shared host.")
+                    raise e
 
         raise RuntimeError(f"All OpenRouter vision models failed. Last error: {last_error}")
 
@@ -184,5 +191,8 @@ class OpenRouterProvider(BaseAIProvider):
             except Exception as e:
                 logger.warning(f"OpenRouter text model '{model}' failed: {e}. Trying fallback...")
                 last_error = e
+                if is_network_error(e):
+                    logger.warning(f"OpenRouter network/DNS failure detected on '{model}'. Skipping remaining models for shared host.")
+                    raise e
 
         raise RuntimeError(f"All OpenRouter text models failed. Last error: {last_error}")

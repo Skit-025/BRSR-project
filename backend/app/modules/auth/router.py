@@ -210,6 +210,20 @@ def login(login_data: UserLogin, db: Session = Depends(get_db)):
         pending_inv.status = "ACCEPTED"
         pending_inv.accepted_at = datetime.now(timezone.utc)
         db.commit()
+
+    if not user.org_node_id:
+        from app.security.scope import get_user_effective_scope_node_ids
+        eff_ids = get_user_effective_scope_node_ids(db, user)
+        for eid in eff_ids:
+            try:
+                import uuid as _uuid
+                _uuid.UUID(str(eid))
+                user.org_node_id = str(eid)
+                db.commit()
+                db.refresh(user)
+                break
+            except (ValueError, AttributeError, TypeError):
+                pass
     
     access_token = create_access_token(
         subject=user.id,

@@ -9,14 +9,17 @@ import { authApi } from '../api/client';
 
 // ─── Roles each admin level can create/manage (Eight-Role Architecture) ──────────────
 export const MANAGEABLE_ROLES = {
-  system_admin:          ['group_admin', 'group_supervisor', 'subsidiary_admin', 'subsidiary_supervisor', 'bu_admin', 'bu_supervisor', 'project_admin', 'project_supervisor'],
-  group_admin:           ['subsidiary_admin', 'subsidiary_supervisor'],
-  group_supervisor:      [],
-  subsidiary_admin:      ['bu_admin', 'bu_supervisor'],
+  system_admin:          ['group_admin', 'group_esg_manager', 'subsidiary_admin', 'subsidiary_esg_manager', 'bu_admin', 'bu_esg_manager', 'project_admin', 'project_supervisor'],
+  group_admin:           [], // User creation and appointment access removed for Group Admin
+  group_esg_manager:     ['subsidiary_admin', 'subsidiary_esg_manager'], // User creation and appointment granted to Group ESG Manager
+  group_supervisor:      ['subsidiary_admin', 'subsidiary_esg_manager'],
+  subsidiary_admin:      ['subsidiary_esg_manager', 'bu_admin', 'bu_esg_manager'],
+  subsidiary_esg_manager: [],
   subsidiary_supervisor: [],
-  bu_admin:              ['project_admin', 'project_supervisor'],
+  bu_admin:              ['bu_esg_manager', 'project_admin', 'project_supervisor'],
+  bu_esg_manager:        [],
   bu_supervisor:         [],
-  project_admin:         [],
+  project_admin:         ['project_supervisor'],
   project_supervisor:    [],
 };
 
@@ -45,9 +48,20 @@ const ROLE_PERMISSIONS = {
     'submission:read', 'submission:review', 'submission:approve', 'evidence:read', 'consolidation:read',
     'bu_disclosure:read', 'subsidiary_disclosure:read', 'group_disclosure:read',
     'report:read', 'report:lineage',
-    'period:lock', 'audit:read',
-    'user:manage', 'user:create', 'user:delete', 'users:manage_scoped',
+    'period:lock', 'audit:read', 'assurance:write',
     'ai:e1:use', 'ai:e2:use', 'ai:e3:use', 'ai:e4:use', 'ai:e5:use', 'ai:e6:use', 'ai:e7:use', 'ai:approve',
+  ]),
+
+  group_esg_manager: new Set([
+    'org:read', 'org:hierarchy_view', 'metric:read', 'metric:write', 'form:master',
+    'submission:read', 'evidence:read', 'evidence:upload', 'spreadsheet:upload',
+    'consolidation:run', 'consolidation:read', 'calc:run',
+    'bu_disclosure:read', 'subsidiary_disclosure:read',
+    'group_disclosure:write', 'group_disclosure:read',
+    'report:read', 'report:lineage', 'report:compile',
+    'audit:read',
+    'user:manage', 'user:create', 'user:delete', 'users:manage_scoped',
+    'ai:e1:use', 'ai:e2:use', 'ai:e3:use', 'ai:e4:use', 'ai:e5:use', 'ai:e6:use', 'ai:e7:use',
   ]),
 
   group_supervisor: new Set([
@@ -58,6 +72,7 @@ const ROLE_PERMISSIONS = {
     'group_disclosure:write', 'group_disclosure:read',
     'report:read', 'report:lineage', 'report:compile',
     'audit:read',
+    'user:manage', 'user:create', 'user:delete', 'users:manage_scoped',
     'ai:e1:use', 'ai:e2:use', 'ai:e3:use', 'ai:e4:use', 'ai:e5:use', 'ai:e6:use', 'ai:e7:use',
   ]),
 
@@ -69,6 +84,18 @@ const ROLE_PERMISSIONS = {
     'report:read', 'report:lineage',
     'audit:read', 'users:manage_scoped',
     'ai:e1:use', 'ai:e2:use', 'ai:e3:use', 'ai:e4:use', 'ai:e5:use', 'ai:e6:use', 'ai:e7:use', 'ai:approve',
+  ]),
+
+  subsidiary_esg_manager: new Set([
+    'org:read', 'org:hierarchy_view', 'metric:read', 'metric:write',
+    'submission:create', 'submission:read', 'submission:submit',
+    'evidence:read', 'evidence:upload', 'spreadsheet:upload',
+    'consolidation:run', 'consolidation:read', 'calc:run',
+    'bu_disclosure:read',
+    'subsidiary_disclosure:write', 'subsidiary_disclosure:read',
+    'report:read', 'report:lineage',
+    'audit:read',
+    'ai:e1:use', 'ai:e2:use', 'ai:e3:use', 'ai:e4:use', 'ai:e5:use', 'ai:e6:use', 'ai:e7:use',
   ]),
 
   subsidiary_supervisor: new Set([
@@ -90,6 +117,17 @@ const ROLE_PERMISSIONS = {
     'bu_disclosure:read',
     'report:read', 'report:lineage', 'audit:read', 'users:manage_scoped',
     'ai:e1:use', 'ai:e2:use', 'ai:e3:use', 'ai:e6:use', 'ai:e7:use', 'ai:approve',
+  ]),
+
+  bu_esg_manager: new Set([
+    'org:read', 'org:hierarchy_view', 'metric:read', 'metric:write',
+    'form:submit',
+    'submission:create', 'submission:read', 'submission:submit',
+    'evidence:read', 'evidence:upload', 'spreadsheet:upload',
+    'consolidation:run', 'consolidation:read', 'calc:run',
+    'bu_disclosure:write', 'bu_disclosure:read',
+    'report:read', 'report:lineage', 'audit:read',
+    'ai:e1:use', 'ai:e2:use', 'ai:e3:use', 'ai:e6:use', 'ai:e7:use',
   ]),
 
   bu_supervisor: new Set([
@@ -126,11 +164,14 @@ const ROLE_PERMISSIONS = {
 export const ROLE_META = {
   system_admin:          { label: 'System Admin',          color: '#f43f5e', icon: '🛡️', tier: 'system',     scopeLabel: 'All' },
   group_admin:           { label: 'Group Admin',           color: '#8b5cf6', icon: '🏛️', tier: 'group',      scopeLabel: 'Group' },
-  group_supervisor:      { label: 'Group Supervisor',      color: '#a855f7', icon: '📊', tier: 'group',      scopeLabel: 'Group' },
+  group_esg_manager:     { label: 'Group ESG Manager',     color: '#a855f7', icon: '📊', tier: 'group',      scopeLabel: 'Group' },
+  group_supervisor:      { label: 'Group ESG Manager',     color: '#a855f7', icon: '📊', tier: 'group',      scopeLabel: 'Group' },
   subsidiary_admin:      { label: 'Subsidiary Admin',      color: '#6366f1', icon: '🏢', tier: 'subsidiary', scopeLabel: 'Subsidiary' },
-  subsidiary_supervisor: { label: 'Subsidiary Supervisor', color: '#818cf8', icon: '📋', tier: 'subsidiary', scopeLabel: 'Subsidiary' },
+  subsidiary_esg_manager: { label: 'Subsidiary ESG Manager', color: '#818cf8', icon: '📋', tier: 'subsidiary', scopeLabel: 'Subsidiary' },
+  subsidiary_supervisor: { label: 'Subsidiary ESG Manager', color: '#818cf8', icon: '📋', tier: 'subsidiary', scopeLabel: 'Subsidiary' },
   bu_admin:              { label: 'BU Admin',              color: '#0ea5e9', icon: '🏗️', tier: 'bu',         scopeLabel: 'Business Unit' },
-  bu_supervisor:         { label: 'BU Supervisor',         color: '#38bdf8', icon: '📑', tier: 'bu',         scopeLabel: 'Business Unit' },
+  bu_esg_manager:        { label: 'BU ESG Manager',        color: '#38bdf8', icon: '📑', tier: 'bu',         scopeLabel: 'Business Unit' },
+  bu_supervisor:         { label: 'BU ESG Manager',        color: '#38bdf8', icon: '📑', tier: 'bu',         scopeLabel: 'Business Unit' },
   project_admin:         { label: 'Project Admin',         color: '#059669', icon: '✅', tier: 'project',    scopeLabel: 'Project' },
   project_supervisor:    { label: 'Project Supervisor',    color: '#10b981', icon: '📁', tier: 'project',    scopeLabel: 'Project' },
 };
@@ -365,21 +406,21 @@ export function AuthProvider({ children }) {
 
   // Group
   const isGroupAdmin = role === 'group_admin';
-  const isGroupSupervisor = role === 'group_supervisor';
-  const isGroupEsgManager = isGroupAdmin || isGroupSupervisor;
-  const isEsgManager = isGroupAdmin || isGroupSupervisor || isSystemAdmin;
+  const isGroupSupervisor = role === 'group_supervisor' || role === 'group_esg_manager';
+  const isGroupEsgManager = role === 'group_esg_manager' || role === 'group_supervisor';
+  const isEsgManager = isGroupAdmin || isGroupEsgManager || isSystemAdmin;
 
   // Subsidiary
   const isSubAdmin = role === 'subsidiary_admin';
-  const isSubSupervisor = role === 'subsidiary_supervisor';
+  const isSubSupervisor = role === 'subsidiary_supervisor' || role === 'subsidiary_esg_manager';
   const isSubsidiaryAdmin = isSubAdmin;
   const isSubsidiarySupervisor = isSubSupervisor;
-  const isSubEsgManager = isSubAdmin || isSubSupervisor;
+  const isSubEsgManager = isSubSupervisor;
 
   // BU
   const isBuAdmin = role === 'bu_admin';
-  const isBuSupervisor = role === 'bu_supervisor';
-  const isBuEsgManager = isBuAdmin || isBuSupervisor;
+  const isBuSupervisor = role === 'bu_supervisor' || role === 'bu_esg_manager';
+  const isBuEsgManager = isBuSupervisor;
   const isBuReviewer = isBuAdmin;
 
   // Project
@@ -389,10 +430,10 @@ export function AuthProvider({ children }) {
 
   // General Admin / Supervisor flags
   const isAdmin = ['system_admin', 'group_admin', 'subsidiary_admin', 'bu_admin', 'project_admin'].includes(role);
-  const isSupervisor = ['group_supervisor', 'subsidiary_supervisor', 'bu_supervisor', 'project_supervisor'].includes(role);
+  const isSupervisor = ['group_supervisor', 'group_esg_manager', 'subsidiary_supervisor', 'subsidiary_esg_manager', 'bu_supervisor', 'bu_esg_manager', 'project_supervisor'].includes(role);
 
   // Maker / Checker
-  const isMaker = ['project_supervisor', 'bu_supervisor', 'subsidiary_supervisor', 'group_supervisor', 'system_admin'].includes(role);
+  const isMaker = ['project_supervisor', 'bu_supervisor', 'bu_esg_manager', 'subsidiary_supervisor', 'subsidiary_esg_manager', 'group_supervisor', 'group_esg_manager', 'system_admin'].includes(role);
   const isChecker = ['project_admin', 'bu_admin', 'subsidiary_admin', 'group_admin', 'system_admin'].includes(role);
 
   // Cross-cutting

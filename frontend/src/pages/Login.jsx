@@ -20,14 +20,14 @@ const PLATFORM_ROLES = [
     highlight: 'Group Verification'
   },
   {
-    role: 'Group Supervisor',
+    role: 'Group ESG Manager',
     name: 'Kavita Sen',
     email: 'group.supervisor@aarohan.in',
-    desc: 'Roll up approved subsidiary data, complete group disclosures & compile final BRSR.',
+    desc: 'Enterprise group ESG operations, consolidation, disclosures compilation, and user creation & appointment governance.',
     icon: Building2,
     badgeColor: '#A855F7',
     route: '/dashboard',
-    highlight: 'Group Operations'
+    highlight: 'Group ESG Operations & Users'
   },
   {
     role: 'Subsidiary Admin',
@@ -40,14 +40,14 @@ const PLATFORM_ROLES = [
     highlight: 'Sub. Verification'
   },
   {
-    role: 'Subsidiary Supervisor',
+    role: 'Subsidiary ESG Manager',
     name: 'Pooja Hegde',
     email: 'subsidiary.supervisor@aarohan.in',
     desc: 'Consolidate approved BU submissions, add subsidiary metrics & submit report.',
     icon: Building2,
     badgeColor: '#6366F1',
     route: '/dashboard',
-    highlight: 'Sub. Operations'
+    highlight: 'Sub. ESG Operations'
   },
   {
     role: 'BU Admin',
@@ -60,14 +60,14 @@ const PLATFORM_ROLES = [
     highlight: 'BU Verification'
   },
   {
-    role: 'BU Supervisor',
+    role: 'BU ESG Manager',
     name: 'Vikram Rao',
     email: 'bu.supervisor@aarohan.in',
     desc: 'Aggregate available approved project data, enter BU disclosures & submit report.',
     icon: GitMerge,
     badgeColor: '#38BDF8',
     route: '/dashboard',
-    highlight: 'BU Operations'
+    highlight: 'BU ESG Operations'
   },
   {
     role: 'Project Admin',

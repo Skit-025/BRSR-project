@@ -671,14 +671,18 @@ def _extract_with_llm(text: str, doc_type: str, evidence_id: str) -> Optional[Li
     metric_code, expected_unit = METRIC_MAP.get(doc_type, ("UNKNOWN", "units"))
 
     prompt = (
-        f"You are an expert ESG utility auditor. Extract accurate metered consumption data from this utility document.\n\n"
+        f"You are a Senior Statutory ESG auditor extracting verified metrics from utility documents.\n\n"
         f"Document Type: {doc_type}\n"
         f"Expected BRSR Metric Code: {metric_code} (default unit: {expected_unit})\n\n"
-        f"Extraction Rules:\n"
-        f"1. Extract ONLY numbers that actually appear in the document text below. DO NOT invent or assume values.\n"
-        f"2. Return the primary billed consumption quantity in 'value' (e.g., total kWh for electricity, Litres for fuel, kL for water, tonnes for waste).\n"
-        f"3. Also extract vendor_name (supplier/discom), consumer_name, invoice_number, meter_id, billing_period, and bill_amount if present.\n"
-        f"4. Confidence should reflect how explicitly the consumption value was stated (0.0 to 1.0).\n\n"
+        f"CRITICAL AUDIT RULES (STRICT PHYSICAL VERIFICATION):\n"
+        f"1. NEVER confuse monetary amounts (in Rupees ₹ / INR / Rs) with physical consumption (kWh, Litres, m³, tonnes)!\n"
+        f"   - On electricity bills: 'Amount', 'Total Charges Payable', 'Net Payable', 'Amount Payable after due date' (e.g., 458, 471) are MONEY / CURRENCY in Rupees. Put them into 'bill_amount'.\n"
+        f"   - On electricity bills: Check the meter reading table. 'Units Consumed' or 'BILLED UNITS' = (Current/New Reading - Previous/Old Reading). Put this physical energy consumption into 'value' (e.g., 110 kWh).\n"
+        f"   - NEVER return monetary rupee amounts as 'value'!\n"
+        f"2. Extract ONLY numbers that actually appear in the document text below. DO NOT invent or assume values.\n"
+        f"3. Return the verified physical consumption quantity in 'value' (e.g., total kWh for electricity, Litres for fuel, kL for water, tonnes for waste).\n"
+        f"4. Also extract vendor_name (supplier/discom), consumer_name, invoice_number, meter_id, billing_period, bill_amount, meter_reading_previous, meter_reading_current, units_consumed.\n"
+        f"5. Confidence should reflect how explicitly the consumption value was stated (0.0 to 1.0).\n\n"
         f"Document Content:\n{text[:5000]}\n\n"
         f"Return strictly valid JSON matching the schema."
     )
@@ -688,6 +692,10 @@ def _extract_with_llm(text: str, doc_type: str, evidence_id: str) -> Optional[Li
         "properties": {
             "metric": {"type": "string"},
             "value": {"type": "number"},
+            "units_kwh": {"type": "number"},
+            "units_consumed": {"type": "number"},
+            "meter_reading_previous": {"type": "number"},
+            "meter_reading_current": {"type": "number"},
             "unit": {"type": "string"},
             "confidence": {"type": "number"},
             "invoice_number": {"type": "string"},
@@ -721,10 +729,31 @@ def _extract_with_llm(text: str, doc_type: str, evidence_id: str) -> Optional[Li
             return None
 
         meta = {}
-        for k in ("invoice_number", "meter_id", "billing_period", "consumer_name", "vendor_name", "bill_amount"):
+        for k in ("invoice_number", "meter_id", "billing_period", "consumer_name", "vendor_name", "bill_amount", "meter_reading_previous", "meter_reading_current", "units_consumed"):
             if raw_result.get(k):
                 meta[k] = raw_result[k]
         meta["ai_provider"] = provider_used
+
+        # Reconcile physical meter readings if available
+        curr = raw_result.get("meter_reading_current")
+        prev = raw_result.get("meter_reading_previous")
+        units_c = raw_result.get("units_consumed")
+        amt = raw_result.get("bill_amount")
+        if curr is not None and prev is not None:
+            try:
+                diff = abs(float(curr) - float(prev))
+                if diff > 0 and (val_clean == amt or val_clean == 0 or (units_c and float(units_c) == diff)):
+                    logger.info(f"LLM extraction reconciled val_clean from {val_clean} to meter difference {diff}")
+                    val_clean = diff
+            except (ValueError, TypeError):
+                pass
+        elif units_c is not None and val_clean == amt:
+            try:
+                uc_flt = float(units_c)
+                if uc_flt > 0:
+                    val_clean = uc_flt
+            except (ValueError, TypeError):
+                pass
 
         return [ExtractedField(
             metric=raw_result.get("metric", metric_code),
@@ -772,10 +801,14 @@ def _extract_with_vision(
             "meter_id": {"type": "string"},
             "bill_date": {"type": "string"},
             "billing_period": {"type": "string"},
+            "meter_reading_previous": {"type": "number"},
+            "meter_reading_current": {"type": "number"},
+            "units_consumed": {"type": "number"},
             "value": {"type": "number"},
             "units_kwh": {"type": "number"},
             "unit": {"type": "string"},
             "amount": {"type": "number"},
+            "amount_after_due_date": {"type": "number"},
             "confidence": {"type": "number"}
         }
     }
@@ -792,17 +825,21 @@ def _extract_with_vision(
         )
 
     vision_prompt = (
-        f"You are an expert ESG utility bill auditor.\n\n"
+        f"You are a Senior Statutory ESG auditor extracting verified metrics from utility documents.\n\n"
         f"{relevance_instruction}\n\n"
-        f"Expected BRSR metric: {metric_code} ({expected_unit})\n\n"
-        f"Extraction tasks:\n"
-        f"1. Electricity bills: Extract consumption in kWh (look for 'Total Units', 'Billed Units', 'Current Reading - Previous Reading', 'Net kWh').\n"
-        f"2. Fuel/Diesel receipts: Extract total Litres delivered.\n"
-        f"3. Water bills: Extract total kL or cubic meters consumed.\n"
-        f"4. Waste manifests: Extract total metric tonnes disposed.\n"
-        f"5. Safety logs: Extract total lost-time injury incidents.\n"
-        f"6. Also extract: vendor_name (Discom/Supplier), consumer_name, account_number, invoice_number, meter_id, bill_date, billing_period, and net bill amount.\n"
-        f"7. Return numeric consumption in 'value' (or 'units_kwh') and unit in 'unit'. Do NOT invent values."
+        f"Target BRSR Metric: {metric_code} ({expected_unit})\n\n"
+        f"CRITICAL EXTRACTION RULES (STRICT PHYSICAL VERIFICATION):\n"
+        f"1. NEVER confuse monetary amounts (in Rupees ₹ / INR / Rs) with physical consumption (kWh, Litres, m³, tonnes)!\n"
+        f"   - On electricity bills: 'Amount', 'Total Charges Payable', 'Net Amount', 'Amount Payable after due date' (e.g. 458, 471) are MONETARY CURRENCY in Rupees. Put them into 'amount' or 'amount_after_due_date'.\n"
+        f"   - On electricity bills: Find the physical meter table. Look for 'Meter Reading New' (Current Reading) and 'Meter Reading Old' (Previous Reading). The real energy consumed is (New Reading - Old Reading) or the column 'Units Consumed' / 'BILLED UNITS' (e.g. 6277 - 6167 = 110 kWh).\n"
+        f"   - Return the physical energy consumption in 'value' (and 'units_kwh', 'units_consumed') and set 'unit' to 'kWh'.\n"
+        f"   - NEVER return monetary rupee amounts (like 458 or 471) as kWh!\n"
+        f"2. Fuel/Diesel receipts: Extract the volumetric quantity in Litres (e.g. from 'Volume' or 'Qty (L)'), NOT the total sale price in Rs.\n"
+        f"3. Water bills: Extract volumetric water consumed in kL or m³, NOT bill charges.\n"
+        f"4. Waste manifests: Extract net weight in metric tonnes.\n"
+        f"5. Safety logs: Extract total incidents count.\n"
+        f"6. Also extract: vendor_name, consumer_name, account_number, invoice_number, meter_id, bill_date, billing_period, amount, meter_reading_previous, meter_reading_current, units_consumed.\n"
+        f"7. Return strictly valid JSON matching the schema."
     )
 
     result = None
@@ -859,9 +896,36 @@ def _extract_with_vision(
     unit_str = result.get("unit") or expected_unit
 
     meta = {}
-    for k in ("invoice_number", "meter_id", "billing_period", "consumer_name", "vendor_name", "account_number", "bill_date", "amount", "total_amount"):
+    for k in (
+        "invoice_number", "meter_id", "billing_period", "consumer_name",
+        "vendor_name", "account_number", "bill_date", "amount", "total_amount",
+        "amount_after_due_date", "meter_reading_previous", "meter_reading_current",
+        "units_consumed"
+    ):
         if result.get(k):
             meta[k] = result[k]
+
+    # Reconcile physical meter readings if available
+    curr = result.get("meter_reading_current")
+    prev = result.get("meter_reading_previous")
+    units_c = result.get("units_consumed")
+    amt = result.get("amount")
+    amt_after = result.get("amount_after_due_date")
+    if curr is not None and prev is not None:
+        try:
+            diff = abs(float(curr) - float(prev))
+            if diff > 0 and (val in (amt, amt_after) or val == 0 or (units_c and float(units_c) == diff)):
+                logger.info(f"Vision extraction reconciled val from {val} to meter difference {diff}")
+                val = diff
+        except (ValueError, TypeError):
+            pass
+    elif units_c is not None and (val in (amt, amt_after) or val == 0):
+        try:
+            uc_flt = float(units_c)
+            if uc_flt > 0:
+                val = uc_flt
+        except (ValueError, TypeError):
+            pass
 
     confidence = 0.90
     try:

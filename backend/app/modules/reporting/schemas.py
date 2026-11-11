@@ -20,11 +20,13 @@ class PrincipleIndicatorDisclosure(BaseModel):
     indicator_name: str
     principle: int
     brsr_core: bool
-    disclosed_value: float
+    disclosed_value: Optional[float] = None
     unit: str
     aggregation_method: str
     assurance_ready: bool
     evidence_verified: bool
+    status: str = "CALCULATED"
+    status_reason: Optional[str] = None
 
 class BRSRFullReportResponse(BaseModel):
     report_id: str

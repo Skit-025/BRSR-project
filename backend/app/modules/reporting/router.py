@@ -123,11 +123,17 @@ def export_html_report(
     for item in report.section_c:
         core_badge = "<span style='background:#e0f2fe;color:#0369a1;padding:2px 6px;border-radius:4px;font-size:11px;'>BRSR CORE</span>" if item.brsr_core else ""
         evidence_badge = "<span style='color:#15803d;'>&#10003; Verified</span>" if item.evidence_verified else "<span style='color:#b45309;'>Reported</span>"
+        if item.disclosed_value is not None:
+            val_display = f"{item.disclosed_value:,.2f} {item.unit}"
+        else:
+            status_text = getattr(item, 'status', None) or 'NOT REPORTED'
+            val_display = f"<span style='color:#6b7280;font-style:italic;'>{status_text}</span>"
+
         rows_html += f"""
         <tr>
             <td style="padding:10px;border-bottom:1px solid #e5e7eb;"><b>{item.metric_code}</b></td>
             <td style="padding:10px;border-bottom:1px solid #e5e7eb;">{item.indicator_name} {core_badge}</td>
-            <td style="padding:10px;border-bottom:1px solid #e5e7eb;text-align:right;"><b>{item.disclosed_value:,.2f} {item.unit}</b></td>
+            <td style="padding:10px;border-bottom:1px solid #e5e7eb;text-align:right;"><b>{val_display}</b></td>
             <td style="padding:10px;border-bottom:1px solid #e5e7eb;text-align:center;">{item.aggregation_method.upper()}</td>
             <td style="padding:10px;border-bottom:1px solid #e5e7eb;text-align:center;">{evidence_badge}</td>
         </tr>
