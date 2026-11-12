@@ -128,7 +128,7 @@ def create_node(
         node_in.parent_id = None
 
     # 1. Strict Project-Creation Matrix
-    node_type_val = node_in.type.value if hasattr(node_in.type, "value") else str(node_in.type)
+    node_type_val = (node_in.type.value if hasattr(node_in.type, "value") else str(node_in.type)).strip().lower()
     if node_type_val in ("project", "site"):
         if node_in.name:
             node_in.name = node_in.name.strip().upper()
@@ -194,6 +194,8 @@ def create_node(
             if current_user.org_node_id and node_in.parent_id:
                 if not is_node_descendant(db, str(current_user.org_node_id), str(node_in.parent_id)):
                     raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Parent node is outside your authorized group scope.")
+        elif role != Role.SYSTEM_ADMIN.value:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You are not authorized to create organizational units.")
 
 
     service = OrgService(db)

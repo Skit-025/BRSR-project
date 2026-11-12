@@ -258,6 +258,12 @@ def assert_can_create_project(db: Session, user: User, parent_id: Optional[str])
             return parent
         return None
 
+    if user.role != Role.BU_ADMIN.value:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only Business Unit Admins are permitted to create projects."
+        )
+
     if not parent_id:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,

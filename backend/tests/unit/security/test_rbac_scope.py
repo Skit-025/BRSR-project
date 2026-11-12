@@ -193,3 +193,30 @@ def test_filter_projects_query_for_user(db):
     sys_user = User(id=str(uuid.uuid4()), email="sys@test.com", hashed_password="test_hash_password", full_name="System Admin", role=Role.SYSTEM_ADMIN.value, is_active=True)
     sys_q = filter_projects_query_for_user(db, q, sys_user)
     assert len(sys_q.all()) == 2
+
+
+@pytest.mark.parametrize("disallowed_role", [
+    Role.PROJECT_SUPERVISOR.value,
+    Role.PROJECT_ADMIN.value,
+    Role.BU_ESG_MANAGER.value,
+    Role.BU_SUPERVISOR.value,
+    Role.SUBSIDIARY_ADMIN.value,
+    Role.SUBSIDIARY_ESG_MANAGER.value,
+    Role.SUBSIDIARY_SUPERVISOR.value,
+    Role.GROUP_ADMIN.value,
+    Role.GROUP_ESG_MANAGER.value,
+    Role.GROUP_SUPERVISOR.value,
+    "unknown_role",
+])
+def test_non_bu_admin_cannot_create_project(db, disallowed_role):
+    user = User(
+        id=str(uuid.uuid4()),
+        email=f"{disallowed_role}@test.com",
+        hashed_password="test_hash_password",
+        role=disallowed_role,
+        full_name="Disallowed User",
+        is_active=True,
+    )
+    with pytest.raises(HTTPException) as exc_info:
+        assert_can_create_project(db, user, parent_id=str(uuid.uuid4()))
+    assert exc_info.value.status_code == 403

@@ -150,10 +150,11 @@ function AccessDenied() {
   );
 }
 
-// ─── Guards a route by one or more permissions (any match = allowed) ─────────
-function PermissionGuard({ perms = [], children }) {
+// ─── Guards a route by roles and/or permissions (any perm match = allowed) ──
+function PermissionGuard({ perms = [], roles = [], children }) {
   const { hasPermission, user } = useAuth();
   if (!user) return <Navigate to="/landing" replace />;
+  if (roles.length > 0 && !roles.includes(user.role)) return <AccessDenied />;
   if (perms.length === 0) return children;
   const allowed = perms.some((p) => hasPermission(p));
   if (!allowed) return <AccessDenied />;
@@ -310,7 +311,7 @@ export default function App() {
                   </PermissionGuard>
                 } />
                 <Route path="/projects/new" element={
-                  <PermissionGuard perms={['org:read']}>
+                  <PermissionGuard roles={['bu_admin']} perms={['org:write']}>
                     <ProjectWizard />
                   </PermissionGuard>
                 } />
