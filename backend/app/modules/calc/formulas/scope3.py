@@ -170,7 +170,7 @@ def calculate_scope3_purchased_goods(
         if not factor_meta:
             material_details.append({
                 "material": material,
-                "error": f"No Indian emission factor for '{material}'. Available: {list(SCOPE3_SPEND_FACTORS.keys())}",
+                "error": f"No Indian factor for '{material}'. Available: {list(SCOPE3_SPEND_FACTORS.keys())}",
                 "tco2e": "0",
             })
             continue
@@ -277,7 +277,7 @@ def calculate_scope3_capital_goods(
       - spend_inr_lakh: Decimal — capital expenditure in INR Lakh
                                   (spend-based fallback per SEBI BRSR guidance)
 
-    Emission factors sourced from:
+    Factors sourced from:
       - IPCC 2006 Tier 1 (embodied energy of manufactured goods)
       - European Environment Agency / worldsteel for steel-intensive equipment
       - SEBI BRSR guidance: spend-based estimation (INR lakh × EF) acceptable
@@ -365,7 +365,7 @@ def calculate_scope3_waste(
                                       "msw_landfill", "msw_composted", "ewaste"
       - quantity_t:   Decimal — waste quantity in metric tonnes
 
-    Emission factors sourced from:
+    Factors sourced from:
       - CPCB Solid Waste Management Report 2022–23
       - MoEFCC C&D Waste Management Rules 2016
       - IPCC 2006 Waste Chapter (methane correction factor, India Tier 1)

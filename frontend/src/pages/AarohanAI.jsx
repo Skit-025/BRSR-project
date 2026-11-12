@@ -101,7 +101,7 @@ const ENGINE_META = {
     help: {
       what: 'Estimates Scope 3 GHG emissions for a value-chain work category using SEBI / GHG Protocol spend-based or activity-based methods.',
       when: 'Use for each contracted work category to produce the Scope 3 line items required under BRSR Core.',
-      outputs: 'Estimated tCO₂e, the emission factor used, method (spend vs activity), and confidence level.',
+      outputs: 'Estimated tCO₂e, calculation method (spend vs activity), and confidence level.',
       tip: 'Select the correct work category — the factor database is calibrated per SEBI-recognised categories.',
     },
   },
@@ -200,7 +200,7 @@ const VC_UNITS = ['INR Lakhs', 'INR Crores', 'USD', 'EUR', 'Tonnes', 'kWh', 'GJ'
 const QUICK_QUESTIONS = [
   'What is the reporting boundary for Scope 2 emissions under BRSR Core?',
   'Which BRSR principle covers employee health and safety disclosures?',
-  'How should I calculate water intensity under BRSR?',
+  'How should I report water withdrawal and consumption under BRSR?',
   'What is the difference between Scope 1, Scope 2, and Scope 3 emissions?',
   'What does "top 75% by value" mean in SEBI value chain rules?',
   'How are renewable energy certificates (RECs) accounted for?',
@@ -621,6 +621,7 @@ function E1Form({ onRun, loading }) {
   const [resolveError, setResolveError] = useState('');
   const [billType, setBillType] = usePersistentInput('e1_billType', 'electricity_bill');
   const [customType, setCustomType] = usePersistentInput('e1_customType', '');
+  const [targetFieldName, setTargetFieldName] = usePersistentInput('e1_targetFieldName', '');
   const [file, setFile] = useState(null);
   const [dragging, setDragging] = useState(false);
   const fileRef = useRef(null);
@@ -643,6 +644,7 @@ function E1Form({ onRun, loading }) {
   }, [shaInput]);
 
   const handleRun = () => {
+    const cleanTarget = targetFieldName.trim() || undefined;
     if (mode === 'sha' && resolvedDoc) {
       onRun({
         evidence_id: resolvedDoc.id,
@@ -650,10 +652,15 @@ function E1Form({ onRun, loading }) {
         filename: resolvedDoc.original_name || resolvedDoc.filename,
         mime_type: resolvedDoc.mime_type,
         file_path: resolvedDoc.storage_key || '/vault/' + resolvedDoc.id,
+        metric_name: cleanTarget,
         _sha256: resolvedDoc.sha256,
       });
     } else if (mode === 'upload' && file) {
-      onRun({ file, doc_type_hint: billType === 'other' ? customType : billType });
+      onRun({
+        file,
+        doc_type_hint: billType === 'other' ? customType : billType,
+        metric_name: cleanTarget,
+      });
     }
   };
 
@@ -806,6 +813,15 @@ function E1Form({ onRun, loading }) {
           )}
         </>
       )}
+
+      <div>
+        <Label>Specific Field / Metric to Find (Optional)</Label>
+        <Inp
+          value={targetFieldName}
+          onChange={setTargetFieldName}
+          placeholder="Leave blank to extract all fields, or specify e.g. Groundwater, NOx, Solar PPA, Plastic waste…"
+        />
+      </div>
 
       <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
         <RunBtn onClick={handleRun} loading={loading} engine="E1 — Evidence Extraction" color={C.blue} disabled={!canRun} />
@@ -1060,7 +1076,7 @@ function E5Form({ onRun, loading }) {
       <div>
         <Label>Context Bullets (one per line — guides the narrative tone)</Label>
         <TextArea value={bullets} onChange={setBullets} rows={3}
-          placeholder="New solar plant commissioned in Q2&#10;Target of net-zero Scope 2 by 2030&#10;Energy intensity improved 8% vs prior year" />
+          placeholder="New solar plant commissioned in Q2&#10;Target of net-zero Scope 2 by 2030&#10;Energy consumption reduced 8% vs prior year" />
       </div>
 
       <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
@@ -1382,7 +1398,9 @@ function E1Result({ result }) {
             {fields.map((field, index) => {
               const meta = field.metadata || {};
               const metaEntries = Object.entries(meta).filter(([, v]) => v != null && v !== '' && v !== false);
-              const fieldLabel = field.metric || field.field_name || field.field || field.name || `Field ${index + 1}`;
+              const fieldLabel = meta.field_name
+                ? `${meta.field_name} (${field.metric || field.field_name})`
+                : (field.metric || field.field_name || field.field || field.name || `Field ${index + 1}`);
               const pageInfo = field.page != null ? `Page ${field.page}` : null;
               const runInfo = (field.run_id || result.run_id) ? `Run ID: ${(field.run_id || result.run_id).slice(0, 12)}…` : null;
               const confPct = field.confidence != null ? Math.round(field.confidence * 100) : null;
@@ -1995,14 +2013,25 @@ export default function AarohanAI() {
         if (payload.file) {
           const formData = new FormData();
           formData.append('file', payload.file);
-          formData.append('run_ocr', 'true');
+          formData.append('run_ocr', payload.metric_name ? 'false' : 'true');
           formData.append('doc_type_hint', payload.doc_type_hint || '');
           const response = await evidenceApi.upload(formData);
+          let extractedFields = response.data.extracted_fields || [];
+          if (payload.metric_name && response.data.evidence?.id) {
+            const extRes = await evidenceApi.extract(
+              response.data.evidence.id,
+              payload.doc_type_hint || null,
+              null,
+              null,
+              payload.metric_name
+            );
+            extractedFields = extRes.data || [];
+          }
           return {
             ...response.data,
-            fields: response.data.extracted_fields || [],
+            fields: extractedFields,
             doc_type: response.data.evidence?.doc_type || payload.doc_type_hint,
-            run_id: response.data.extracted_fields?.[0]?.run_id,
+            run_id: extractedFields?.[0]?.run_id,
             evidence_id: response.data.evidence?.id,
             original_name: response.data.evidence?.original_name || payload.file.name,
             mime_type: response.data.evidence?.mime_type || payload.file.type,

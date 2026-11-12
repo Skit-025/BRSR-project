@@ -227,16 +227,13 @@ export default function ProjectDetail() {
     const derivedStatus = subStatus ? (SUB_STATUS_MAP[subStatus] || 'DRAFT') : (dbNode.is_active ? 'APPROVED' : 'DRAFT');
     const dataPoints = submissionPack?.data_points || [];
 
-    const isSeededZojila = dbNode.code === 'PRJ-ZOJILA-P7' || (dbNode.name && dbNode.name.toLowerCase().includes('zojila'));
-    const hero = PROJECTS_DATA['PRJ-ZOJILA-P7'];
-
     // Real dynamic coverage: strictly 0% if no data entered yet!
     const totalRequiredFields = 8;
     const filledCount = dataPoints.filter(d => (d.value_numeric !== null && d.value_numeric !== undefined) || (d.value_text !== null && d.value_text !== undefined && d.value_text !== '')).length;
-    const coverage = isSeededZojila && dataPoints.length === 0 ? 88 : (filledCount > 0 ? Math.min(100, Math.round((filledCount / totalRequiredFields) * 100)) : 0);
+    const coverage = filledCount > 0 ? Math.min(100, Math.round((filledCount / totalRequiredFields) * 100)) : 0;
 
     // Real dynamic evidence count: 0 / 6 for empty projects
-    const evidenceCountStr = isSeededZojila && projectEvidence.length === 0 ? '14 / 16' : `${projectEvidence.length} / ${Math.max(6, projectEvidence.length)}`;
+    const evidenceCountStr = `${projectEvidence.length} / ${Math.max(6, projectEvidence.length)}`;
 
     // Project type resolution
     const pType = (dbNode.project_type || 'Infrastructure').toLowerCase();
@@ -319,52 +316,45 @@ export default function ProjectDetail() {
       return (match.value_numeric !== null && match.value_numeric !== undefined) ? Number(match.value_numeric) : (match.value_text || null);
     };
 
-    let metrics = [];
-    if (isSeededZojila && dataPoints.length === 0) {
-      metrics = hero.metrics;
-    } else {
-      const mElec = getVal('ENV-ENERGY-001') || getVal('ENV-ENE');
-      const mDiesel = getVal('ENV-ENERGY-002') || getVal('ENV-ENERGY-003');
-      const mWater = getVal('ENV-WATER-001') || getVal('ENV-WAT');
-      const mWorkforce = getVal('SOC-WORK') || getVal('SOC') || (filledCount > 0 ? 120 : null);
+    const mElec = getVal('ENV-ENERGY-001') || getVal('ENV-ENE');
+    const mDiesel = getVal('ENV-ENERGY-002') || getVal('ENV-ENERGY-003');
+    const mWater = getVal('ENV-WATER-001') || getVal('ENV-WAT');
+    const mWorkforce = getVal('SOC-WORK') || getVal('SOC');
 
-      metrics = [
-        {
-          label: isTunnel ? 'Underground Grid Power' : isSolar ? 'Clean Power Export' : 'Grid Electricity Draw',
-          value: mElec !== null ? Number(mElec).toLocaleString('en-IN') : '--',
-          unit: isSolar ? 'MWh' : 'kWh',
-          icon: Zap,
-          trend: mElec !== null ? -5 : 0
-        },
-        {
-          label: isTunnel ? 'Auxiliary & Machinery Diesel' : 'Auxiliary Diesel',
-          value: mDiesel !== null ? Number(mDiesel).toLocaleString('en-IN') : '--',
-          unit: 'L',
-          icon: Flame,
-          trend: mDiesel !== null ? -8 : 0
-        },
-        {
-          label: isTunnel ? 'Excavation & Dust Water' : 'Water Consumed',
-          value: mWater !== null ? Number(mWater).toLocaleString('en-IN') : '--',
-          unit: 'kL',
-          icon: Droplets,
-          trend: mWater !== null ? -12 : 0
-        },
-        {
-          label: 'Workers On-site',
-          value: mWorkforce !== null ? String(mWorkforce) : '--',
-          unit: 'persons',
-          icon: Users,
-          trend: mWorkforce !== null ? 2 : 0
-        },
-      ];
-    }
+    const metrics = [
+      {
+        label: isTunnel ? 'Underground Grid Power' : isSolar ? 'Clean Power Export' : 'Grid Electricity Draw',
+        value: mElec !== null ? Number(mElec).toLocaleString('en-IN') : '--',
+        unit: isSolar ? 'MWh' : 'kWh',
+        icon: Zap,
+        trend: mElec !== null ? -5 : 0
+      },
+      {
+        label: isTunnel ? 'Auxiliary & Machinery Diesel' : 'Auxiliary Diesel',
+        value: mDiesel !== null ? Number(mDiesel).toLocaleString('en-IN') : '--',
+        unit: 'L',
+        icon: Flame,
+        trend: mDiesel !== null ? -8 : 0
+      },
+      {
+        label: isTunnel ? 'Excavation & Dust Water' : 'Water Consumed',
+        value: mWater !== null ? Number(mWater).toLocaleString('en-IN') : '--',
+        unit: 'kL',
+        icon: Droplets,
+        trend: mWater !== null ? -12 : 0
+      },
+      {
+        label: 'Workers On-site',
+        value: mWorkforce !== null ? String(mWorkforce) : '--',
+        unit: 'persons',
+        icon: Users,
+        trend: mWorkforce !== null ? 2 : 0
+      },
+    ];
 
     // Dynamic ESG Sections & Percentages
     let esgSections = [];
-    if (isSeededZojila && dataPoints.length === 0) {
-      esgSections = hero.esgSections;
-    } else {
+    {
       const hasEnergy = getVal('ENV-ENERGY-001') !== null || getVal('ENV-ENERGY-002') !== null;
       const hasWater = getVal('ENV-WATER-001') !== null;
       const hasWaste = getVal('ENV-WASTE-001') !== null;
@@ -392,20 +382,15 @@ export default function ProjectDetail() {
       ];
     }
 
-    // Evidence documents: use projectEvidence if present, else fallback for demo seeded project
-    let evidenceList = [];
-    if (projectEvidence.length > 0) {
-      evidenceList = projectEvidence.map(ev => ({
-        id: ev.id,
-        name: ev.original_name,
-        type: ev.mime_type?.includes('pdf') ? 'PDF' : ev.mime_type?.includes('image') ? 'IMAGE' : 'DOC',
-        size: ev.file_size ? `${(ev.file_size / (1024 * 1024)).toFixed(1)} MB` : '1.2 MB',
-        uploaded: ev.created_at ? new Date(ev.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Recent',
-        field: ev.bill_type || ev.doc_type || 'Operational Evidence'
-      }));
-    } else if (isSeededZojila) {
-      evidenceList = hero.evidence;
-    }
+    // Evidence documents from backend API
+    const evidenceList = projectEvidence.map(ev => ({
+      id: ev.id,
+      name: ev.original_name,
+      type: ev.mime_type?.includes('pdf') ? 'PDF' : ev.mime_type?.includes('image') ? 'IMAGE' : 'DOC',
+      size: ev.file_size ? `${(ev.file_size / (1024 * 1024)).toFixed(1)} MB` : '1.2 MB',
+      uploaded: ev.created_at ? new Date(ev.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Recent',
+      field: ev.bill_type || ev.doc_type || 'Operational Evidence'
+    }));
 
     return {
       id: dbNode.id,
@@ -423,14 +408,14 @@ export default function ProjectDetail() {
       description,
       activities,
       template,
-      lastUpdated: isSeededZojila ? hero.lastUpdated : (dataPoints.length > 0 ? 'Today · Active' : 'Not submitted yet'),
-      submittedBy: isSeededZojila ? 'Ravi Kumar' : (user?.name || 'Project Site Engineer'),
-      submittedByDesignation: isSeededZojila ? 'Site Engineer – Zojila Tunnel P7' : (user?.role ? user.role.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : 'Project Admin'),
+      lastUpdated: dataPoints.length > 0 ? 'Today · Active' : 'Not submitted yet',
+      submittedBy: user?.name || 'Project Site Engineer',
+      submittedByDesignation: user?.role ? user.role.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : 'Project Admin',
       esgSections,
       evidence: evidenceList,
       metrics,
-      reviews: isSeededZojila ? hero.reviews : [],
-      pipeline: isSeededZojila ? hero.pipeline : [
+      reviews: [],
+      pipeline: [
         { label: 'Project Data Submitted', status: dataPoints.length > 0 ? 'done' : 'pending', time: dataPoints.length > 0 ? 'Submitted' : 'Pending Data Entry' },
         { label: 'BU Admin Review', status: derivedStatus === 'IN_REVIEW' ? 'active' : (derivedStatus === 'APPROVED' ? 'done' : 'pending'), time: 'Pending' },
         { label: 'Project Emission Calculation', status: derivedStatus === 'APPROVED' ? 'done' : 'pending', time: 'Pending Approval' },
@@ -668,7 +653,7 @@ export default function ProjectDetail() {
             <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
               <strong style={{ color: 'var(--text-primary)' }}>YOU PROVIDE:</strong> Raw operational facts & verified evidence documents
               <span style={{ margin: '0 10px', color: 'var(--border)' }}>|</span>
-              <strong style={{ color: 'var(--accent)' }}>SYSTEM CALCULATES:</strong> Emission factors, Scope 1 & 2 GHG emissions, hierarchical roll-ups
+              <strong style={{ color: 'var(--accent)' }}>SYSTEM CALCULATES:</strong> Scope 1 & 2 GHG totals, energy/water/waste sums, hierarchical roll-ups
             </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -762,8 +747,8 @@ export default function ProjectDetail() {
                   done: true,
                 },
                 {
-                  title: 'Deterministic Emission Factors Assigned',
-                  desc: 'SEBI BRSR Core India emission factors linked to entered fuels',
+                  title: 'Direct Scope 1 & 2 Reporting Verified',
+                  desc: 'SEBI BRSR Principle 6 Scope 1 and Scope 2 tCO₂e values validated',
                   done: project.coverage > 50,
                 },
               ].map((item, idx) => (
@@ -1055,10 +1040,8 @@ function EsgDataTab({ project, selectedSection, setSelectedSection, navigate }) 
   });
 
   const isTunnel = project.type?.toLowerCase().includes('tunnel') || project.name?.toLowerCase().includes('tunnel');
-  const isSolar = project.type?.toLowerCase().includes('solar');
-  const isSeeded = project.code === 'PRJ-ZOJILA-P7' || (project.name && project.name.toLowerCase().includes('zojila'));
 
-  // Base field schema adapting to project operational nature
+  // Base field schema adapting to project operational nature (populated strictly from API dataPoints)
   const FIELDS = {
     energy: [
       {
@@ -1066,33 +1049,33 @@ function EsgDataTab({ project, selectedSection, setSelectedSection, navigate }) 
         metricCode: 'ENV-ENERGY-002',
         label: isTunnel ? 'Underground Machinery & DG Diesel' : 'Auxiliary Fuel / Diesel Consumption',
         desc: isTunnel ? 'Total diesel consumed by excavators, tunnel machinery, and backup DG sets.' : 'Total diesel consumed by backup generators and site machinery during the reporting period.',
-        value: isSeeded ? '14,200' : '',
+        value: '',
         unit: 'litres',
-        source: isSeeded ? 'IOCL Fuel Delivery Challans' : 'Site Fuel Register / Delivery Vouchers',
-        evidence: isSeeded ? 'IOCL-DIESEL-CHALLANS-HEAVY-FLEET.pdf' : null,
-        status: isSeeded ? 'filled' : 'empty'
+        source: 'Site Fuel Register / Delivery Vouchers',
+        evidence: null,
+        status: 'empty'
       },
       {
         id: 'grid_draw',
         metricCode: 'ENV-ENERGY-001',
         label: isTunnel ? 'Underground Grid Power & Substation TSS-04' : 'Grid Electricity Draw',
         desc: isTunnel ? 'Grid electricity drawn for ventilation fans, tunnel lighting, and drainage pumping.' : 'Grid electricity drawn for auxiliary services, SCADA and site equipment.',
-        value: isSeeded ? '52,000' : '',
+        value: '',
         unit: 'kWh',
-        source: isSeeded ? 'DISCOM Grid TSS-04 Substation Meter' : 'Discom Utility Monthly Bill',
-        evidence: isSeeded ? 'DISCOM-UTILITY-BILL-ZOJILA-TSS04.pdf' : null,
-        status: isSeeded ? 'filled' : 'empty'
+        source: 'Discom Utility Monthly Bill',
+        evidence: null,
+        status: 'empty'
       },
       {
         id: 'fleet_diesel',
         metricCode: 'ENV-ENERGY-003',
         label: isTunnel ? 'Muck Haulage & Spoil Transport Diesel' : 'Mobile Fleet & Machinery Diesel',
         desc: isTunnel ? 'Diesel consumed by heavy dumper trucks, spoil haulage, and site transport.' : 'Diesel consumed by earthmoving, transit and maintenance fleet at site.',
-        value: isSeeded ? '31,800' : '',
+        value: '',
         unit: 'litres',
-        source: isSeeded ? 'Excavation Fleet Dispatch Logs' : 'Fleet Logbook / Fuel Slips',
-        evidence: isSeeded ? 'IOCL-DIESEL-CHALLANS-HEAVY-FLEET.pdf' : null,
-        status: isSeeded ? 'filled' : 'empty'
+        source: 'Fleet Logbook / Fuel Slips',
+        evidence: null,
+        status: 'empty'
       },
     ],
     water: [
@@ -1101,11 +1084,11 @@ function EsgDataTab({ project, selectedSection, setSelectedSection, navigate }) 
         metricCode: 'ENV-WATER-001',
         label: isTunnel ? 'Drilling Slurry & Dust Suppression Water' : 'Site Water Withdrawal',
         desc: isTunnel ? 'Water extracted for drilling slurry, concrete curing, and portal dust suppression.' : 'Groundwater extracted for cleaning, dust control and domestic use.',
-        value: isSeeded ? '8,420' : '',
+        value: '',
         unit: 'kL',
-        source: isSeeded ? 'Site Borewell & Slurry Flowmeters' : 'Flow Meter / Water Tanker Receipts',
-        evidence: isSeeded ? 'TUNNEL-DUST-WATER-METER-LOGS.pdf' : null,
-        status: isSeeded ? 'filled' : 'empty'
+        source: 'Flow Meter / Water Tanker Receipts',
+        evidence: null,
+        status: 'empty'
       },
     ],
     waste: [
@@ -1114,48 +1097,48 @@ function EsgDataTab({ project, selectedSection, setSelectedSection, navigate }) 
         metricCode: 'ENV-WASTE-001',
         label: isTunnel ? 'Muck Rock Waste & Hydraulic Oil' : 'Hazardous Waste',
         desc: isTunnel ? 'Tunnel rock muck and used hydraulic fluids disposed through approved recyclers.' : 'Used oils and workshop sludge dispatched to SPCB re-refiners.',
-        value: isSeeded ? '1.60' : '',
+        value: '',
         unit: 'tonnes',
-        source: isSeeded ? 'SPCB Form 10 Manifest' : 'SPCB Hazardous Waste Manifest',
-        evidence: isSeeded ? 'HAZARDOUS-WASTE-MANIFEST-SPCB.pdf' : null,
-        status: isSeeded ? 'filled' : 'empty'
+        source: 'SPCB Hazardous Waste Manifest',
+        evidence: null,
+        status: 'empty'
       },
     ],
     social: [
       {
         id: 'workforce',
-        metricCode: null,
+        metricCode: 'SOC-WORK-001',
         label: 'Total Site Workforce',
         desc: isTunnel ? 'Underground tunneling technicians, civil engineers, safety marshals, and contractor staff.' : 'Direct staff and maintenance workforce.',
-        value: isSeeded ? '312' : '',
+        value: '',
         unit: 'persons',
         source: 'Biometric Access Gate Records',
         evidence: null,
-        status: isSeeded ? 'filled' : 'empty'
+        status: 'empty'
       },
       {
         id: 'safe_hours',
-        metricCode: null,
+        metricCode: 'SOC-SAFE-001',
         label: 'Cumulative Safe Work Hours',
         desc: 'Total cumulative operational hours without Lost Time Injury (LTI).',
-        value: isSeeded ? '248,000' : '',
+        value: '',
         unit: 'hours',
         source: 'Monthly Safety Audit',
         evidence: null,
-        status: isSeeded ? 'filled' : 'empty'
+        status: 'empty'
       },
     ],
     env: [
       {
         id: 'topsoil',
-        metricCode: null,
+        metricCode: 'ENV-BIO-001',
         label: isTunnel ? 'Spoil Dumping & Slope Stabilization Area' : 'Managed Environmental Buffer Area',
         desc: isTunnel ? 'Site land designated for approved rock spoil disposal and slope vegetative stabilization.' : 'Native ground cover preserved to prevent arid dust erosion.',
-        value: isSeeded ? '450' : '',
+        value: '',
         unit: 'Acres',
         source: 'EIA Environmental Audit',
         evidence: null,
-        status: isSeeded ? 'filled' : 'empty'
+        status: 'empty'
       },
     ],
   };
@@ -1654,7 +1637,6 @@ function PipelineTab({ project, navigate }) {
   const isApproved = ['APPROVED', 'CALCULATED'].includes(project.status);
   const isSubmitted = ['SUBMITTED', 'IN_REVIEW'].includes(project.status);
   const hasCapturedData = (project.dataPoints && project.dataPoints.length > 0) || project.coverage > 0;
-  const isSeeded = project.code === 'PRJ-ZOJILA-P7' || (project.name && project.name.toLowerCase().includes('zojila'));
 
   const dynamicPipeline = [
     {
@@ -1676,10 +1658,10 @@ function PipelineTab({ project, navigate }) {
       detail: isApproved ? 'BU Admin digitally signed submission.' : 'Under review in BU workflow queue.'
     },
     {
-      label: 'Scope 1 & 2 Deterministic Calculation',
+      label: 'Scope 1 & 2 Direct Roll-up',
       status: isApproved ? 'done' : 'pending',
-      time: isApproved ? 'Calculated (CEA v2023 Factors)' : 'Pending BU Approval',
-      detail: isApproved ? 'Scope 1 & Scope 2 derived using statutory emission factors.' : 'Triggered automatically upon BU approval.'
+      time: isApproved ? 'Consolidated (SUM)' : 'Pending BU Approval',
+      detail: isApproved ? 'Scope 1 & Scope 2 tCO₂e summed into BU totals.' : 'Triggered automatically upon BU approval.'
     },
     {
       label: 'Multi-Tier Boundary Consolidation',

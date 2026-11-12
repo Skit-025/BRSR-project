@@ -19,7 +19,7 @@ const PALETTE_ITEMS = [
   { id: 'nav-proj-sum', type: 'Navigation', title: 'Project Read-Model Summary', subtitle: 'Operational summary for project data entry users', url: '/project-summary', icon: BarChart3 },
 
   // Key ESG Metrics
-  { id: 'metric-scope1', type: 'ESG Metric', title: 'Scope 1 Stationary Combustion (DG Genset)', subtitle: 'Diesel fuel consumption × CEA emission factor', url: '/collection', icon: BarChart3 },
+  { id: 'metric-scope1', type: 'ESG Metric', title: 'Scope 1 & 2 GHG Emissions (tCO₂e)', subtitle: 'Direct Scope 1 and Scope 2 tCO₂e reporting', url: '/collection', icon: BarChart3 },
   { id: 'metric-scope2', type: 'ESG Metric', title: 'Scope 2 Purchased Grid Electricity', subtitle: 'Kilowatt-hours (kWh) × Regional grid factor', url: '/collection', icon: BarChart3 },
   { id: 'metric-water', type: 'ESG Metric', title: 'Water Withdrawal & Consumption', subtitle: 'Municipal supply, borewell, tanker tracking', url: '/collection', icon: BarChart3 },
   { id: 'metric-ltir', type: 'ESG Metric', title: 'Lost Time Injury Frequency Rate (LTIFR)', subtitle: 'Safety incidents per million man-hours', url: '/collection', icon: BarChart3 },

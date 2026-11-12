@@ -20,7 +20,7 @@ def calculate_scope2_electricity(
     and SEBI BRSR Principle 6 Indicator E2.
 
     Strict Dual-Reporting Architecture:
-      - Location-based method: Total grid MWh × grid emission factor (CEA Baseline).
+      - Location-based method: Total grid MWh × grid factor (CEA Baseline).
         Contractual instruments (PPAs, green tariffs, RECs) are NOT deducted.
       - Market-based method: Contractual instruments zero-rated (if verified),
         residual/unhedged grid power multiplied by applicable grid factor.
@@ -127,7 +127,7 @@ def calculate_scope2_renewable_electricity(
             "avoided_emissions_tco2e": str((renewable_mwh * Decimal("0.716")).quantize(Decimal("0.0001"))),
         },
         "factors_applied": {
-            "emission_factor": factor_applied,
+            "factor_value": factor_applied,
             "factor_unit": "tCO2e/MWh",
             "source": source_note,
         }
@@ -151,7 +151,7 @@ def calculate_scope2_purchased_steam(
             "quantity_tonnes": str(quantity_tonnes),
         },
         "factors_applied": {
-            "emission_factor": str(factor_tco2e_per_tonne),
+            "factor_value": str(factor_tco2e_per_tonne),
             "factor_unit": "tCO2e/tonne",
             "source": "BEE Industrial Steam Boiler Benchmark 2023",
         }

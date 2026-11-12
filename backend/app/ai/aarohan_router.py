@@ -87,6 +87,9 @@ def _run_engine(engine: str, payload: Dict[str, Any], db: Session):
             filename=payload.get("filename"),
             mime_type=payload.get("mime_type"),
             doc_type_hint=payload.get("doc_type_hint"),
+            target_metric=payload.get("target_metric"),
+            metric_name=payload.get("metric_name"),
+            target_unit=payload.get("target_unit"),
         )
         return e1_engine.extract_from_file(req, db_session=db)
     if engine == "E2":

@@ -16,7 +16,6 @@ class AggregationType(str, enum.Enum):
     AVERAGE = "average"
     WEIGHTED_AVERAGE = "weighted_average"
     WEIGHTED_PCT = "weighted_pct"
-    RATIO = "ratio"
     DERIVED = "derived"
     MIN = "min"
     MAX = "max"

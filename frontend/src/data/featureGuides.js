@@ -175,7 +175,7 @@ export const FEATURE_GUIDES = {
     sebiSection: 'Internal Controls & Data Integrity Assurance (Section B & C)',
     indicators: ['Missing Mandatory Evidence', 'Negative Consumption Rule', 'Unit Slip Outliers (>1000x)', 'Year-over-Year Spikes (>35%)'],
     whatIsIt: `The Data Quality Desk is the central ESG quality assurance console that continuously scans all submitted operational data against business rules, statistical limits, and AI anomaly engines. It flags missing mandatory vouchers, impossible negative values, unit slip errors (e.g., entering Litres in place of kL), and uncharacteristic spikes.`,
-    whyNecessary: `Regulators and institutional investors scrutinize year-over-year swings and anomalous intensity figures. Submitting faulty or unverified figures leads to SEBI clarification notices or assurance qualifications. The Data Quality desk ensures errors are caught and justified internally before data enters the corporate calculation pipeline.`,
+    whyNecessary: `Regulators and institutional investors scrutinize year-over-year swings and anomalous figures. Submitting faulty or unverified figures leads to SEBI clarification notices or assurance qualifications. The Data Quality desk ensures errors are caught and justified internally before data enters the corporate roll-up pipeline.`,
     brsrContribution: `Guarantees the mathematical and physical accuracy of all Section C disclosures. Exceptions resolved and logged here with written management justifications serve as the official defense trail during Reasonable Assurance inquiries.`,
     rolesGuide: [
       {
@@ -327,10 +327,10 @@ export const FEATURE_GUIDES = {
     badge: 'Consolidation Engine',
     color: '#7C3AED',
     sebiSection: 'Consolidated Group Disclosures across Principles 1–9',
-    indicators: ['Scope 1 Direct GHG', 'Scope 2 Location & Market GHG', 'Total Operational Energy (GJ)', 'Water Intensity & Turnover Ratios'],
-    whatIsIt: `The Calculation & Consolidation Pipeline is the high-performance computation engine that aggregates operational metrics bottom-up through the corporate hierarchy: Project $\\to$ Business Unit $\\to$ Subsidiary $\\to$ Group. It applies statutory greenhouse gas emission factors, boundary ownership percentages (100% operational control vs. equity share JVs), and recomputes intensity ratios from raw sums rather than averaging percentages.`,
-    whyNecessary: `A common failure point in manual sustainability reporting is "averaging averages" (e.g. averaging energy intensities across sites of different sizes) and misapplying Joint Venture equity percentages. The consolidation engine executes boundary math deterministically and stores child contribution lineages for drill-down.`,
-    brsrContribution: `Produces the corporate totals that appear in Section C disclosure tables and executive BRSR Core KPIs: Total Scope 1 Emissions (tCO₂e), Total Scope 2 Emissions (tCO₂e), Total Energy Consumption (GJ), and statutory Energy/Water Intensity per Rupee of Turnover.`,
+    indicators: ['Scope 1 Direct GHG', 'Scope 2 Location & Market GHG', 'Total Operational Energy (GJ)', 'Water Withdrawal & Waste Totals'],
+    whatIsIt: `The Calculation & Consolidation Pipeline is the high-performance computation engine that aggregates operational metrics bottom-up through the corporate hierarchy: Project $\\to$ Business Unit $\\to$ Subsidiary $\\to$ Group. It sums reported figures across accepted nodes and stores child contribution lineages for drill-down.`,
+    whyNecessary: `Manual sustainability reporting often loses track of child node contributions across sites of different sizes. The consolidation engine executes bottom-up SUM aggregation deterministically and stores child contribution lineages for drill-down.`,
+    brsrContribution: `Produces the corporate totals that appear in Section C disclosure tables and executive BRSR Core KPIs: Total Scope 1 Emissions (tCO₂e), Total Scope 2 Emissions (tCO₂e), Total Energy Consumption (GJ), and Total Water & Waste.`,
     rolesGuide: [
       {
         role: 'Project Admin / Site Engineer (Maker)',
@@ -366,8 +366,8 @@ export const FEATURE_GUIDES = {
         },
         {
           num: '2',
-          title: 'Review Emission Factor Registry',
-          desc: 'Verify that statutory emission factors (CEA Grid CO₂ factors, IPCC stationary combustion factors) are active for the reporting year.'
+          title: 'Review Scope & Totals Registry',
+          desc: 'Verify that Principle 6 indicator definitions and units are active for the reporting year.'
         },
         {
           num: '3',
@@ -387,7 +387,7 @@ export const FEATURE_GUIDES = {
       ],
       proTips: [
         'Consolidation only includes approved or locked submissions; draft submissions are intentionally excluded to protect data integrity.',
-        'Intensity metrics automatically re-divide aggregate energy/emissions by corporate turnover to guarantee mathematical validity.'
+        'All quantitative roll-ups use deterministic SUM aggregation across accepted child nodes.'
       ],
       pitfalls: [
         'Running consolidation before all key project packs are approved will produce incomplete corporate totals.',
@@ -407,7 +407,7 @@ export const FEATURE_GUIDES = {
     indicators: ['Complete BRSR Full Format', 'BRSR Core (9 Mandatory Attributes)', 'PDF Statutory Filing Report', 'Excel XBRL-Ready Workbook'],
     whatIsIt: `The BRSR Disclosures & Reporting module is the final publishing engine. It automatically merges quantitative consolidated numbers from the calculation pipeline with corporate disclosures (governance, policies, workforce demographics, CSR, and stakeholder engagement) to generate the complete SEBI BRSR and BRSR Core statutory reports.`,
     whyNecessary: `Listed companies in India (top 1,000 by market capitalization) are legally mandated under SEBI circulars to file the BRSR annual report with stock exchanges (BSE/NSE) and obtain Reasonable Assurance on the BRSR Core attributes. Compiling this manually in Word or Excel takes hundreds of hours and is prone to version errors. This module compiles the entire report in seconds with audit hashes.`,
-    brsrContribution: `This IS the final statutory output. It formats and renders: Section A (General Disclosures including corporate identity, products, turnover, workforce), Section B (Management and Process Disclosures including policies, governance, and review), and Section C (Principle 1 through 9 performance).`,
+    brsrContribution: `This IS the final statutory output. It formats and renders: Section A (General Disclosures including corporate identity, products, workforce), Section B (Management and Process Disclosures including policies, governance, and review), and Section C (Principle 1 through 9 performance).`,
     rolesGuide: [
       {
         role: 'Project Admin / Site Engineer (Maker)',
@@ -650,7 +650,7 @@ export const FEATURE_GUIDES = {
         role: 'BU Admin / Department Head',
         badge: 'Checker',
         color: '#0EA5E9',
-        action: 'Review your Business Unit’s submission completion rate and compare environmental intensity against peer business units.'
+        action: 'Review your Business Unit’s submission completion rate and compare environmental totals against peer business units.'
       },
       {
         role: 'Project Admin / Site Engineer',
@@ -867,8 +867,8 @@ export const FEATURE_GUIDES = {
         },
         {
           num: '3',
-          title: 'Compute Scope 3 Emissions',
-          desc: 'Apply DEFRA/IPCC spend-based or fuel-based emission factors to calculate Scope 3 categories (freight, diesel hauling, employee commute).'
+          title: 'Report Scope 3 Emissions',
+          desc: 'Report BU and value-chain Scope 3 emissions (tCO₂e) and partner assessment percentages.'
         }
       ],
       proTips: [

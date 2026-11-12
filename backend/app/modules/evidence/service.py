@@ -132,7 +132,8 @@ def process_and_store_evidence(
                 file_bytes=file_bytes,
                 filename=filename,
                 mime_type=mime_type,
-                doc_type_hint=effective_hint
+                doc_type_hint=effective_hint,
+                target_metric=esg_indicator or None,
             )
 
             if clean_category == "Report":

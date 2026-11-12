@@ -417,3 +417,45 @@ class GroupOverviewDesignResponse(BaseModel):
 GroupOverviewResponse.model_rebuild()
 
 
+class Principle6BreadcrumbItem(BaseModel):
+    id: str
+    name: str
+    code: str
+    type: str
+
+
+class Principle6ChildSummary(BaseModel):
+    id: str
+    name: str
+    code: str
+    type: str
+    submission_status: str = "NOT_STARTED"
+    energy_gj: float = 0.0
+    ghg_s1_s2_tco2e: float = 0.0
+    scope3_tco2e: float = 0.0
+    water_kl: float = 0.0
+    waste_mt: float = 0.0
+    has_children: bool = False
+
+
+class Principle6RawEntry(BaseModel):
+    metric_code: str
+    metric_name: str
+    value_numeric: Optional[float] = None
+    value_text: Optional[str] = None
+    unit: str
+    status: str = "ACTUAL"
+    notes: Optional[str] = None
+    evidence_count: int = 0
+
+
+class Principle6RolldownResponse(BaseModel):
+    entity: Principle6BreadcrumbItem
+    period: Dict[str, Any]
+    breadcrumbs: List[Principle6BreadcrumbItem] = []
+    kpis: Dict[str, Any]
+    children: List[Principle6ChildSummary] = []
+    project_raw_entries: List[Principle6RawEntry] = []
+
+
+

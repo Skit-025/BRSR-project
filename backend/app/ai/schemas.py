@@ -50,6 +50,9 @@ class E1ExtractRequest(BaseModel):
     filename: Optional[str] = Field(None, description="Original filename, used for extension-based type detection")
     mime_type: Optional[str] = Field(None, description="MIME type of the uploaded file")
     doc_type_hint: Optional[str] = Field(None, description="Hint: electricity_bill, fuel_receipt, waste_manifest, etc.")
+    target_metric: Optional[str] = Field(None, description="Specific BRSR metric code requested, e.g. ENV-ENERGY-001")
+    metric_name: Optional[str] = Field(None, description="Human-readable name of the target field, e.g. 'Grid electricity consumed'")
+    target_unit: Optional[str] = Field(None, description="Expected unit for the target field, e.g. 'kWh', 'kL', 'MT'")
 
 class E1ExtractResponse(BaseModel):
     run_id: str

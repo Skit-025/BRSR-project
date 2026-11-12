@@ -13,88 +13,67 @@ const SUB_TABS = [
   { id: 'section_a_org', label: 'Section A: General Details', icon: Building, desc: 'Corporate identity, facilities, employee demographics & CSR' },
   { id: 'section_b_p1', label: 'Section B: Management (P1-P9)', icon: ShieldCheck, desc: 'Policy commitments, board governance, and oversight' },
   { id: 'section_c_overrides', label: 'Section C: Direct Metrics', icon: Layers, desc: 'Subsidiary-owned metrics and non-project disclosures' },
+  { id: 'sub_p6', label: 'Principle 6: Environment', icon: Globe, desc: 'PAT, ZLD, Compliance, Waste Strategy & Procurement Scope 3' },
 ];
 
-const getInitialFormData = (subNode) => {
-  const code = subNode?.code || '';
-  const isSeed = code.startsWith('SUB-') || code === 'MEGHA-ROAD-TRANS';
-
-  if (isSeed) {
-    return {
-      section_a_org: {
-        corporate_name: subNode?.name || 'Olectra Greentech Limited',
-        cin_number: 'L34100TG2000PLC035451',
-        registered_office_address: 'S-22, 3rd Floor, Technocrat Indl Estate, Balanagar, Hyderabad - 500037, Telangana',
-        contact_person: 'Corporate Sustainability Officer',
-        contact_email: 'esg.compliance@meghaengineering.com',
-        website: 'https://meghaengineering.com',
-        reporting_boundary: 'Standalone entity and operational sites',
-        total_employees_permanent: '14250',
-        total_workers_permanent: '28400',
-        female_employees_pct: '14.5',
-        csr_average_net_profit_cr: '124.50',
-        csr_spent_amount_cr: '2.52',
-        grievance_complaints_received: '4',
-        grievance_complaints_resolved: '4',
-      },
-      section_b_p1: {
-        has_ethics_policy: true,
-        has_human_rights_policy: true,
-        has_environment_policy: true,
-        has_stakeholder_policy: true,
-        board_committee_responsible: 'CSR & Sustainability Committee of the Board',
-        policy_weblink: 'https://meghaengineering.com/sustainability/policies',
-        review_frequency_months: '12',
-        independent_directors_oversight: true,
-        stakeholder_grievance_redressal_in_place: true
-      },
-      section_c_overrides: {
-        subsidiary_r_and_d_spend_pct_turnover: '1.2',
-        patents_granted_count: '6',
-        extended_producer_responsibility_registered: true,
-        green_building_certified_sqft: '450000',
-        internal_carbon_pricing_inr: '1850'
-      }
-    };
+const getInitialFormData = (subNode) => ({
+  section_a_org: {
+    corporate_name: subNode?.name || '',
+    cin_number: '',
+    registered_office_address: '',
+    contact_person: '',
+    contact_email: '',
+    website: '',
+    reporting_boundary: 'Standalone entity and operational sites',
+    total_employees_permanent: '',
+    total_workers_permanent: '',
+    female_employees_pct: '',
+    csr_average_net_profit_cr: '',
+    csr_spent_amount_cr: '',
+    grievance_complaints_received: '',
+    grievance_complaints_resolved: '',
+  },
+  section_b_p1: {
+    has_ethics_policy: false,
+    has_human_rights_policy: false,
+    has_environment_policy: false,
+    has_stakeholder_policy: false,
+    board_committee_responsible: '',
+    policy_weblink: '',
+    review_frequency_months: '',
+    independent_directors_oversight: false,
+    stakeholder_grievance_redressal_in_place: false
+  },
+  section_c_overrides: {
+    subsidiary_r_and_d_spend_pct_turnover: '',
+    patents_granted_count: '',
+    extended_producer_responsibility_registered: false,
+    green_building_certified_sqft: '',
+    internal_carbon_pricing_inr: ''
+  },
+  sub_p6: {
+    turnover_inr_crores: '',
+    prev_turnover_inr_crores: '',
+    pat_designated_consumer: 'No',
+    pat_details: '',
+    zld_implemented: 'No',
+    zld_coverage: '',
+    env_law_compliant: 'Yes',
+    env_non_compliance_rows: [],
+    env_non_compliance_details: '',
+    waste_management_strategy: '',
+    bcp_disaster_plan: 'Yes',
+    bcp_summary: '',
+    bcp_weblink: '',
+    scope3_purchased_goods_category: 'Cement & Steel',
+    scope3_purchased_goods_spend: '',
+    scope3_purchased_goods_tco2e: '',
+    scope3_capital_goods_tco2e: '',
+    scope3_leased_assets_tco2e: '',
+    vc_env_impact_mitigation: '',
+    vc_partners_assessed_pct: '',
   }
-
-  return {
-    section_a_org: {
-      corporate_name: subNode?.name || '',
-      cin_number: '',
-      registered_office_address: '',
-      contact_person: '',
-      contact_email: '',
-      website: '',
-      reporting_boundary: 'Standalone entity and operational sites',
-      total_employees_permanent: '',
-      total_workers_permanent: '',
-      female_employees_pct: '',
-      csr_average_net_profit_cr: '',
-      csr_spent_amount_cr: '',
-      grievance_complaints_received: '',
-      grievance_complaints_resolved: '',
-    },
-    section_b_p1: {
-      has_ethics_policy: false,
-      has_human_rights_policy: false,
-      has_environment_policy: false,
-      has_stakeholder_policy: false,
-      board_committee_responsible: '',
-      policy_weblink: '',
-      review_frequency_months: '',
-      independent_directors_oversight: false,
-      stakeholder_grievance_redressal_in_place: false
-    },
-    section_c_overrides: {
-      subsidiary_r_and_d_spend_pct_turnover: '',
-      patents_granted_count: '',
-      extended_producer_responsibility_registered: false,
-      green_building_certified_sqft: '',
-      internal_carbon_pricing_inr: ''
-    }
-  };
-};
+});
 
 export default function SubsidiaryDisclosure() {
   const { user, isSystemAdmin, isSubsidiaryAdmin, isSubEsgManager } = useAuth();
@@ -510,19 +489,6 @@ export default function SubsidiaryDisclosure() {
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 18 }}>
                   <div>
                     <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6 }}>
-                      R&D Spending (% of Total Turnover)
-                    </label>
-                    <input
-                      type="number"
-                      disabled={isLocked}
-                      value={formData.section_c_overrides.subsidiary_r_and_d_spend_pct_turnover || ''}
-                      onChange={e => handleFieldChange('section_c_overrides', 'subsidiary_r_and_d_spend_pct_turnover', e.target.value)}
-                      style={{ width: '100%', padding: '10px 14px', borderRadius: 8, border: '1px solid var(--border-default)', background: 'var(--bg-base)', color: 'var(--text-primary)' }}
-                    />
-                  </div>
-
-                  <div>
-                    <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6 }}>
                       Green Building Space (Sq. Ft.)
                     </label>
                     <input
@@ -549,6 +515,180 @@ export default function SubsidiaryDisclosure() {
                 </div>
               </div>
             )}
+
+            {activeTab === 'sub_p6' && (() => {
+              const p6 = formData.sub_p6 || {};
+              const nonCompRows = Array.isArray(p6.env_non_compliance_rows) ? p6.env_non_compliance_rows : [];
+              return (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+                  <div>
+                    <h2 style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4 }}>
+                      Principle 6 — Subsidiary Statutory &amp; Financial Disclosures (EI-2, EI-5, EI-10, EI-13, LI-2, LI-5, LI-6, LI-7)
+                    </h2>
+                    <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: 0 }}>
+                      Statutory compliance, ZLD/PAT status, BCP, procurement/asset Scope 3, and value chain assessments.
+                    </p>
+                  </div>
+
+                  {/* EI-2 PAT & EI-5 ZLD */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                    <div>
+                      <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6 }}>
+                        EI-2: Designated Consumer under PAT Scheme (BEE)?
+                      </label>
+                      <select disabled={isLocked} value={p6.pat_designated_consumer || 'No'}
+                        onChange={e => handleFieldChange('sub_p6', 'pat_designated_consumer', e.target.value)}
+                        style={{ width: '100%', padding: '10px 14px', borderRadius: 8, border: '1px solid var(--border-default)', background: 'var(--bg-base)', marginBottom: 8 }}>
+                        <option value="No">No</option>
+                        <option value="Yes">Yes</option>
+                      </select>
+                      <input type="text" disabled={isLocked} value={p6.pat_details || ''} placeholder="Target achievement / facility details (if Yes)"
+                        onChange={e => handleFieldChange('sub_p6', 'pat_details', e.target.value)}
+                        style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid var(--border-default)', background: 'var(--bg-base)', fontSize: 12 }} />
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6 }}>
+                        EI-5: Zero Liquid Discharge (ZLD) Implemented?
+                      </label>
+                      <select disabled={isLocked} value={p6.zld_implemented || 'No'}
+                        onChange={e => handleFieldChange('sub_p6', 'zld_implemented', e.target.value)}
+                        style={{ width: '100%', padding: '10px 14px', borderRadius: 8, border: '1px solid var(--border-default)', background: 'var(--bg-base)', marginBottom: 8 }}>
+                        <option value="Yes">Yes</option>
+                        <option value="No">No</option>
+                        <option value="Partial">Partial (Selected Facilities)</option>
+                      </select>
+                      <input type="text" disabled={isLocked} value={p6.zld_coverage || ''} placeholder="Coverage (% of sites / facility names & reuse details)"
+                        onChange={e => handleFieldChange('sub_p6', 'zld_coverage', e.target.value)}
+                        style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid var(--border-default)', background: 'var(--bg-base)', fontSize: 12 }} />
+                    </div>
+                  </div>
+
+                  {/* EI-13 Environmental Law Compliance */}
+                  <div style={{ padding: 14, borderRadius: 10, border: '1px solid var(--border-default)', background: 'var(--bg-base)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                      <label style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--text-primary)' }}>
+                        EI-13: Compliant with Water Act, Air Act, Environment Protection Act?
+                      </label>
+                      <select disabled={isLocked} value={p6.env_law_compliant || 'Yes'}
+                        onChange={e => handleFieldChange('sub_p6', 'env_law_compliant', e.target.value)}
+                        style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid var(--border-default)', background: '#fff' }}>
+                        <option value="Yes">Yes — Fully Compliant</option>
+                        <option value="No">No — Fines / Show-cause Notices</option>
+                      </select>
+                    </div>
+                    {p6.env_law_compliant === 'No' && (
+                      <div>
+                        {!isLocked && (
+                          <button type="button" onClick={() => handleFieldChange('sub_p6', 'env_non_compliance_rows', [...nonCompRows, { law: '', authority: '', details: '', fine_inr: '' }])}
+                            style={{ marginBottom: 8, padding: '4px 10px', fontSize: 11.5, fontWeight: 700, borderRadius: 6, border: '1px solid #cbd5e1', background: '#fff', cursor: 'pointer' }}>
+                            + Add Notice / Fine
+                          </button>
+                        )}
+                        {nonCompRows.map((r, idx) => (
+                          <div key={idx} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 2fr 0.8fr auto', gap: 8, marginBottom: 6 }}>
+                            <input disabled={isLocked} value={r.law || ''} placeholder="Applicable Law" onChange={e => handleFieldChange('sub_p6', 'env_non_compliance_rows', nonCompRows.map((x, i) => i === idx ? { ...x, law: e.target.value } : x))}
+                              style={{ padding: '6px 8px', borderRadius: 6, border: '1px solid #cbd5e1', fontSize: 12 }} />
+                            <input disabled={isLocked} value={r.authority || ''} placeholder="Authority (SPCB/CPCB)" onChange={e => handleFieldChange('sub_p6', 'env_non_compliance_rows', nonCompRows.map((x, i) => i === idx ? { ...x, authority: e.target.value } : x))}
+                              style={{ padding: '6px 8px', borderRadius: 6, border: '1px solid #cbd5e1', fontSize: 12 }} />
+                            <input disabled={isLocked} value={r.details || ''} placeholder="Show-cause / Corrective Action" onChange={e => handleFieldChange('sub_p6', 'env_non_compliance_rows', nonCompRows.map((x, i) => i === idx ? { ...x, details: e.target.value } : x))}
+                              style={{ padding: '6px 8px', borderRadius: 6, border: '1px solid #cbd5e1', fontSize: 12 }} />
+                            <input disabled={isLocked} value={r.fine_inr || ''} placeholder="Fine (₹)" onChange={e => handleFieldChange('sub_p6', 'env_non_compliance_rows', nonCompRows.map((x, i) => i === idx ? { ...x, fine_inr: e.target.value } : x))}
+                              style={{ padding: '6px 8px', borderRadius: 6, border: '1px solid #cbd5e1', fontSize: 12 }} />
+                            {!isLocked && (
+                              <button type="button" onClick={() => handleFieldChange('sub_p6', 'env_non_compliance_rows', nonCompRows.filter((_, i) => i !== idx))}
+                                style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer' }}>✕</button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* LI-2 Procurement & Asset Scope 3 */}
+                  <div style={{ padding: 14, borderRadius: 10, border: '1px solid var(--border-default)', background: 'var(--bg-base)' }}>
+                    <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 10 }}>
+                      LI-2: Procurement &amp; Asset Scope 3 (Purchased Goods 003C, Capital Goods 003E, Downstream Leased Assets)
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 12 }}>
+                      <div>
+                        <label style={{ display: 'block', fontSize: 11.5, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 4 }}>003C Material Category</label>
+                        <select disabled={isLocked} value={p6.scope3_purchased_goods_category || 'Cement & Steel'}
+                          onChange={e => handleFieldChange('sub_p6', 'scope3_purchased_goods_category', e.target.value)}
+                          style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border-default)', background: '#fff' }}>
+                          <option value="Cement & Steel">Cement &amp; Steel</option>
+                          <option value="Ready-Mix Concrete">Ready-Mix Concrete</option>
+                          <option value="Bitumen & Aggregates">Bitumen &amp; Aggregates</option>
+                          <option value="Electrical & Mechanical">Electrical &amp; Mechanical</option>
+                          <option value="All Bulk Materials">All Bulk Materials</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label style={{ display: 'block', fontSize: 11.5, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 4 }}>003C Purchased Goods (tCO₂e)</label>
+                        <input type="number" step="0.01" disabled={isLocked} value={p6.scope3_purchased_goods_tco2e || ''}
+                          onChange={e => handleFieldChange('sub_p6', 'scope3_purchased_goods_tco2e', e.target.value)}
+                          style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border-default)', background: '#fff' }} />
+                      </div>
+                      <div>
+                        <label style={{ display: 'block', fontSize: 11.5, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 4 }}>003E Capital Goods (tCO₂e)</label>
+                        <input type="number" step="0.01" disabled={isLocked} value={p6.scope3_capital_goods_tco2e || ''}
+                          onChange={e => handleFieldChange('sub_p6', 'scope3_capital_goods_tco2e', e.target.value)}
+                          style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border-default)', background: '#fff' }} />
+                      </div>
+                      <div>
+                        <label style={{ display: 'block', fontSize: 11.5, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 4 }}>Downstream Leased Assets (tCO₂e)</label>
+                        <input type="number" step="0.01" disabled={isLocked} value={p6.scope3_leased_assets_tco2e || ''}
+                          onChange={e => handleFieldChange('sub_p6', 'scope3_leased_assets_tco2e', e.target.value)}
+                          style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border-default)', background: '#fff' }} />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* LI-5 BCP & LI-6/LI-7 Value Chain */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                    <div>
+                      <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6 }}>
+                        LI-5: Business Continuity &amp; Disaster Plan (Yes/No + Web link)
+                      </label>
+                      <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+                        <select disabled={isLocked} value={p6.bcp_disaster_plan || 'Yes'}
+                          onChange={e => handleFieldChange('sub_p6', 'bcp_disaster_plan', e.target.value)}
+                          style={{ padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border-default)', background: 'var(--bg-base)' }}>
+                          <option value="Yes">Yes</option>
+                          <option value="No">No</option>
+                        </select>
+                        <input type="text" disabled={isLocked} value={p6.bcp_weblink || ''} placeholder="BCP Policy Web Link (URL)"
+                          onChange={e => handleFieldChange('sub_p6', 'bcp_weblink', e.target.value)}
+                          style={{ flex: 1, padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border-default)', background: 'var(--bg-base)' }} />
+                      </div>
+                      <textarea rows={2} disabled={isLocked} value={p6.bcp_summary || ''} placeholder="100-word BCP & Disaster Management summary..."
+                        onChange={e => handleFieldChange('sub_p6', 'bcp_summary', e.target.value)}
+                        style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid var(--border-default)', background: 'var(--bg-base)' }} />
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6 }}>
+                        LI-7: % Value Chain Partners Assessed &amp; LI-6 Mitigation Actions
+                      </label>
+                      <input type="number" step="0.1" disabled={isLocked} value={p6.vc_partners_assessed_pct || ''} placeholder="% of value chain partners assessed (by business value)"
+                        onChange={e => handleFieldChange('sub_p6', 'vc_partners_assessed_pct', e.target.value)}
+                        style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border-default)', background: 'var(--bg-base)', marginBottom: 8 }} />
+                      <textarea rows={2} disabled={isLocked} value={p6.vc_env_impact_mitigation || ''} placeholder="LI-6: Significant adverse environmental impacts in value chain & mitigation actions..."
+                        onChange={e => handleFieldChange('sub_p6', 'vc_env_impact_mitigation', e.target.value)}
+                        style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid var(--border-default)', background: 'var(--bg-base)' }} />
+                    </div>
+                  </div>
+
+                  {/* EI-10 Waste Strategy */}
+                  <div>
+                    <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6 }}>
+                      EI-10: Waste Management Practices &amp; Hazardous/Toxic Chemical Reduction Strategy
+                    </label>
+                    <textarea rows={2} disabled={isLocked} value={p6.waste_management_strategy || ''}
+                      onChange={e => handleFieldChange('sub_p6', 'waste_management_strategy', e.target.value)}
+                      style={{ width: '100%', padding: '10px 14px', borderRadius: 8, border: '1px solid var(--border-default)', background: 'var(--bg-base)' }} />
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* Action Bar */}
             {!isLocked && (

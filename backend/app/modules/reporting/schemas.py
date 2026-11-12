@@ -44,6 +44,6 @@ class BRSRFullReportResponse(BaseModel):
     total_scope_2_tco2e: float = 0.0
     total_scope_3_tco2e: float = 0.0
     total_ghg_emissions_tco2e: float = 0.0
-    ghg_intensity_turnover: Optional[float] = None
+    principle_6_summary: Optional[Dict[str, Any]] = None
     reporting_coverage: Optional[Dict[str, Any]] = None
     is_partially_reported: bool = False

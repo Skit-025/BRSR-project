@@ -97,6 +97,17 @@ export default function Sidebar({ isOpen = false, onClose }) {
       }
     })();
 
+    const roleFormLabel = {
+      project_supervisor: 'Site Operations Data',
+      project_admin: 'Site Compliance',
+      bu_supervisor: 'BU Value Chain',
+      bu_admin: 'BU Environmental Mgmt',
+      subsidiary_supervisor: 'Subsidiary Initiatives',
+      subsidiary_admin: 'Subsidiary Compliance',
+      group_supervisor: 'Group Policy & Targets',
+      group_admin: 'Group Disclosures',
+    }[user?.role];
+
     const groups = [
       {
         section: 'OVERVIEW',
@@ -108,15 +119,13 @@ export default function Sidebar({ isOpen = false, onClose }) {
         section: 'ORGANIZATION',
         items: [
           hasPermission('org:read') && !['bu_admin', 'project_admin'].includes(user?.role) && { to: '/org', label: 'Org Hierarchy', icon: Layers },
-          hasPermission('subsidiary_disclosure:read') && { to: '/disclosure/subsidiary', label: 'Subsidiaries', icon: Building2 },
-          hasPermission('bu_disclosure:read') && { to: '/disclosure/bu', label: 'Business Units', icon: Factory },
           !['subsidiary_admin', 'group_admin'].includes(user?.role) && { to: '/projects', label: 'Projects', icon: HardHat },
         ].filter(Boolean)
       },
       {
         section: 'ESG WORKSPACE',
         items: [
-          hasPermission('form:submit') && { to: '/collection', label: 'Data Collection', icon: PenLine },
+          roleFormLabel && { to: '/esg-form', label: roleFormLabel, icon: PenLine },
           { to: '/metrics', label: 'Parameters', icon: BookOpen },
           hasPermission('evidence:read') && { to: '/evidence', label: 'Evidence Repository', icon: ClipboardList },
           hasPermission('report:read') && { to: '/valuechain', label: 'Value Chain (75%)', icon: Truck },
@@ -135,7 +144,6 @@ export default function Sidebar({ isOpen = false, onClose }) {
         section: 'REPORTING',
         items: [
           { to: '/reporting', label: 'BRSR Disclosures', icon: FileSpreadsheet },
-          hasPermission('group_disclosure:read') && { to: '/disclosure/group', label: 'Consolidated Reports', icon: BarChart3 },
           hasPermission('audit:read') && { to: '/assurance', label: 'Reasonable Assurance', icon: ClipboardCheck },
           hasPermission('audit:read') && { to: '/audit', label: 'Audit Trail', icon: Shield },
         ].filter(Boolean)

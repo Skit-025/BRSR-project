@@ -1,9 +1,9 @@
 """
-E6 Engine: Activity Classifier + Proxy Emission Factors
-Classifies subcontractor work categories and maps to standard proxy emission factors.
+E6 Engine: Activity Classifier + Proxy Activity Factors
+Classifies subcontractor work categories and maps to standard proxy factors.
 """
 
-# Proxy emission factors per activity type
+# Proxy factors per activity type
 # Source: India GHG Program / IPCC default activity factors
 PROXY_FACTORS = {
     "earthmoving": {

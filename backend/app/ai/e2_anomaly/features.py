@@ -1,7 +1,7 @@
 """
 E2 Engine: Feature Engineering
 Normalizes and prepares feature vectors for the Isolation Forest model.
-Also computes derived features like rolling ratios and seasonal indices.
+Also computes derived features like rolling comparisons and seasonal indices.
 """
 import numpy as np
 from typing import List, Dict, Any

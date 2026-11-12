@@ -12,78 +12,53 @@ import PageHelpButton from '../components/PageHelpButton';
 const SECTIONS = [
   { id: 'bu_targets', label: 'ESG Targets & Commitments', icon: Target, desc: 'Reduction targets set at the Business Unit level' },
   { id: 'bu_initiatives', label: 'Key ESG Initiatives', icon: Award, desc: 'Programs, investments, and energy transitions' },
+  { id: 'bu_p6', label: 'Principle 6: Environment', icon: Layers, desc: 'Water-stressed sites, Eco-sensitive/EIA, GHG projects & BU Scope 3' },
   { id: 'bu_governance', label: 'BU Governance & Risk', icon: Shield, desc: 'Oversight structure and sustainability accountability' },
 ];
 
-const getInitialFormData = (buNode) => {
-  const code = buNode?.code || '';
-  const isSeed = code === 'BU-TRANS' || code.startsWith('BU-A1-') || code === 'BU-HYDRO-01';
-
-  if (isSeed) {
-    return {
-      bu_targets: {
-        energy_reduction_pct: '',
-        energy_baseline_year: 'FY 2023-24',
-        energy_target_year: 'FY 2027-28',
-        water_recycle_pct: '',
-        ghg_reduction_pct: '',
-        renewable_energy_target_pct: '',
-        zero_waste_target_year: '',
-        net_zero_commitment_year: '2045',
-      },
-      bu_initiatives: [
-        {
-          id: 1,
-          name: 'Rooftop Solar & Microgrid Installation',
-          category: 'Renewable Energy',
-          capex_inr_lakhs: '125',
-          expected_co2_reduction_tco2e: '340',
-          status: 'In Progress',
-          milestone: '70% commissioning complete'
-        },
-        {
-          id: 2,
-          name: 'Effluent Zero Liquid Discharge (ZLD) Retrofit',
-          category: 'Water Conservation',
-          capex_inr_lakhs: '80',
-          expected_co2_reduction_tco2e: '45',
-          status: 'Completed',
-          milestone: 'Commissioned Q1'
-        }
-      ],
-      bu_governance: {
-        bu_esg_lead_name: '',
-        lead_designation: 'Head of Operations / ESG',
-        committee_meeting_frequency: 'Monthly',
-        risk_mitigation_framework: 'ISO 14001 & ISO 45001 Integrated System',
-        audit_mechanism: 'Quarterly Internal ESG Peer Review',
-        escalation_protocol: 'Reported directly to Subsidiary ESG Committee'
-      }
-    };
+const getInitialFormData = () => ({
+  bu_targets: {
+    energy_reduction_pct: '',
+    energy_baseline_year: '',
+    energy_target_year: '',
+    water_recycle_pct: '',
+    ghg_reduction_pct: '',
+    renewable_energy_target_pct: '',
+    zero_waste_target_year: '',
+    net_zero_commitment_year: '',
+  },
+  bu_initiatives: [],
+  bu_p6: {
+    water_stressed_project_ids: [],
+    water_stressed_projects: '',
+    water_stress_tool: 'WRI Aqueduct',
+    eco_sensitive_rows: [],
+    eco_sensitive_operations: '',
+    eco_clearance_compliant: 'Yes',
+    eia_rows: [],
+    eia_projects_summary: '',
+    efficiency_initiatives: [],
+    ghg_reduction_projects: '',
+    biodiversity_remediation: '',
+    resource_efficiency_outcomes: '',
+    business_travel_mode: 'Air passenger-km',
+    business_travel_qty: '',
+    scope3_business_travel_tco2e: '',
+    commute_headcount: '',
+    commute_mode: 'Two-wheeler',
+    commute_avg_km: '',
+    commute_working_days: '250',
+    scope3_employee_commute_tco2e: '',
+  },
+  bu_governance: {
+    bu_esg_lead_name: '',
+    lead_designation: '',
+    committee_meeting_frequency: 'Quarterly',
+    risk_mitigation_framework: '',
+    audit_mechanism: '',
+    escalation_protocol: ''
   }
-
-  return {
-    bu_targets: {
-      energy_reduction_pct: '',
-      energy_baseline_year: '',
-      energy_target_year: '',
-      water_recycle_pct: '',
-      ghg_reduction_pct: '',
-      renewable_energy_target_pct: '',
-      zero_waste_target_year: '',
-      net_zero_commitment_year: '',
-    },
-    bu_initiatives: [],
-    bu_governance: {
-      bu_esg_lead_name: '',
-      lead_designation: '',
-      committee_meeting_frequency: 'Quarterly',
-      risk_mitigation_framework: '',
-      audit_mechanism: '',
-      escalation_protocol: ''
-    }
-  };
-};
+});
 
 export default function BUDisclosure() {
   const { user, isSystemAdmin, isBuAdmin, isBuEsgManager } = useAuth();
@@ -106,6 +81,16 @@ export default function BUDisclosure() {
   const selectedBUNode = useMemo(() => {
     return buNodes.find(n => n.id === selectedBU);
   }, [buNodes, selectedBU]);
+
+  // Projects belonging to the selected BU (for LI-1, EI-11, EI-12 dropdowns)
+  const buProjects = useMemo(() => {
+    const projects = orgNodes.filter(n => n.type === 'project' || n.type === 'site');
+    if (!selectedBUNode) return projects;
+    const scoped = projects.filter(
+      n => n.parent_id === selectedBUNode.id || (n.path && selectedBUNode.path && n.path.startsWith(selectedBUNode.path))
+    );
+    return scoped.length > 0 ? scoped : projects;
+  }, [orgNodes, selectedBUNode]);
 
   // Form payload states initialized dynamically
   const [formData, setFormData] = useState(() => getInitialFormData(null));
@@ -448,7 +433,7 @@ export default function BUDisclosure() {
 
                   <div>
                     <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6 }}>
-                      GHG Intensity Reduction Target (%)
+                      GHG Reduction Target (%)
                     </label>
                     <input
                       type="number"
@@ -680,6 +665,277 @@ export default function BUDisclosure() {
                 </div>
               </div>
             )}
+
+            {activeTab === 'bu_p6' && (() => {
+              const p6 = formData.bu_p6 || {};
+              const updateP6 = (patch) => setFormData(p => ({ ...p, bu_p6: { ...(p.bu_p6 || {}), ...patch } }));
+              const selectedWsIds = Array.isArray(p6.water_stressed_project_ids) ? p6.water_stressed_project_ids : [];
+              const toggleWsProject = (proj) => {
+                const nextIds = selectedWsIds.includes(proj.id)
+                  ? selectedWsIds.filter(id => id !== proj.id)
+                  : [...selectedWsIds, proj.id];
+                const names = buProjects.filter(pr => nextIds.includes(pr.id)).map(pr => pr.name).join(', ');
+                updateP6({ water_stressed_project_ids: nextIds, water_stressed_projects: names });
+              };
+              const ecoRows = Array.isArray(p6.eco_sensitive_rows) ? p6.eco_sensitive_rows : [];
+              const eiaRows = Array.isArray(p6.eia_rows) ? p6.eia_rows : [];
+              const effRows = Array.isArray(p6.efficiency_initiatives) ? p6.efficiency_initiatives : [];
+
+              return (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
+                  <div>
+                    <h2 style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4 }}>
+                      Principle 6 — Business Unit Disclosures (LI-1, EI-11 &amp; LI-3, EI-12, EI-8 &amp; LI-4, LI-2)
+                    </h2>
+                    <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: 0 }}>
+                      BU-wide site classifications, EIA/eco-sensitive compliance, resource-efficiency initiatives, and BU Scope 3 (Travel &amp; Commuting).
+                    </p>
+                  </div>
+
+                  {/* 1. LI-1 Water-Stressed Sites */}
+                  <div style={{ padding: 14, borderRadius: 10, border: '1px solid var(--border-default)', background: 'var(--bg-base)' }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 10 }}>
+                      LI-1: Water-Stressed Sites (Multi-select BU Projects + Assessment Tool)
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 14 }}>
+                      <div>
+                        <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6 }}>
+                          Select BU Projects in Water-Stressed Areas
+                        </label>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, padding: 10, borderRadius: 8, border: '1px solid var(--border-default)', background: '#fff', maxHeight: 130, overflowY: 'auto' }}>
+                          {buProjects.length === 0 ? (
+                            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>No projects under this BU yet.</span>
+                          ) : buProjects.map(proj => {
+                            const checked = selectedWsIds.includes(proj.id);
+                            return (
+                              <label key={proj.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, padding: '4px 10px', borderRadius: 99, border: `1px solid ${checked ? '#2563eb' : '#cbd5e1'}`, background: checked ? '#eff6ff' : '#f8fafc', cursor: 'pointer', fontWeight: 600 }}>
+                                <input type="checkbox" disabled={isLocked} checked={checked} onChange={() => toggleWsProject(proj)} />
+                                {proj.name}
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </div>
+                      <div>
+                        <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6 }}>
+                          Assessment Tool / Source
+                        </label>
+                        <select
+                          disabled={isLocked}
+                          value={p6.water_stress_tool || 'WRI Aqueduct'}
+                          onChange={e => updateP6({ water_stress_tool: e.target.value })}
+                          style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid var(--border-default)', background: '#fff' }}
+                        >
+                          <option value="WRI Aqueduct">WRI Aqueduct</option>
+                          <option value="CGWB Assessment">CGWB (Central Ground Water Board)</option>
+                          <option value="WWF Water Risk Filter">WWF Water Risk Filter</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 2. EI-11 & LI-3 Ecologically Sensitive Areas & Biodiversity */}
+                  <div style={{ padding: 14, borderRadius: 10, border: '1px solid var(--border-default)', background: 'var(--bg-base)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>
+                        EI-11 &amp; LI-3: Ecologically Sensitive Areas &amp; Biodiversity
+                      </div>
+                      {!isLocked && (
+                        <button type="button" onClick={() => updateP6({ eco_sensitive_rows: [...ecoRows, { project_name: '', operations_type: 'EPC project', compliant: 'Yes', corrective_action: '', biodiversity_action: '' }] })}
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '5px 10px', fontSize: 11.5, fontWeight: 700, borderRadius: 6, border: '1px solid #cbd5e1', background: '#fff', cursor: 'pointer' }}>
+                          <Plus size={13} /> Add Site
+                        </button>
+                      )}
+                    </div>
+                    {ecoRows.map((row, idx) => (
+                      <div key={idx} style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 0.8fr 1.2fr 1.5fr auto', gap: 8, marginBottom: 8, alignItems: 'center' }}>
+                        <select disabled={isLocked} value={row.project_name || ''} onChange={e => {
+                          const next = ecoRows.map((r, i) => i === idx ? { ...r, project_name: e.target.value } : r);
+                          updateP6({ eco_sensitive_rows: next, eco_sensitive_operations: next.map(r => `${r.project_name} (${r.operations_type})`).join('; ') });
+                        }} style={{ padding: '7px 8px', borderRadius: 6, border: '1px solid #cbd5e1', fontSize: 12 }}>
+                          <option value="">Select Project/Location...</option>
+                          {buProjects.map(pr => <option key={pr.id} value={pr.name}>{pr.name}</option>)}
+                        </select>
+                        <input disabled={isLocked} value={row.operations_type || ''} placeholder="Type of operations" onChange={e => {
+                          const next = ecoRows.map((r, i) => i === idx ? { ...r, operations_type: e.target.value } : r);
+                          updateP6({ eco_sensitive_rows: next });
+                        }} style={{ padding: '7px 8px', borderRadius: 6, border: '1px solid #cbd5e1', fontSize: 12 }} />
+                        <select disabled={isLocked} value={row.compliant || 'Yes'} onChange={e => {
+                          const next = ecoRows.map((r, i) => i === idx ? { ...r, compliant: e.target.value } : r);
+                          updateP6({ eco_sensitive_rows: next, eco_clearance_compliant: next.some(r => r.compliant === 'No') ? 'No' : 'Yes' });
+                        }} style={{ padding: '7px 8px', borderRadius: 6, border: '1px solid #cbd5e1', fontSize: 12 }}>
+                          <option value="Yes">Compliant: Yes</option>
+                          <option value="No">Compliant: No</option>
+                        </select>
+                        <input disabled={isLocked || row.compliant !== 'No'} value={row.corrective_action || ''} placeholder="Corrective action (if No)" onChange={e => {
+                          const next = ecoRows.map((r, i) => i === idx ? { ...r, corrective_action: e.target.value } : r);
+                          updateP6({ eco_sensitive_rows: next });
+                        }} style={{ padding: '7px 8px', borderRadius: 6, border: '1px solid #cbd5e1', fontSize: 12 }} />
+                        <input disabled={isLocked} value={row.biodiversity_action || ''} placeholder="LI-3 Biodiversity remediation" onChange={e => {
+                          const next = ecoRows.map((r, i) => i === idx ? { ...r, biodiversity_action: e.target.value } : r);
+                          updateP6({ eco_sensitive_rows: next, biodiversity_remediation: next.map(r => r.biodiversity_action).filter(Boolean).join('; ') });
+                        }} style={{ padding: '7px 8px', borderRadius: 6, border: '1px solid #cbd5e1', fontSize: 12 }} />
+                        {!isLocked && (
+                          <button type="button" onClick={() => updateP6({ eco_sensitive_rows: ecoRows.filter((_, i) => i !== idx) })} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer' }}>
+                            <Trash2 size={14} />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* 3. EI-12 Environmental Impact Assessments (EIA) */}
+                  <div style={{ padding: 14, borderRadius: 10, border: '1px solid var(--border-default)', background: 'var(--bg-base)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>
+                        EI-12: Environmental Impact Assessments (EIA)
+                      </div>
+                      {!isLocked && (
+                        <button type="button" onClick={() => updateP6({ eia_rows: [...eiaRows, { project_name: '', notification_no_date: '', independent_agency: 'Yes', public_domain: 'Yes', web_link: '' }] })}
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '5px 10px', fontSize: 11.5, fontWeight: 700, borderRadius: 6, border: '1px solid #cbd5e1', background: '#fff', cursor: 'pointer' }}>
+                          <Plus size={13} /> Add EIA
+                        </button>
+                      )}
+                    </div>
+                    {eiaRows.map((row, idx) => (
+                      <div key={idx} style={{ display: 'grid', gridTemplateColumns: '1.2fr 1.2fr 0.8fr 0.8fr 1.3fr auto', gap: 8, marginBottom: 8, alignItems: 'center' }}>
+                        <select disabled={isLocked} value={row.project_name || ''} onChange={e => {
+                          const next = eiaRows.map((r, i) => i === idx ? { ...r, project_name: e.target.value } : r);
+                          updateP6({ eia_rows: next, eia_projects_summary: next.map(r => `${r.project_name}: ${r.notification_no_date}`).join('; ') });
+                        }} style={{ padding: '7px 8px', borderRadius: 6, border: '1px solid #cbd5e1', fontSize: 12 }}>
+                          <option value="">Select Project/Location...</option>
+                          {buProjects.map(pr => <option key={pr.id} value={pr.name}>{pr.name}</option>)}
+                        </select>
+                        <input disabled={isLocked} value={row.notification_no_date || ''} placeholder="EIA Notification No. & Date" onChange={e => {
+                          const next = eiaRows.map((r, i) => i === idx ? { ...r, notification_no_date: e.target.value } : r);
+                          updateP6({ eia_rows: next, eia_projects_summary: next.map(r => `${r.project_name}: ${r.notification_no_date}`).join('; ') });
+                        }} style={{ padding: '7px 8px', borderRadius: 6, border: '1px solid #cbd5e1', fontSize: 12 }} />
+                        <select disabled={isLocked} value={row.independent_agency || 'Yes'} onChange={e => updateP6({ eia_rows: eiaRows.map((r, i) => i === idx ? { ...r, independent_agency: e.target.value } : r) })}
+                          style={{ padding: '7px 8px', borderRadius: 6, border: '1px solid #cbd5e1', fontSize: 12 }}>
+                          <option value="Yes">Indep. Agency: Yes</option>
+                          <option value="No">Indep. Agency: No</option>
+                        </select>
+                        <select disabled={isLocked} value={row.public_domain || 'Yes'} onChange={e => updateP6({ eia_rows: eiaRows.map((r, i) => i === idx ? { ...r, public_domain: e.target.value } : r) })}
+                          style={{ padding: '7px 8px', borderRadius: 6, border: '1px solid #cbd5e1', fontSize: 12 }}>
+                          <option value="Yes">Public: Yes</option>
+                          <option value="No">Public: No</option>
+                        </select>
+                        <input disabled={isLocked} value={row.web_link || ''} placeholder="Public Web Link" onChange={e => updateP6({ eia_rows: eiaRows.map((r, i) => i === idx ? { ...r, web_link: e.target.value } : r) })}
+                          style={{ padding: '7px 8px', borderRadius: 6, border: '1px solid #cbd5e1', fontSize: 12 }} />
+                        {!isLocked && (
+                          <button type="button" onClick={() => updateP6({ eia_rows: eiaRows.filter((_, i) => i !== idx) })} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer' }}>
+                            <Trash2 size={14} />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* 4. EI-8 & LI-4 GHG & Resource Efficiency Initiatives */}
+                  <div style={{ padding: 14, borderRadius: 10, border: '1px solid var(--border-default)', background: 'var(--bg-base)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>
+                        EI-8 &amp; LI-4: GHG &amp; Resource Efficiency Initiatives
+                      </div>
+                      {!isLocked && (
+                        <button type="button" onClick={() => updateP6({ efficiency_initiatives: [...effRows, { title: '', category: 'Energy', description: '', outcome: '' }] })}
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '5px 10px', fontSize: 11.5, fontWeight: 700, borderRadius: 6, border: '1px solid #cbd5e1', background: '#fff', cursor: 'pointer' }}>
+                          <Plus size={13} /> Add Initiative
+                        </button>
+                      )}
+                    </div>
+                    {effRows.map((row, idx) => (
+                      <div key={idx} style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.9fr 1.6fr 1.3fr auto', gap: 8, marginBottom: 8, alignItems: 'center' }}>
+                        <input disabled={isLocked} value={row.title || ''} placeholder="Initiative title" onChange={e => {
+                          const next = effRows.map((r, i) => i === idx ? { ...r, title: e.target.value } : r);
+                          updateP6({ efficiency_initiatives: next, ghg_reduction_projects: next.map(r => `${r.title} (${r.outcome})`).join('; ') });
+                        }} style={{ padding: '7px 8px', borderRadius: 6, border: '1px solid #cbd5e1', fontSize: 12 }} />
+                        <select disabled={isLocked} value={row.category || 'Energy'} onChange={e => updateP6({ efficiency_initiatives: effRows.map((r, i) => i === idx ? { ...r, category: e.target.value } : r) })}
+                          style={{ padding: '7px 8px', borderRadius: 6, border: '1px solid #cbd5e1', fontSize: 12 }}>
+                          <option value="Energy">Energy</option>
+                          <option value="GHG">GHG</option>
+                          <option value="Water">Water</option>
+                          <option value="Waste">Waste</option>
+                          <option value="Effluent">Effluent</option>
+                        </select>
+                        <input disabled={isLocked} value={row.description || ''} placeholder="Description / technology used" onChange={e => updateP6({ efficiency_initiatives: effRows.map((r, i) => i === idx ? { ...r, description: e.target.value } : r) })}
+                          style={{ padding: '7px 8px', borderRadius: 6, border: '1px solid #cbd5e1', fontSize: 12 }} />
+                        <input disabled={isLocked} value={row.outcome || ''} placeholder="Measurable outcome (GJ / tCO₂e / kL / MT)" onChange={e => {
+                          const next = effRows.map((r, i) => i === idx ? { ...r, outcome: e.target.value } : r);
+                          updateP6({ efficiency_initiatives: next, ghg_reduction_projects: next.map(r => `${r.title} (${r.outcome})`).join('; ') });
+                        }} style={{ padding: '7px 8px', borderRadius: 6, border: '1px solid #cbd5e1', fontSize: 12 }} />
+                        {!isLocked && (
+                          <button type="button" onClick={() => updateP6({ efficiency_initiatives: effRows.filter((_, i) => i !== idx) })} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer' }}>
+                            <Trash2 size={14} />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* 5. LI-2 BU-Level Scope 3 */}
+                  <div style={{ padding: 14, borderRadius: 10, border: '1px solid var(--border-default)', background: 'var(--bg-base)' }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 10 }}>
+                      LI-2: BU-Level Scope 3 (Business Travel ENV-GHG-003A &amp; Employee Commuting ENV-GHG-003B)
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 12 }}>
+                      <div>
+                        <label style={{ display: 'block', fontSize: 11.5, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 4 }}>Business Travel Mode</label>
+                        <select disabled={isLocked} value={p6.business_travel_mode || 'Air passenger-km'} onChange={e => updateP6({ business_travel_mode: e.target.value })}
+                          style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border-default)', background: '#fff' }}>
+                          <option value="Air passenger-km">Air passenger-km</option>
+                          <option value="Rail km">Rail km</option>
+                          <option value="Road km">Road km</option>
+                          <option value="Travel Spend (₹)">Travel Spend (₹)</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label style={{ display: 'block', fontSize: 11.5, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 4 }}>Activity Quantity / Spend</label>
+                        <input type="number" disabled={isLocked} value={p6.business_travel_qty || ''} onChange={e => updateP6({ business_travel_qty: e.target.value })}
+                          style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border-default)', background: '#fff' }} />
+                      </div>
+                      <div>
+                        <label style={{ display: 'block', fontSize: 11.5, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 4 }}>ENV-GHG-003A Travel (tCO₂e)</label>
+                        <input type="number" step="0.01" disabled={isLocked} value={p6.scope3_business_travel_tco2e || ''} onChange={e => updateP6({ scope3_business_travel_tco2e: e.target.value })}
+                          style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border-default)', background: '#fff' }} />
+                      </div>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr 1fr', gap: 10 }}>
+                      <div>
+                        <label style={{ display: 'block', fontSize: 11.5, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 4 }}>Commute Headcount</label>
+                        <input type="number" disabled={isLocked} value={p6.commute_headcount || ''} onChange={e => updateP6({ commute_headcount: e.target.value })}
+                          style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border-default)', background: '#fff' }} />
+                      </div>
+                      <div>
+                        <label style={{ display: 'block', fontSize: 11.5, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 4 }}>Commute Mode</label>
+                        <select disabled={isLocked} value={p6.commute_mode || 'Two-wheeler'} onChange={e => updateP6({ commute_mode: e.target.value })}
+                          style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border-default)', background: '#fff' }}>
+                          <option value="Two-wheeler">Two-wheeler</option>
+                          <option value="Car">Car</option>
+                          <option value="Bus / Metro">Bus / Metro</option>
+                          <option value="EV / Public">EV / Public</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label style={{ display: 'block', fontSize: 11.5, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 4 }}>Avg Distance (km/day)</label>
+                        <input type="number" disabled={isLocked} value={p6.commute_avg_km || ''} onChange={e => updateP6({ commute_avg_km: e.target.value })}
+                          style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border-default)', background: '#fff' }} />
+                      </div>
+                      <div>
+                        <label style={{ display: 'block', fontSize: 11.5, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 4 }}>Working Days</label>
+                        <input type="number" disabled={isLocked} value={p6.commute_working_days || '250'} onChange={e => updateP6({ commute_working_days: e.target.value })}
+                          style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border-default)', background: '#fff' }} />
+                      </div>
+                      <div>
+                        <label style={{ display: 'block', fontSize: 11.5, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 4 }}>ENV-GHG-003B (tCO₂e)</label>
+                        <input type="number" step="0.01" disabled={isLocked} value={p6.scope3_employee_commute_tco2e || ''} onChange={e => updateP6({ scope3_employee_commute_tco2e: e.target.value })}
+                          style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border-default)', background: '#fff' }} />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* ── Action Buttons ── */}
             {!isLocked && (

@@ -50,7 +50,7 @@ export default function Landing() {
     }
   }, []);
   
-  // Interactive Calculator State (CEA v19 Emission Factor = 0.716 kgCO2e/kWh)
+  // Interactive Calculator State (Grid kWh -> Energy GJ)
   const [calcKwh, setCalcKwh] = useState(125000);
   const calcScope2Tonnes = ((calcKwh * 0.716) / 1000).toFixed(2);
   const calcEnergyGJ = (calcKwh * 0.0036).toFixed(2);
@@ -108,7 +108,7 @@ export default function Landing() {
       traditional: [
         'Site supervisors enter raw fuel logs and submit directly to corporate sustainability',
         'No four-eyes verification before numbers enter company-wide consolidation',
-        'Generic AI tools hallucinate emission factors or qualitative disclosures',
+        'Generic AI tools hallucinate figures or qualitative disclosures',
         'Corporate directors sign off on unverified roll-ups with personal statutory liability'
       ],
       aarohan: [
@@ -684,7 +684,7 @@ export default function Landing() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                   <div style={{ padding: '12px 14px', background: '#EFF6FF', borderRadius: 8, border: '1px solid #BFDBFE' }}>
                     <div style={{ fontSize: 13, fontWeight: 700, color: '#1D4ED8' }}>9 Mandatory SEBI BRSR Core KPIs</div>
-                    <div style={{ fontSize: 11, color: '#475569', marginTop: 2 }}>Assurance-ready KPIs including Scope 1, Scope 2, Water, Energy Intensity &amp; LTIFR.</div>
+                    <div style={{ fontSize: 11, color: '#475569', marginTop: 2 }}>Assurance-ready KPIs including Scope 1, Scope 2, Water, Energy &amp; Waste.</div>
                   </div>
                   <div style={{ padding: '12px 14px', background: '#ECFDF5', borderRadius: 8, border: '1px solid #A7F3D0' }}>
                     <div style={{ fontSize: 13, fontWeight: 700, color: '#065F46' }}>40 Regulatory Dimensions</div>
@@ -917,7 +917,7 @@ export default function Landing() {
             </div>
 
             <div style={{ padding: '20px', background: '#ECFDF5', borderRadius: 12, border: '1px solid #A7F3D0' }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: '#065F46', textTransform: 'uppercase' }}>Statutory Energy Intensity</div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: '#065F46', textTransform: 'uppercase' }}>Total Operational Energy</div>
               <div style={{ fontSize: 28, fontWeight: 800, color: '#09090B', fontFamily: 'JetBrains Mono, monospace', margin: '6px 0' }}>
                 {calcEnergyGJ} <span style={{ fontSize: 14, fontWeight: 500, color: '#64748B' }}>GJ</span>
               </div>

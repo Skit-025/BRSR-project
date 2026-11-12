@@ -1,10 +1,10 @@
 """
 app/modules/calc/router.py
-FastAPI router for calculation formulas, emission factors, and unit conversion endpoints.
+FastAPI router for calculation formulas and unit conversion endpoints.
 
-Note: Reference lookup endpoints (formulas, factors, fuel-catalog, scope3-catalog, convert-unit)
-are intentionally public — they expose only statutory emission factors, not organisational data.
-Computation POST endpoints (scope1, scope2, scope3, energy-intensity, safety-ltifr) require
+Note: Reference lookup endpoints (formulas, fuel-catalog, scope3-catalog, convert-unit)
+are intentionally public.
+Computation POST endpoints (scope1, scope2, scope3, safety-ltifr) require
 authentication and the calc:run permission.
 """
 from typing import List, Dict, Any
@@ -19,7 +19,6 @@ from app.modules.calc.schemas import (
     Scope2CalcRequest,
     Scope3CalcRequest,
     Scope3CalcResult,
-    EnergyIntensityRequest,
     SafetyCalcRequest,
     CalculationResult,
     FormulaInfo,
@@ -27,7 +26,7 @@ from app.modules.calc.schemas import (
 from app.modules.calc.service import CalculationService
 from app.modules.calc.registry import FORMULA_METADATA, get_formula_info
 from app.modules.calc.units import convert_unit
-from app.modules.calc.factors import FUEL_EMISSION_FACTORS, GRID_EMISSION_FACTOR_CEA_WEIGHTED_AVG
+from app.modules.calc.factors import FUEL_EMISSION_FACTORS
 from app.security.rbac import Permission, has_permission
 
 router = APIRouter(prefix="/calc", tags=["Calculation Engine & Deterministic Formulas"])
@@ -46,23 +45,6 @@ def _require_calc_permission(current_user: User) -> None:
 def list_supported_formulas():
     """Returns list and definitions of all deterministic formulas available."""
     return list(FORMULA_METADATA.values())
-
-
-@router.get("/factors")
-def get_statutory_factors():
-    """Returns regulatory emission factors and calorific values (CEA & IPCC)."""
-    return {
-        "grid_emission_factor_tco2e_per_mwh": str(GRID_EMISSION_FACTOR_CEA_WEIGHTED_AVG),
-        "fuel_factors": {
-            k: {
-                "unit": v["unit"],
-                "factor_tco2e_per_unit": str(v["factor"]),
-                "net_calorific_value_gj_per_unit": str(v["net_calorific_value_gj_per_unit"]),
-                "source": v["source"],
-            }
-            for k, v in FUEL_EMISSION_FACTORS.items()
-        }
-    }
 
 
 @router.get("/fuel-catalog")
@@ -190,26 +172,6 @@ def get_scope3_catalog():
         ],
     }
 
-
-
-@router.post("/energy-intensity", response_model=CalculationResult)
-def calculate_intensity(
-    req: EnergyIntensityRequest,
-    current_user: User = Depends(get_current_active_user),
-    db: Session = Depends(get_db),
-):
-    """Calculate Energy Intensity (GJ / Crore INR)."""
-    _require_calc_permission(current_user)
-    service = CalculationService(db)
-    try:
-        return service.run_energy_intensity(
-            total_energy_gj=req.total_energy_gj,
-            turnover_inr_crores=req.turnover_inr_crores,
-            org_node_id=req.org_node_id,
-            period_id=req.period_id,
-        )
-    except Exception as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
 
 
 @router.post("/safety-ltifr", response_model=CalculationResult)

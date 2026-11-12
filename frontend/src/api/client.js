@@ -281,6 +281,12 @@ export const dashboardsApi = {
     if (entityId) params.entity_id = entityId;
     return api.get('/dashboards/command-center', { params });
   },
+  getPrinciple6Rolldown: (periodId, entityId) => {
+    const params = {};
+    if (periodId) params.period_id = periodId;
+    if (entityId) params.entity_id = entityId;
+    return api.get('/dashboards/principle6-rolldown', { params });
+  },
 };
 
 // ─────────────────────────────────────────────────────────────────
@@ -554,4 +560,31 @@ export const jobsApi = {
 export const validationApi = {
   check: (submissionId) => api.post(`/validation/check/${encodeURIComponent(submissionId)}`),
   justify: (data) => api.post('/validation/justify', data),
+};
+
+// ─────────────────────────────────────────────────────────────────
+// Principle 6 Role-Specific Forms & Unified esgData.json Store
+// ─────────────────────────────────────────────────────────────────
+export const p6FormsApi = {
+  getSchema: () => api.get('/p6-forms/schema'),
+  getEntries: (nodeId) => api.get('/p6-forms/entries', { params: nodeId ? { node_id: nodeId } : {} }),
+  getDescendants: (nodeId) => api.get('/p6-forms/descendants', { params: nodeId ? { node_id: nodeId } : {} }),
+  saveDraft: (payload) => api.post('/p6-forms/save', payload),
+  submit: (payload) => api.post('/p6-forms/submit', payload),
+  review: (payload) => api.post('/p6-forms/review', payload),
+  getDashboard: (nodeId) => api.get('/p6-forms/dashboard', { params: nodeId ? { node_id: nodeId } : {} }),
+  getLineage: (kpi, nodeId) => api.get('/p6-forms/lineage', { params: { kpi, ...(nodeId ? { node_id: nodeId } : {}) } }),
+  getRollup: (nodeId, onlyAccepted = true) =>
+    api.get('/p6-forms/rollup', { params: { ...(nodeId ? { node_id: nodeId } : {}), only_accepted: onlyAccepted } }),
+  // Evidence attachment
+  uploadEvidence: (nodeId, fieldId, fyKey, file) => {
+    const fd = new FormData();
+    fd.append('node_id', nodeId);
+    fd.append('field_id', fieldId);
+    fd.append('fy_key', fyKey);
+    fd.append('file', file);
+    return api.post('/p6-forms/upload-evidence', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+  },
+  getFieldEvidence: (nodeId, fieldId) => api.get(`/p6-forms/evidence/${encodeURIComponent(nodeId)}/${encodeURIComponent(fieldId)}`),
+  getNodeEvidence: (nodeId) => api.get(`/p6-forms/evidence/${encodeURIComponent(nodeId)}`),
 };

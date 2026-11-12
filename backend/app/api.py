@@ -27,6 +27,7 @@ from app.modules.valuechain.router import router as valuechain_router
 from app.modules.admin.router import router as admin_router
 from app.modules.notifications.router import router as notifications_router
 from app.modules.disclosures.router import router as disclosures_router
+from app.modules.p6_pipeline.router import router as p6_forms_router
 
 api_router = APIRouter()
 
@@ -42,6 +43,7 @@ api_router.include_router(forms_router)
 
 # Type 3 Org-Level Disclosures (BU, Subsidiary, Group)
 api_router.include_router(disclosures_router)
+api_router.include_router(p6_forms_router)
 
 
 # Data Collection & Monthly Submissions

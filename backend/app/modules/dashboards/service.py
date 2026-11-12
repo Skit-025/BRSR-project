@@ -1839,5 +1839,366 @@ class DashboardService:
             ),
         )
 
+    def get_principle6_rolldown(self, period_id: str, entity_id: str, current_user) -> Dict[str, Any]:
+        """
+        Top-down Principle 6 roll-down payload for any admin tier (Group -> Subsidiary -> BU -> Project).
+        Aggregates live DataPoint records across the selected entity and its descendants.
+        """
+        import uuid as _uuid
+        from collections import defaultdict
+        from app.modules.collection.models import DataPoint
+        from app.modules.evidence.models import Evidence
+        from app.modules.auth.service import get_descendant_node_ids
+        from app.modules.dashboards.schemas import (
+            Principle6BreadcrumbItem,
+            Principle6ChildSummary,
+            Principle6RawEntry,
+            Principle6RolldownResponse,
+        )
+
+        # Resolve period
+        period = None
+        try:
+            _uuid.UUID(str(period_id))
+            period = self.db.query(ReportingPeriod).filter(ReportingPeriod.id == period_id).first()
+        except (ValueError, TypeError):
+            period = self.db.query(ReportingPeriod).filter(ReportingPeriod.code == period_id).first()
+
+        if not period:
+            period = self.db.query(ReportingPeriod).order_by(ReportingPeriod.start_date.desc()).first()
+
+        # Resolve entity
+        entity = self.db.query(OrgNode).filter(OrgNode.id == entity_id, OrgNode.is_deleted == False).first()
+        if not entity:
+            entity = self.db.query(OrgNode).filter(OrgNode.is_deleted == False).first()
+
+        # Build breadcrumbs from user's scope root down to `entity`
+        all_nodes = {str(n.id): n for n in self.db.query(OrgNode).filter(OrgNode.is_deleted == False).all()}
+        user_scope_root_id = str(current_user.org_node_id) if getattr(current_user, "org_node_id", None) else None
+        chain = []
+        cursor = entity
+        seen = set()
+        while cursor and str(cursor.id) not in seen:
+            seen.add(str(cursor.id))
+            chain.append(
+                Principle6BreadcrumbItem(
+                    id=str(cursor.id),
+                    name=cursor.name,
+                    code=cursor.code,
+                    type=cursor.type,
+                )
+            )
+            if user_scope_root_id and str(cursor.id) == user_scope_root_id:
+                break
+            cursor = all_nodes.get(str(cursor.parent_id)) if cursor.parent_id else None
+        breadcrumbs = list(reversed(chain))
+
+        def _to_gj(val: float, unit: str) -> float:
+            u = (unit or "").lower()
+            if u == "kwh":
+                return val * 0.0036
+            if u == "mwh":
+                return val * 3.6
+            if u in ("litres", "l"):
+                return val * 0.03576
+            if u == "kl":
+                return val * 35.76
+            return val
+
+        def _to_mt(val: float, unit: str) -> float:
+            return val / 1000.0 if (unit or "").lower() == "kg" else val
+
+        def _to_tco2e(val: float, unit: str) -> float:
+            return val / 1000.0 if (unit or "").lower() == "kgco2e" else val
+
+        def _collect_node_metrics(node_id_str: str):
+            raw_ids = list({str(x) for x in get_descendant_node_ids(self.db, node_id_str)} | {node_id_str})
+            target_ids = []
+            for x in raw_ids:
+                try:
+                    _uuid.UUID(x)
+                    target_ids.append(x)
+                except (ValueError, TypeError):
+                    pass
+            subs_q = self.db.query(Submission).filter(Submission.entity_id.in_(target_ids))
+            if period:
+                subs_q = subs_q.filter(Submission.period_id == period.id)
+            subs = subs_q.all()
+            sub_ids = [s.id for s in subs]
+            dps = (
+                self.db.query(DataPoint).filter(DataPoint.submission_id.in_(sub_ids)).all()
+                if sub_ids
+                else []
+            )
+            sums = defaultdict(float)
+            counts = defaultdict(int)
+            texts = {}
+            for dp in dps:
+                val = float(dp.value_numeric) if dp.value_numeric is not None else None
+                code = dp.metric_code
+                if val is not None:
+                    counts[code] += 1
+                    if code.startswith("ENV-ENERGY") or code.startswith("ENV-FUEL"):
+                        sums[code] += _to_gj(val, dp.unit)
+                    elif code.startswith("ENV-WASTE"):
+                        sums[code] += _to_mt(val, dp.unit)
+                    elif code.startswith("ENV-GHG"):
+                        sums[code] += _to_tco2e(val, dp.unit)
+                    else:
+                        sums[code] += val
+                if dp.value_text:
+                    texts[code] = dp.value_text
+            return subs, dps, sums, counts, texts
+
+        subs, dps, sums, counts, texts = _collect_node_metrics(str(entity.id))
+
+        # Energy Breakdown (EI-1)
+        ren_elec = round(sums["ENV-ENERGY-REN-ELEC"] + sums["ENV-GHG-002B"], 2)
+        ren_fuel = round(sums["ENV-ENERGY-REN-FUEL"], 2)
+        ren_other = round(sums["ENV-ENERGY-REN-OTHER"], 2)
+        ren_total = round(ren_elec + ren_fuel + ren_other, 2)
+
+        nonren_elec = round(sums["ENV-ENERGY-001"], 2)
+        nonren_fuel = round(
+            sums["ENV-ENERGY-002"]
+            + sums["ENV-FUEL-DIESEL-HSD"]
+            + sums["ENV-FUEL-DIESEL-LDO"]
+            + sums["ENV-FUEL-COAL-ANTHRACITE"]
+            + sums["ENV-FUEL-COAL-NONCOKING"]
+            + sums["ENV-FUEL-GAS-CNG"]
+            + sums["ENV-FUEL-GAS-PNG"],
+            2,
+        )
+        nonren_other = round(sums["ENV-ENERGY-NONREN-OTHER"], 2)
+        nonren_total = round(nonren_elec + nonren_fuel + nonren_other, 2)
+        total_energy_gj = round(ren_total + nonren_total, 2)
+        renewable_pct = round((ren_total / total_energy_gj) * 100.0, 2) if total_energy_gj > 0 else 0.0
+
+        # GHG Breakdown (EI-7 & LI-2)
+        s1_sub = sums["ENV-GHG-001A"] + sums["ENV-GHG-001B"] + sums["ENV-GHG-001C"] + sums["ENV-GHG-001D"]
+        s1_total = round(s1_sub if s1_sub > 0 else sums["ENV-GHG-001"], 2)
+        s2_sub = sums["ENV-GHG-002A"]
+        s2_total = round(s2_sub if s2_sub > 0 else sums["ENV-GHG-002"], 2)
+        s1_s2_total = round(s1_total + s2_total, 2)
+        s3_codes = ["ENV-GHG-003A", "ENV-GHG-003B", "ENV-GHG-003C", "ENV-GHG-003D", "ENV-GHG-003E", "ENV-GHG-003F", "ENV-GHG-003G"]
+        s3_total = round(sum(sums[c] for c in s3_codes), 2)
+
+        # Water Breakdown (EI-3 & EI-4)
+        w_surf = round(sums["ENV-WATER-SURF"], 2)
+        w_ground = round(sums["ENV-WATER-GROUND"] + sums["ENV-WATER-001"], 2)
+        w_third = round(sums["ENV-WATER-THIRD"], 2)
+        w_sea = round(sums["ENV-WATER-SEA"], 2)
+        w_other = round(sums["ENV-WATER-OTHER"], 2)
+        w_withdrawn = round(w_surf + w_ground + w_third + w_sea + w_other, 2)
+        w_discharged = round(
+            sums["ENV-WATER-DIS-SURF"]
+            + sums["ENV-WATER-DIS-GROUND"]
+            + sums["ENV-WATER-DIS-SEA"]
+            + sums["ENV-WATER-DIS-THIRD"]
+            + sums["ENV-WATER-DIS-OTHER"],
+            2,
+        )
+        w_consumed = round(sums["ENV-WATER-CONS"] if sums["ENV-WATER-CONS"] > 0 else max(w_withdrawn - w_discharged, 0.0), 2)
+
+        # Waste Breakdown (EI-9)
+        waste_cats = {
+            "plastic": round(sums["ENV-WASTE-PLASTIC"], 2),
+            "ewaste": round(sums["ENV-WASTE-EWASTE"], 2),
+            "biomed": round(sums["ENV-WASTE-BIOMED"], 2),
+            "cd": round(sums["ENV-WASTE-CD"], 2),
+            "battery": round(sums["ENV-WASTE-BATTERY"], 2),
+            "radioactive": round(sums["ENV-WASTE-RADIO"], 2),
+            "hazardous_other": round(sums["ENV-WASTE-HAZ-OTHER"] + sums["ENV-WASTE-001"], 2),
+            "non_hazardous_other": round(sums["ENV-WASTE-NONHAZ-OTHER"], 2),
+        }
+        waste_generated = round(sum(waste_cats.values()), 2)
+        waste_rec = {
+            "recycled": round(sums["ENV-WASTE-REC-RECYCLED"], 2),
+            "reused": round(sums["ENV-WASTE-REC-REUSED"], 2),
+            "other": round(sums["ENV-WASTE-REC-OTHER"], 2),
+        }
+        waste_recovered = round(sum(waste_rec.values()), 2)
+        waste_disp = {
+            "incineration": round(sums["ENV-WASTE-DISP-INCIN"], 2),
+            "landfilling": round(sums["ENV-WASTE-DISP-LANDFILL"], 2),
+            "other": round(sums["ENV-WASTE-DISP-OTHER"], 2),
+        }
+        waste_disposed = round(sum(waste_disp.values()), 2)
+        waste_recovery_pct = round((waste_recovered / waste_generated) * 100.0, 2) if waste_generated > 0 else 0.0
+
+        # Direct children roll-down
+        direct_children = (
+            self.db.query(OrgNode)
+            .filter(OrgNode.parent_id == entity.id, OrgNode.is_deleted == False)
+            .order_by(OrgNode.name)
+            .all()
+        )
+        children_list = []
+        for ch in direct_children:
+            ch_subs, _, ch_sums, _, _ = _collect_node_metrics(str(ch.id))
+            ch_status = ch_subs[0].status if ch_subs else "NOT_STARTED"
+            ch_energy = round(
+                ch_sums["ENV-ENERGY-001"]
+                + ch_sums["ENV-ENERGY-002"]
+                + ch_sums["ENV-ENERGY-REN-ELEC"]
+                + ch_sums["ENV-ENERGY-REN-FUEL"]
+                + ch_sums["ENV-ENERGY-REN-OTHER"]
+                + ch_sums["ENV-ENERGY-NONREN-OTHER"]
+                + ch_sums["ENV-FUEL-DIESEL-HSD"]
+                + ch_sums["ENV-FUEL-DIESEL-LDO"]
+                + ch_sums["ENV-FUEL-COAL-ANTHRACITE"]
+                + ch_sums["ENV-FUEL-COAL-NONCOKING"]
+                + ch_sums["ENV-FUEL-GAS-CNG"]
+                + ch_sums["ENV-FUEL-GAS-PNG"],
+                2,
+            )
+            ch_s1_s2 = round(
+                (ch_sums["ENV-GHG-001A"] + ch_sums["ENV-GHG-001B"] + ch_sums["ENV-GHG-001C"] + ch_sums["ENV-GHG-001D"] or ch_sums["ENV-GHG-001"])
+                + (ch_sums["ENV-GHG-002A"] or ch_sums["ENV-GHG-002"]),
+                2,
+            )
+            ch_s3 = round(sum(ch_sums[c] for c in s3_codes), 2)
+            ch_water = round(
+                ch_sums["ENV-WATER-SURF"] + ch_sums["ENV-WATER-GROUND"] + ch_sums["ENV-WATER-001"] + ch_sums["ENV-WATER-THIRD"] + ch_sums["ENV-WATER-SEA"] + ch_sums["ENV-WATER-OTHER"],
+                2,
+            )
+            ch_waste = round(
+                ch_sums["ENV-WASTE-PLASTIC"] + ch_sums["ENV-WASTE-EWASTE"] + ch_sums["ENV-WASTE-BIOMED"] + ch_sums["ENV-WASTE-CD"] + ch_sums["ENV-WASTE-BATTERY"] + ch_sums["ENV-WASTE-RADIO"] + ch_sums["ENV-WASTE-HAZ-OTHER"] + ch_sums["ENV-WASTE-001"] + ch_sums["ENV-WASTE-NONHAZ-OTHER"],
+                2,
+            )
+            has_kids = self.db.query(OrgNode).filter(OrgNode.parent_id == ch.id, OrgNode.is_deleted == False).count() > 0
+            children_list.append(
+                Principle6ChildSummary(
+                    id=str(ch.id),
+                    name=ch.name,
+                    code=ch.code,
+                    type=ch.type,
+                    submission_status=ch_status,
+                    energy_gj=ch_energy,
+                    ghg_s1_s2_tco2e=ch_s1_s2,
+                    scope3_tco2e=ch_s3,
+                    water_kl=ch_water,
+                    waste_mt=ch_waste,
+                    has_children=has_kids,
+                )
+            )
+
+        # Raw entries for leaf/project view
+        raw_entries = []
+        if entity.type in ("project", "site"):
+            metrics_map = {m.code: m for m in self.db.query(Metric).filter(Metric.principle == 6, Metric.is_deleted == False).all()}
+            for dp in dps:
+                m_obj = metrics_map.get(dp.metric_code)
+                if not m_obj:
+                    continue
+                ev_count = self.db.query(Evidence).filter(Evidence.submission_id == dp.submission_id, Evidence.esg_indicator == dp.metric_code).count()
+                raw_entries.append(
+                    Principle6RawEntry(
+                        metric_code=dp.metric_code,
+                        metric_name=m_obj.name,
+                        value_numeric=float(dp.value_numeric) if dp.value_numeric is not None else None,
+                        value_text=dp.value_text,
+                        unit=dp.unit,
+                        status=dp.status,
+                        notes=dp.notes,
+                        evidence_count=ev_count,
+                    )
+                )
+
+        return Principle6RolldownResponse(
+            entity=Principle6BreadcrumbItem(id=str(entity.id), name=entity.name, code=entity.code, type=entity.type),
+            period={"id": str(period.id) if period else "", "code": period.code if period else str(period_id), "financial_year": getattr(period, "financial_year", "") if period else ""},
+            breadcrumbs=breadcrumbs,
+            kpis={
+                "energy": {
+                    "total_gj": total_energy_gj,
+                    "renewable_gj": ren_total,
+                    "non_renewable_gj": nonren_total,
+                    "renewable_pct": renewable_pct,
+                    "intensity_cr": _int(total_energy_gj, turnover_cr),
+                    "intensity_ppp": _int(total_energy_gj, ppp_denom),
+                    "breakdown": {
+                        "ren_elec_gj": ren_elec, "ren_fuel_gj": ren_fuel, "ren_other_gj": ren_other,
+                        "nonren_elec_gj": nonren_elec, "nonren_fuel_gj": nonren_fuel, "nonren_other_gj": nonren_other,
+                    },
+                },
+                "ghg": {
+                    "scope1_tco2e": s1_total,
+                    "scope2_tco2e": s2_total,
+                    "scope3_tco2e": s3_total,
+                    "total_s1_s2_tco2e": s1_s2_total,
+                    "total_all_tco2e": round(s1_s2_total + s3_total, 2),
+                    "intensity_s1_s2_cr": _int(s1_s2_total, turnover_cr),
+                    "intensity_s1_s2_ppp": _int(s1_s2_total, ppp_denom),
+                    "intensity_s3_cr": _int(s3_total, turnover_cr),
+                    "scope1_breakdown": {
+                        "stationary": round(sums["ENV-GHG-001A"], 2),
+                        "mobile": round(sums["ENV-GHG-001B"], 2),
+                        "process": round(sums["ENV-GHG-001C"], 2),
+                        "fugitive": round(sums["ENV-GHG-001D"], 2),
+                    },
+                    "scope3_breakdown": {c: round(sums[c], 2) for c in s3_codes},
+                },
+                "water": {
+                    "total_withdrawal_kl": w_withdrawn,
+                    "total_consumption_kl": w_consumed,
+                    "total_discharged_kl": w_discharged,
+                    "intensity_cr": _int(w_consumed, turnover_cr),
+                    "intensity_ppp": _int(w_consumed, ppp_denom),
+                    "withdrawal_by_source": {
+                        "surface": w_surf, "groundwater": w_ground, "third_party": w_third, "seawater": w_sea, "others": w_other,
+                    },
+                    "discharge_by_dest": {
+                        "surface": round(sums["ENV-WATER-DIS-SURF"], 2),
+                        "groundwater": round(sums["ENV-WATER-DIS-GROUND"], 2),
+                        "seawater": round(sums["ENV-WATER-DIS-SEA"], 2),
+                        "third_party": round(sums["ENV-WATER-DIS-THIRD"], 2),
+                        "others": round(sums["ENV-WATER-DIS-OTHER"], 2),
+                    },
+                    "water_stressed_projects": texts.get("ENV-WATER-STRESSED-FLAG"),
+                },
+                "waste": {
+                    "total_generated_mt": waste_generated,
+                    "total_recovered_mt": waste_recovered,
+                    "total_disposed_mt": waste_disposed,
+                    "recovery_pct": waste_recovery_pct,
+                    "intensity_cr": _int(waste_generated, turnover_cr),
+                    "intensity_ppp": _int(waste_generated, ppp_denom),
+                    "by_category": waste_cats,
+                    "recovery_methods": waste_rec,
+                    "disposal_methods": waste_disp,
+                },
+                "air": {
+                    "nox": round(sums["ENV-AIR-NOX"] / max(counts["ENV-AIR-NOX"], 1), 2),
+                    "sox": round(sums["ENV-AIR-SOX"] / max(counts["ENV-AIR-SOX"], 1), 2),
+                    "pm": round(sums["ENV-AIR-PM"] / max(counts["ENV-AIR-PM"], 1), 2),
+                    "voc": round(sums["ENV-AIR-VOC"] / max(counts["ENV-AIR-VOC"], 1), 2),
+                    "hap": round(sums["ENV-AIR-HAP"] / max(counts["ENV-AIR-HAP"], 1), 2),
+                    "pop": round(sums["ENV-AIR-POP"] / max(counts["ENV-AIR-POP"], 1), 2),
+                },
+                "compliance_and_leadership": {
+                    "pat_status": texts.get("ENV-PAT-001"),
+                    "zld_status": texts.get("ENV-WATER-ZLD"),
+                    "env_compliance_status": texts.get("ENV-COMP-001"),
+                    "eco_sensitive_details": texts.get("ENV-ECO-SENSITIVE-001"),
+                    "eia_details": texts.get("ENV-EIA-001"),
+                    "ghg_reduce_details": texts.get("ENV-GHG-REDUCE-001"),
+                    "waste_strategy": texts.get("ENV-WASTE-STRAT-001"),
+                    "biodiversity_details": texts.get("ENV-BIO-001"),
+                    "efficiency_details": texts.get("ENV-EFFICIENCY-001"),
+                    "bcp_status": texts.get("ENV-BCP-001"),
+                    "vc_impact": texts.get("ENV-VC-IMPACT-001"),
+                    "vc_assessed_pct": round(sums["ENV-VC-ASSESSED-PCT"], 2),
+                    "green_credits_entity": round(sums["ENV-GREEN-CREDITS-ENT"], 2),
+                    "green_credits_vc": round(sums["ENV-GREEN-CREDITS-VC"], 2),
+                    "assurance_status": texts.get("ENV-ASSURANCE-P6"),
+                    "turnover_cr": turnover_cr,
+                    "ppp_rate": ppp_rate,
+                },
+            },
+            children=children_list,
+            project_raw_entries=raw_entries,
+        )
+
 
 

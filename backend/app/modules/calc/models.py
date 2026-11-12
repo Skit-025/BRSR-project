@@ -1,7 +1,7 @@
 """
 app/modules/calc/models.py
-Calculation execution logs, versioned calculation formulas, and custom emission factors.
-Uses NUMERIC for all emission factors and mathematical calculations.
+Calculation execution logs and versioned calculation formulas.
+Uses NUMERIC for mathematical calculations.
 """
 from sqlalchemy import Column, String, Numeric, DateTime, ForeignKey, Date, Boolean, Text, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID as PG_UUID
@@ -21,7 +21,7 @@ class CalcFormula(Base, UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin):
     version = Column(String(20), nullable=False, default="1.0.0")  # Semver
     name = Column(String(150), nullable=False)
     description = Column(Text, nullable=True)
-    expression = Column(Text, nullable=False)                       # AST or python expression e.g. "fuel_qty * emission_factor * gwp"
+    expression = Column(Text, nullable=False)                       # AST or python expression e.g. "sum(values)"
     unit = Column(String(50), nullable=False)                       # "tCO2e"
     
     effective_from = Column(Date, nullable=False)
@@ -33,7 +33,7 @@ class CalcFormula(Base, UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin):
 class CalculationLog(Base, TimestampMixin):
     """
     Audit log of every deterministic calculation run.
-    Guarantees reproducibility of calculated indicators (Scope 1, 2, LTIFR, Intensities).
+    Guarantees reproducibility of calculated indicators (Scope 1, 2, LTIFR).
     """
     __tablename__ = "calc_logs"
 
@@ -59,7 +59,7 @@ class CalculationLog(Base, TimestampMixin):
 
 class CustomEmissionFactor(Base, TimestampMixin, SoftDeleteMixin):
     """
-    Facility-specific or supplier-specific emission factors (e.g. customized green tariff, captive cogen).
+    Facility-specific or supplier-specific custom factors.
     Uses high-precision NUMERIC(20, 8) to prevent rounding discrepancies in carbon accounting.
     """
     __tablename__ = "custom_emission_factors"
@@ -83,20 +83,20 @@ class CustomEmissionFactor(Base, TimestampMixin, SoftDeleteMixin):
 
 class EmissionFactor(Base, UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin):
     """
-    Standard Government-approved Emission Factors (CEA, BEE, MoPNG, MoEFCC).
+    Standard Government-approved Factor Table.
     Supports versioning, Indian context citation, and granular fuel sub-types.
     Matches Director's required catalog:
     COAL-ANT, COAL-BIT, COAL-LIG, DIESEL-HSD, DIESEL-LDO,
     GAS-CNG, GAS-PNG, GAS-LPG, PETROL, GRID-CEA, TRAVEL-FLIGHT.
     """
-    __tablename__ = "emission_factors"
+    __tablename__ = "statutory_factors"
 
     code = Column(String(50), index=True, nullable=False)                  # e.g. "DIESEL-HSD"
     category = Column(String(50), nullable=False, index=True)             # "Coal", "Diesel", "Gas", "Electricity", "Travel"
     subtype = Column(String(100), nullable=False)                          # "High Speed Diesel", "Anthracite"
     unit = Column(String(50), nullable=False)                              # "L", "kg", "MWh", "passenger-km"
-    activity_unit = Column(String(50), nullable=True)                     # Canonical denominator unit e.g. "L", "kg", "MWh", "p-km"
-    emission_unit = Column(String(50), default="tCO2e", nullable=True)    # Canonical numerator unit e.g. "tCO2e", "kgCO2e"
+    activity_unit = Column(String(50), nullable=True)                     # Canonical activity unit e.g. "L", "kg", "MWh", "p-km"
+    emission_unit = Column(String(50), default="tCO2e", nullable=True)    # Canonical output unit e.g. "tCO2e", "kgCO2e"
     co2e_factor = Column(Numeric(precision=20, scale=8), nullable=False)  # value per unit
     source = Column(String(255), nullable=False)                           # e.g. "BEE / MoPNG 2023"
     source_authority = Column(String(100), nullable=True)                 # e.g. "CEA", "MoPNG", "IPCC", "BEE", "ICAO"
@@ -116,7 +116,7 @@ class EmissionFactor(Base, UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin)
 
 class FactorChangeAuditLog(Base):
     """
-    Audit record tracking changes to statutory emission factors.
+    Audit record tracking changes to statutory factors.
     Guarantees full provenance and historical reproducibility.
     """
     __tablename__ = "factor_change_audit_logs"

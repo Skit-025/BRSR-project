@@ -1,5 +1,50 @@
 <div class="section-container">
     <div class="section-title">SECTION C: PRINCIPLE-WISE PERFORMANCE DISCLOSURE</div>
+    {% if report.principle_6_summary %}
+    <h3 style="margin-top: 12px; color: #0f766e;">Principle 6: Environment — Statutory Summary (EI-1 to EI-12 &amp; LI-1 to LI-9)</h3>
+    <table style="margin-bottom: 18px;">
+        <thead>
+            <tr>
+                <th>Indicator</th>
+                <th style="text-align: right;">Reported Total</th>
+                <th>Unit</th>
+                <th>Breakdown</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>EI-1 / LI-1: Total Energy Consumption</td>
+                <td style="text-align: right; font-weight: 600;">{{ report.principle_6_summary.energy_gj.total }}</td>
+                <td>GJ</td>
+                <td>Renewable: {{ report.principle_6_summary.energy_gj.renewable }} | Non-Renewable: {{ report.principle_6_summary.energy_gj.non_renewable }}</td>
+            </tr>
+            <tr>
+                <td>EI-6: GHG Emissions (Scope 1 + Scope 2)</td>
+                <td style="text-align: right; font-weight: 600;">{{ report.principle_6_summary.ghg_tco2e.total_s1_s2 }}</td>
+                <td>tCO2e</td>
+                <td>Scope 1: {{ report.principle_6_summary.ghg_tco2e.scope1 }} | Scope 2: {{ report.principle_6_summary.ghg_tco2e.scope2 }}</td>
+            </tr>
+            <tr>
+                <td>LI-4: Scope 3 Emissions</td>
+                <td style="text-align: right; font-weight: 600;">{{ report.principle_6_summary.ghg_tco2e.scope3 }}</td>
+                <td>tCO2e</td>
+                <td>Value Chain Indirect Emissions</td>
+            </tr>
+            <tr>
+                <td>EI-3 / LI-2: Water Consumption &amp; Discharge</td>
+                <td style="text-align: right; font-weight: 600;">{{ report.principle_6_summary.water_kl.consumed }}</td>
+                <td>kL</td>
+                <td>Withdrawn: {{ report.principle_6_summary.water_kl.withdrawn }} | Discharged: {{ report.principle_6_summary.water_kl.discharged }}</td>
+            </tr>
+            <tr>
+                <td>EI-8: Waste Generated &amp; Recovered</td>
+                <td style="text-align: right; font-weight: 600;">{{ report.principle_6_summary.waste_mt.generated }}</td>
+                <td>MT</td>
+                <td>Recovered: {{ report.principle_6_summary.waste_mt.recovered }} | Disposed: {{ report.principle_6_summary.waste_mt.disposed }}</td>
+            </tr>
+        </tbody>
+    </table>
+    {% endif %}
     <table>
         <thead>
             <tr>

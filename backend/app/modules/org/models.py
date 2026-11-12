@@ -102,7 +102,7 @@ class OrgNode(Base, UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin):
     effective_from = Column(Date, nullable=True)
     effective_to = Column(Date, nullable=True)
     
-    # Extensible attributes (turnover, capacity, employee headcount, geo-coordinates)
+    # Extensible attributes (capacity, employee headcount, geo-coordinates)
     attributes = Column(JSONB, default=dict, nullable=False)
 
     # Project profile facts for applicability derivation

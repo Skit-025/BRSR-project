@@ -24,6 +24,9 @@ from app.modules.calc.formulas.energy import calculate_total_energy
 from app.modules.calc.formulas.intensity import (
     calculate_energy_intensity,
     calculate_ghg_intensity,
+    calculate_water_intensity,
+    calculate_waste_intensity,
+    calculate_ppp_adjusted_intensity,
 )
 from app.modules.calc.formulas.safety import (
     calculate_ltifr,
@@ -251,4 +254,25 @@ def test_scope3_operational_waste_calculation():
     res = calculate_scope3_waste(waste)
     assert res["formula_code"] == "CALC-GHG-SCOPE3-WASTE"
     assert res["result_value"] == Decimal("4.7600")
+
+
+def test_water_waste_and_ppp_intensities():
+    water_res = calculate_water_intensity(Decimal("5000"), Decimal("250"))
+    assert water_res["formula_code"] == "CALC-INTENSITY-WATER"
+    assert water_res["result_value"] == Decimal("20.0000")
+    assert water_res["result_unit"] == "kL/Crore INR"
+
+    waste_res = calculate_waste_intensity(Decimal("125"), Decimal("250"))
+    assert waste_res["formula_code"] == "CALC-INTENSITY-WASTE"
+    assert waste_res["result_value"] == Decimal("0.5000")
+    assert waste_res["result_unit"] == "MT/Crore INR"
+
+    # 100 Crore INR * 10 / 20.0 PPP = 50 PPP Mn USD; 1000 GJ / 50 = 20.0000 GJ/PPP Mn USD
+    ppp_res = calculate_ppp_adjusted_intensity(Decimal("1000"), Decimal("100"), Decimal("20.0"), "GJ")
+    assert ppp_res["formula_code"] == "CALC-INTENSITY-PPP"
+    assert ppp_res["result_value"] == Decimal("20.0000")
+    assert ppp_res["result_unit"] == "GJ/PPP Mn USD"
+
+    with pytest.raises(ValueError, match="PPP conversion rate must be strictly positive"):
+        calculate_ppp_adjusted_intensity(Decimal("1000"), Decimal("100"), Decimal("0"), "GJ")
 

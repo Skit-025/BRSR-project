@@ -139,6 +139,176 @@ def export_html_report(
         </tr>
         """
 
+    p6 = report.principle_6_summary or {}
+    c6 = p6.get("current") or {}
+    p6_prev = p6.get("previous") or {}
+    qual = p6.get("qualitative") or {}
+    curr_fy = p6.get("current_fy") or report.financial_year
+    prev_fy = p6.get("previous_fy") or "Previous FY"
+
+    def _f(v):
+        if v is None or v == "":
+            return "—"
+        if isinstance(v, (int, float)):
+            return f"{v:,.2f}"
+        return str(v)
+
+    ce = c6.get("energy", {})
+    pe = p6_prev.get("energy", {})
+    cw = c6.get("water", {})
+    pw = p6_prev.get("water", {})
+    ca = c6.get("air", {})
+    pa = p6_prev.get("air", {})
+    cg = c6.get("ghg", {})
+    pg = p6_prev.get("ghg", {})
+    cws = c6.get("waste", {})
+    pws = p6_prev.get("waste", {})
+    ccat = cws.get("categories", {})
+    pcat = pws.get("categories", {})
+    crec = cws.get("recovery", {})
+    prec = pws.get("recovery", {})
+    cdisp = cws.get("disposal", {})
+    pdisp = pws.get("disposal", {})
+    cwdis = cw.get("discharge_by_dest", {})
+    pwdis = pw.get("discharge_by_dest", {})
+    assur_note = f"<i>Note: External assessment/assurance status: <b>{qual.get('assurance_status', 'Not Assured')}</b> | Agency: <b>{qual.get('assurance_agency', '—')}</b></i>"
+
+    p6_html = f"""
+    <div style="margin-top: 30px; page-break-before: always;">
+        <h2 style="color:#0f766e;border-bottom:2px solid #0f766e;padding-bottom:6px;">PRINCIPLE 6: Businesses should respect and make efforts to protect and restore the environment</h2>
+        <h3 style="background:#f1f5f9;padding:8px 12px;border-left:4px solid #0f766e;">Essential Indicators</h3>
+
+        <p><b>1. Details of total energy consumption (in GJ):</b></p>
+        <table>
+            <thead><tr><th>Parameter</th><th style="text-align:right;">{curr_fy} (Current FY)</th><th style="text-align:right;">{prev_fy} (Previous FY)</th></tr></thead>
+            <tbody>
+                <tr><td>Total electricity consumption (A+D)</td><td style="text-align:right;">{_f(ce.get('elec'))}</td><td style="text-align:right;">{_f(pe.get('elec'))}</td></tr>
+                <tr><td>Total fuel consumption (B+E)</td><td style="text-align:right;">{_f(ce.get('fuel'))}</td><td style="text-align:right;">{_f(pe.get('fuel'))}</td></tr>
+                <tr><td>Energy consumption through other sources (C+F)</td><td style="text-align:right;">{_f(ce.get('other'))}</td><td style="text-align:right;">{_f(pe.get('other'))}</td></tr>
+                <tr><td><b>Total energy consumption (A+B+C+D+E+F)</b></td><td style="text-align:right;"><b>{_f(ce.get('total'))}</b></td><td style="text-align:right;"><b>{_f(pe.get('total'))}</b></td></tr>
+            </tbody>
+        </table>
+        <p style="font-size:12px;color:#475569;">{assur_note}</p>
+
+        <p><b>2. Designated Consumers (DCs) under PAT Scheme:</b> {_f(qual.get('pat_scheme'))}</p>
+
+        <p><b>3. Disclosures related to water (in kilolitres):</b></p>
+        <table>
+            <thead><tr><th>Parameter</th><th style="text-align:right;">{curr_fy} (Current FY)</th><th style="text-align:right;">{prev_fy} (Previous FY)</th></tr></thead>
+            <tbody>
+                <tr><td>(i) Surface water</td><td style="text-align:right;">{_f(cw.get('surface'))}</td><td style="text-align:right;">{_f(pw.get('surface'))}</td></tr>
+                <tr><td>(ii) Groundwater</td><td style="text-align:right;">{_f(cw.get('groundwater'))}</td><td style="text-align:right;">{_f(pw.get('groundwater'))}</td></tr>
+                <tr><td>(iii) Third party water</td><td style="text-align:right;">{_f(cw.get('third_party'))}</td><td style="text-align:right;">{_f(pw.get('third_party'))}</td></tr>
+                <tr><td>(iv) Seawater / desalinated water</td><td style="text-align:right;">{_f(cw.get('seawater'))}</td><td style="text-align:right;">{_f(pw.get('seawater'))}</td></tr>
+                <tr><td>(v) Others</td><td style="text-align:right;">{_f(cw.get('others'))}</td><td style="text-align:right;">{_f(pw.get('others'))}</td></tr>
+                <tr><td><b>Total volume of water withdrawal (i+ii+iii+iv+v)</b></td><td style="text-align:right;"><b>{_f(cw.get('withdrawn'))}</b></td><td style="text-align:right;"><b>{_f(pw.get('withdrawn'))}</b></td></tr>
+                <tr><td><b>Total volume of water consumption (kL)</b></td><td style="text-align:right;"><b>{_f(cw.get('consumed'))}</b></td><td style="text-align:right;"><b>{_f(pw.get('consumed'))}</b></td></tr>
+            </tbody>
+        </table>
+        <p style="font-size:12px;color:#475569;">{assur_note}</p>
+
+        <p><b>4. Zero Liquid Discharge (ZLD) mechanism implemented:</b> {_f(qual.get('zld_mechanism'))}</p>
+
+        <p><b>5. Air emissions (other than GHG emissions):</b></p>
+        <table>
+            <thead><tr><th>Parameter</th><th>Unit</th><th style="text-align:right;">{curr_fy}</th><th style="text-align:right;">{prev_fy}</th></tr></thead>
+            <tbody>
+                <tr><td>NOx</td><td>mg/m³</td><td style="text-align:right;">{_f(ca.get('nox'))}</td><td style="text-align:right;">{_f(pa.get('nox'))}</td></tr>
+                <tr><td>SOx</td><td>mg/m³</td><td style="text-align:right;">{_f(ca.get('sox'))}</td><td style="text-align:right;">{_f(pa.get('sox'))}</td></tr>
+                <tr><td>Particulate matter (PM)</td><td>mg/m³</td><td style="text-align:right;">{_f(ca.get('pm'))}</td><td style="text-align:right;">{_f(pa.get('pm'))}</td></tr>
+                <tr><td>Persistent organic pollutants (POP)</td><td>mg/m³</td><td style="text-align:right;">{_f(ca.get('pop'))}</td><td style="text-align:right;">{_f(pa.get('pop'))}</td></tr>
+                <tr><td>Volatile organic compounds (VOC)</td><td>mg/m³</td><td style="text-align:right;">{_f(ca.get('voc'))}</td><td style="text-align:right;">{_f(pa.get('voc'))}</td></tr>
+                <tr><td>Hazardous air pollutants (HAP)</td><td>mg/m³</td><td style="text-align:right;">{_f(ca.get('hap'))}</td><td style="text-align:right;">{_f(pa.get('hap'))}</td></tr>
+            </tbody>
+        </table>
+
+        <p><b>6. Greenhouse gas emissions (Scope 1 and Scope 2):</b></p>
+        <table>
+            <thead><tr><th>Parameter</th><th>Unit</th><th style="text-align:right;">{curr_fy}</th><th style="text-align:right;">{prev_fy}</th></tr></thead>
+            <tbody>
+                <tr><td>Total Scope 1 emissions</td><td>tCO2e</td><td style="text-align:right;">{_f(cg.get('scope1'))}</td><td style="text-align:right;">{_f(pg.get('scope1'))}</td></tr>
+                <tr><td>Total Scope 2 emissions</td><td>tCO2e</td><td style="text-align:right;">{_f(cg.get('scope2'))}</td><td style="text-align:right;">{_f(pg.get('scope2'))}</td></tr>
+            </tbody>
+        </table>
+
+        <p><b>7. Projects related to reducing Green House Gas emission:</b> {_f(qual.get('ghg_projects'))}</p>
+
+        <p><b>8. Waste management (in metric tonnes):</b></p>
+        <table>
+            <thead><tr><th>Parameter</th><th style="text-align:right;">{curr_fy}</th><th style="text-align:right;">{prev_fy}</th></tr></thead>
+            <tbody>
+                <tr><td>Plastic waste (A)</td><td style="text-align:right;">{_f(ccat.get('plastic'))}</td><td style="text-align:right;">{_f(pcat.get('plastic'))}</td></tr>
+                <tr><td>E-waste (B)</td><td style="text-align:right;">{_f(ccat.get('ewaste'))}</td><td style="text-align:right;">{_f(pcat.get('ewaste'))}</td></tr>
+                <tr><td>Bio-medical waste (C)</td><td style="text-align:right;">{_f(ccat.get('biomed'))}</td><td style="text-align:right;">{_f(pcat.get('biomed'))}</td></tr>
+                <tr><td>Construction and demolition waste (D)</td><td style="text-align:right;">{_f(ccat.get('cd'))}</td><td style="text-align:right;">{_f(pcat.get('cd'))}</td></tr>
+                <tr><td>Battery waste (E)</td><td style="text-align:right;">{_f(ccat.get('battery'))}</td><td style="text-align:right;">{_f(pcat.get('battery'))}</td></tr>
+                <tr><td>Radioactive waste (F)</td><td style="text-align:right;">{_f(ccat.get('radioactive'))}</td><td style="text-align:right;">{_f(pcat.get('radioactive'))}</td></tr>
+                <tr><td>Other Hazardous waste (G)</td><td style="text-align:right;">{_f(ccat.get('hazardous_other'))}</td><td style="text-align:right;">{_f(pcat.get('hazardous_other'))}</td></tr>
+                <tr><td>Other Non-hazardous waste (H)</td><td style="text-align:right;">{_f(ccat.get('non_hazardous_other'))}</td><td style="text-align:right;">{_f(pcat.get('non_hazardous_other'))}</td></tr>
+                <tr><td><b>Total Waste Generated (A+B+C+D+E+F+G+H)</b></td><td style="text-align:right;"><b>{_f(cws.get('generated'))}</b></td><td style="text-align:right;"><b>{_f(pws.get('generated'))}</b></td></tr>
+                <tr><td>Recovered — (i) Recycled</td><td style="text-align:right;">{_f(crec.get('recycled'))}</td><td style="text-align:right;">{_f(prec.get('recycled'))}</td></tr>
+                <tr><td>Recovered — (ii) Re-used</td><td style="text-align:right;">{_f(crec.get('reused'))}</td><td style="text-align:right;">{_f(prec.get('reused'))}</td></tr>
+                <tr><td>Recovered — (iii) Other recovery operations</td><td style="text-align:right;">{_f(crec.get('other'))}</td><td style="text-align:right;">{_f(prec.get('other'))}</td></tr>
+                <tr><td>Disposed — (i) Incineration</td><td style="text-align:right;">{_f(cdisp.get('incineration'))}</td><td style="text-align:right;">{_f(pdisp.get('incineration'))}</td></tr>
+                <tr><td>Disposed — (ii) Landfilling</td><td style="text-align:right;">{_f(cdisp.get('landfilling'))}</td><td style="text-align:right;">{_f(pdisp.get('landfilling'))}</td></tr>
+                <tr><td>Disposed — (iii) Other disposal operations</td><td style="text-align:right;">{_f(cdisp.get('other'))}</td><td style="text-align:right;">{_f(pdisp.get('other'))}</td></tr>
+            </tbody>
+        </table>
+
+        <p><b>9. Waste management practices &amp; toxic chemical reduction strategy:</b> {_f(qual.get('waste_strategy'))}</p>
+        <p><b>10. Operations in ecologically sensitive areas:</b> {_f(qual.get('eco_sensitive'))}</p>
+        <p><b>11. Environmental Impact Assessments (EIA):</b> {_f(qual.get('eia_details'))}</p>
+        <p><b>12. Compliance with Water Act, Air Act &amp; Environment Protection Act:</b> {_f(qual.get('env_compliance'))}</p>
+
+        <h3 style="background:#f1f5f9;padding:8px 12px;border-left:4px solid #0f766e;margin-top:24px;">Leadership Indicators</h3>
+
+        <p><b>1. Break-up of total energy consumed (in GJ) from renewable and non-renewable sources:</b></p>
+        <table>
+            <thead><tr><th>Parameter</th><th style="text-align:right;">{curr_fy}</th><th style="text-align:right;">{prev_fy}</th></tr></thead>
+            <tbody>
+                <tr><td>Renewable — Electricity (A)</td><td style="text-align:right;">{_f(ce.get('ren_elec'))}</td><td style="text-align:right;">{_f(pe.get('ren_elec'))}</td></tr>
+                <tr><td>Renewable — Fuel (B)</td><td style="text-align:right;">{_f(ce.get('ren_fuel'))}</td><td style="text-align:right;">{_f(pe.get('ren_fuel'))}</td></tr>
+                <tr><td>Renewable — Other (C)</td><td style="text-align:right;">{_f(ce.get('ren_other'))}</td><td style="text-align:right;">{_f(pe.get('ren_other'))}</td></tr>
+                <tr><td><b>Total Renewable (A+B+C)</b></td><td style="text-align:right;"><b>{_f(ce.get('ren_total'))}</b></td><td style="text-align:right;"><b>{_f(pe.get('ren_total'))}</b></td></tr>
+                <tr><td>Non-Renewable — Electricity (D)</td><td style="text-align:right;">{_f(ce.get('nonren_elec'))}</td><td style="text-align:right;">{_f(pe.get('nonren_elec'))}</td></tr>
+                <tr><td>Non-Renewable — Fuel (E)</td><td style="text-align:right;">{_f(ce.get('nonren_fuel'))}</td><td style="text-align:right;">{_f(pe.get('nonren_fuel'))}</td></tr>
+                <tr><td>Non-Renewable — Other (F)</td><td style="text-align:right;">{_f(ce.get('nonren_other'))}</td><td style="text-align:right;">{_f(pe.get('nonren_other'))}</td></tr>
+                <tr><td><b>Total Non-Renewable (D+E+F)</b></td><td style="text-align:right;"><b>{_f(ce.get('nonren_total'))}</b></td><td style="text-align:right;"><b>{_f(pe.get('nonren_total'))}</b></td></tr>
+            </tbody>
+        </table>
+
+        <p><b>2. Water discharged by destination (in kilolitres):</b></p>
+        <table>
+            <thead><tr><th>Destination</th><th style="text-align:right;">{curr_fy}</th><th style="text-align:right;">{prev_fy}</th></tr></thead>
+            <tbody>
+                <tr><td>(i) To Surface water</td><td style="text-align:right;">{_f(cwdis.get('surface'))}</td><td style="text-align:right;">{_f(pwdis.get('surface'))}</td></tr>
+                <tr><td>(ii) To Groundwater</td><td style="text-align:right;">{_f(cwdis.get('groundwater'))}</td><td style="text-align:right;">{_f(pwdis.get('groundwater'))}</td></tr>
+                <tr><td>(iii) To Seawater</td><td style="text-align:right;">{_f(cwdis.get('seawater'))}</td><td style="text-align:right;">{_f(pwdis.get('seawater'))}</td></tr>
+                <tr><td>(iv) Sent to third-parties</td><td style="text-align:right;">{_f(cwdis.get('third_party'))}</td><td style="text-align:right;">{_f(pwdis.get('third_party'))}</td></tr>
+                <tr><td>(v) Others</td><td style="text-align:right;">{_f(cwdis.get('others'))}</td><td style="text-align:right;">{_f(pwdis.get('others'))}</td></tr>
+                <tr><td><b>Total water discharged (kL)</b></td><td style="text-align:right;"><b>{_f(cw.get('discharged'))}</b></td><td style="text-align:right;"><b>{_f(pw.get('discharged'))}</b></td></tr>
+            </tbody>
+        </table>
+
+        <p><b>3. Water withdrawal, consumption &amp; discharge in areas of water stress:</b> {_f(qual.get('water_stressed_sites'))}</p>
+
+        <p><b>4. Total Scope 3 emissions:</b></p>
+        <table>
+            <thead><tr><th>Parameter</th><th>Unit</th><th style="text-align:right;">{curr_fy}</th><th style="text-align:right;">{prev_fy}</th></tr></thead>
+            <tbody>
+                <tr><td>Total Scope 3 emissions</td><td>tCO2e</td><td style="text-align:right;">{_f(cg.get('scope3'))}</td><td style="text-align:right;">{_f(pg.get('scope3'))}</td></tr>
+            </tbody>
+        </table>
+
+        <p><b>5. Biodiversity impact &amp; remediation:</b> {_f(qual.get('biodiversity'))}</p>
+        <p><b>6. Resource efficiency initiatives &amp; outcomes:</b> {_f(qual.get('resource_efficiency'))}</p>
+        <p><b>7. Business continuity &amp; disaster management plan:</b> {_f(qual.get('bcp_plan'))}</p>
+        <p><b>8. Adverse environmental impact from value chain &amp; mitigation:</b> {_f(qual.get('vc_impact'))}</p>
+        <p><b>9. % of value chain partners assessed for environmental impacts:</b> {_f(qual.get('vc_assessed_pct'))}%</p>
+        <p><b>Green Credits (Entity / Top 10 Value Chain Partners):</b> {_f(qual.get('green_credits_entity'))} / {_f(qual.get('green_credits_vc'))}</p>
+    </div>
+    """
+
     html_content = f"""
     <!DOCTYPE html>
     <html>
@@ -170,6 +340,8 @@ def export_html_report(
         <h3>Section A: General Information</h3>
         <p>Corporate Name: <b>{report.section_a.corporate_name}</b> | CIN: <b>{report.section_a.cin}</b></p>
         <p>Reporting Boundary: <b>{report.section_a.reporting_boundary}</b> | Operating Sites: <b>{report.section_a.operating_plants_and_sites_count}</b></p>
+
+        {p6_html}
 
         <h3>Section C: Principle-wise Performance Indicators</h3>
         <table>

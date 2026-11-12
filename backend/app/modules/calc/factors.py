@@ -1,11 +1,11 @@
 """
 app/modules/calc/factors.py
-Statutory Emission Factors and Calorific Values.
+Statutory Factors and Calorific Values.
 
 PRIMARY SOURCES (Indian Regulatory Context — per Director's Brief):
   - CEA: Central Electricity Authority CO₂ Baseline Database for Indian Power Sector (Ver 17/18–19/20)
   - MoPNG: Ministry of Petroleum and Natural Gas / PPAC calorific values
-  - BEE: Bureau of Energy Efficiency (PAT Scheme Emission Factors)
+  - BEE: Bureau of Energy Efficiency (PAT Scheme Reference Factors)
   - MoEFCC: Ministry of Environment, Forest and Climate Change (India GWP & IPCC AR4 India Annex)
   - IPCC 2006 Guidelines used ONLY where Indian-specific factors are unavailable.
 """
@@ -13,14 +13,14 @@ from decimal import Decimal
 from typing import Dict, Any, Optional
 
 # ---------------------------------------------------------------------------
-# CEA Grid Emission Factors (tCO2e per MWh)
+# CEA Grid Factors (tCO2e per MWh)
 # CEA CO2 Baseline Database for the Indian Power Sector (Ver. 17/18 & 19/20)
 # Used for Scope 2 location-based calculation
 # ---------------------------------------------------------------------------
 GRID_EMISSION_FACTOR_CEA_WEIGHTED_AVG = Decimal("0.716")   # tCO2e/MWh – national weighted average
 GRID_EMISSION_FACTOR_RENEWABLE = Decimal("0.0")            # Solar / Wind / Hydro / REC-backed PPAs
 
-# State-specific grid emission factors (CEA Table 4 — optional granularity)
+# State-specific grid factors (CEA Table 4 — optional granularity)
 # Key = State code, Value = tCO2e/MWh
 STATE_GRID_FACTORS: Dict[str, Decimal] = {
     "AP":  Decimal("0.813"),   # Andhra Pradesh / Telangana
@@ -42,7 +42,7 @@ STATE_GRID_FACTORS: Dict[str, Decimal] = {
 }
 
 # ---------------------------------------------------------------------------
-# Fuel Emission Factors — Indian Primary Sources
+# Fuel Factors — Indian Primary Sources
 # ---------------------------------------------------------------------------
 # Legacy dict kept intact (backward compat). Extended below with Indian grades.
 FUEL_EMISSION_FACTORS: Dict[str, Dict[str, Any]] = {
@@ -257,7 +257,7 @@ FUEL_EMISSION_FACTORS: Dict[str, Dict[str, Any]] = {
         "source": "CEA / Ministry of Coal 2023 — Non-Coking Pit-Grade",
         "indian_grade": "Non-Coking Coal Grade E / Pit-Grade",
     },
-    # ── Fugitive Emission Factors (AR4 GWP — MoEFCC India uses IPCC AR4) ─
+    # ── Fugitive Factors (AR4 GWP — MoEFCC India uses IPCC AR4) ─
     "r22": {
         "unit": "kg",
         "factor": Decimal("1.810"),
@@ -317,9 +317,9 @@ FUEL_EMISSION_FACTORS: Dict[str, Dict[str, Any]] = {
 }
 
 # ---------------------------------------------------------------------------
-# Scope 3 Activity-Based Emission Factors (MoEFCC / IPCC AR4 India defaults)
+# Scope 3 Activity-Based Factors (MoEFCC / IPCC AR4 India defaults)
 # ---------------------------------------------------------------------------
-# Transport emission factors: tCO2e per passenger-km or tonne-km
+# Transport factors: tCO2e per passenger-km or tonne-km
 SCOPE3_TRANSPORT_FACTORS: Dict[str, Dict[str, Any]] = {
     "air_domestic_economy": {
         "unit": "passenger-km",
@@ -386,7 +386,7 @@ SCOPE3_SPEND_FACTORS: Dict[str, Dict[str, Any]] = {
 
 def get_grid_factor(state: Optional[str] = None, db: Optional[Any] = None) -> Decimal:
     """
-    Returns grid emission factor in tCO2e/MWh.
+    Returns grid factor in tCO2e/MWh.
     Deterministic selection precedence:
       1. State-specific factor from database if available (GRID-CEA-{STATE}).
       2. State-specific statutory CEA factor from registry (STATE_GRID_FACTORS).
@@ -433,7 +433,7 @@ def get_grid_factor(state: Optional[str] = None, db: Optional[Any] = None) -> De
 
 def get_fuel_factor(fuel_type: str, db: Optional[Any] = None, org_node_id: Optional[str] = None) -> Dict[str, Any]:
     """
-    Returns emission factor and unit metadata for fuel combustion (all Indian grades).
+    Returns factor and unit metadata for fuel combustion (all Indian grades).
     Checks database reference tables first when db session is supplied.
     Ensures factor values are strictly in tCO2e per fuel unit.
     """
@@ -525,14 +525,14 @@ def get_scope3_material_factor(material: str) -> Optional[Dict[str, Any]]:
 
 
 # ---------------------------------------------------------------------------
-# Scope 3 — Capital Goods Emission Factors  (GHG Protocol Cat 2)
+# Scope 3 — Capital Goods Factors  (GHG Protocol Cat 2)
 # ---------------------------------------------------------------------------
 # Sources:
 #   - worldsteel Association: steel-intensive machinery (EAF/BOF route average)
 #   - IPCC 2006 Tier 1: embodied energy of manufactured goods
 #   - BEE / Make-in-India data: Indian-manufactured electrical equipment
 #   - SEBI BRSR spend-based fallback: tCO2e per INR Lakh of CAPEX
-#     (derived from India's capital goods sector average carbon intensity)
+#     (derived from India's capital goods sector average)
 SCOPE3_CAPITAL_GOODS_FACTORS: Dict[str, Dict[str, Any]] = {
     # ── Heavy Construction Equipment ──────────────────────────────────────
     "excavator": {
@@ -612,7 +612,7 @@ SCOPE3_CAPITAL_GOODS_FACTORS: Dict[str, Dict[str, Any]] = {
 
 
 # ---------------------------------------------------------------------------
-# Scope 3 — Waste in Operations Emission Factors  (GHG Protocol Cat 5)
+# Scope 3 — Waste in Operations Factors  (GHG Protocol Cat 5)
 # ---------------------------------------------------------------------------
 # Sources:
 #   - CPCB Solid Waste Management Status Report 2022–23

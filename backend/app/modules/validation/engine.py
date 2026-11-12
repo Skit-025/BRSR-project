@@ -57,7 +57,6 @@ def validate_submission(
                 metric.calc_formula_code
                 or metric.entry_level == "calculated"
                 or (metric.code.startswith("ENV-GHG") and "FUEL" not in metric.code)
-                or "INTENSITY" in metric.code
             )
         )
         if metric and metric.evidence_rule == EvidenceRule.MANDATORY.value and not is_calculated_metric:

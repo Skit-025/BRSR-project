@@ -18,7 +18,7 @@ def run_consolidation_engine(
     F22-F23 Deterministic Boundary & Consolidation Engine:
     Rolls up data points hierarchically: Project -> Business Unit -> Subsidiary -> Group.
     Guarantees:
-      - Ratios are recomputed from sums of numerators and denominators (never averaged).
+      - Quantitative roll-ups use plain SUM aggregation across accepted child nodes + own values.
       - Effective boundary % is applied per node (100% operational control vs 51% JV equity share).
       - Every rolled-up value carries its full child contribution lineage.
     """
@@ -98,12 +98,8 @@ def run_consolidation_engine(
             node_values[parent.id] = {}
 
         # Process in two passes:
-        # Pass 1: Additive and raw metrics (SUM, COUNT, AVERAGE, MIN, MAX, WEIGHTED_AVG)
-        # Pass 2: Ratio & Derived metrics (so parent-level numerators and denominators are already available)
-        base_metrics = [m for m in all_metrics if m.aggregation_type not in (AggregationType.RATIO.value, "ratio", AggregationType.DERIVED.value, "derived")]
-        ratio_metrics = [m for m in all_metrics if m.aggregation_type in (AggregationType.RATIO.value, "ratio", AggregationType.DERIVED.value, "derived")]
-
-        for metric in (base_metrics + ratio_metrics):
+        # Pass 1: Additive and raw metrics (SUM, COUNT, AVERAGE, MIN, MAX)
+        for metric in all_metrics:
             metric_code = metric.code
             child_records: List[Dict[str, Any]] = []
             sum_weighted_val = 0.0
@@ -183,85 +179,7 @@ def run_consolidation_engine(
             calc_status = "CALCULATED"
             status_reason = None
 
-            # For Ratio metrics: recompute as Sum(Numerators) / Sum(Denominators) (DEF-CALC-001)
-            if roll_method in (AggregationType.RATIO.value, "ratio", AggregationType.DERIVED.value, "derived"):
-                num_id = metric.numerator_metric_id
-                denom_id = metric.denominator_metric_id
-
-                num_metric = (metrics_by_id.get(str(num_id)) or metrics.get(str(num_id))) if num_id else None
-                denom_metric = (metrics_by_id.get(str(denom_id)) or metrics.get(str(denom_id))) if denom_id else None
-
-                num_val = None
-                denom_val = None
-
-                if num_metric and num_metric.code in node_values.get(parent.id, {}):
-                    num_val = node_values[parent.id][num_metric.code][0]
-                if denom_metric and denom_metric.code in node_values.get(parent.id, {}):
-                    denom_val = node_values[parent.id][denom_metric.code][0]
-
-                if num_val is not None and denom_val is not None:
-                    if denom_val > 0:
-                        final_val = num_val / denom_val
-                        calc_status = "CALCULATED" if num_val > 0 else "VALID_ZERO"
-                    elif denom_val == 0:
-                        final_val = None
-                        calc_status = "UNDEFINED_ZERO_DENOMINATOR"
-                        status_reason = "Division by zero: denominator is 0.0"
-                    else:
-                        final_val = None
-                        calc_status = "INVALID_NEGATIVE_DENOMINATOR"
-                        status_reason = f"Negative denominator ({denom_val}) is invalid for statutory ratio"
-                else:
-                    # Deterministically sum numerators and denominators from child records
-                    c_num_sum = 0.0
-                    c_den_sum = 0.0
-                    has_num = False
-                    has_den = False
-                    for child in children:
-                        if child.id in node_values:
-                            c_share = (float(child.ownership_pct) if child.ownership_pct is not None else 100.0) if child.control_type == ControlType.EQUITY_SHARE.value else 100.0
-                            if num_metric and num_metric.code in node_values[child.id]:
-                                num_tuple = node_values[child.id][num_metric.code]
-                                if num_tuple[0] is not None:
-                                    c_num_sum += num_tuple[0] * (c_share / 100.0)
-                                    has_num = True
-                            if denom_metric and denom_metric.code in node_values[child.id]:
-                                den_tuple = node_values[child.id][denom_metric.code]
-                                if den_tuple[0] is not None:
-                                    c_den_sum += den_tuple[0] * (c_share / 100.0)
-                                    has_den = True
-
-                    if not has_num and not has_den:
-                        final_val = None
-                        calc_status = "INSUFFICIENT_DATA"
-                        status_reason = "Neither numerator nor denominator reported by any contributing entity"
-                    elif not has_den:
-                        final_val = None
-                        calc_status = "MISSING_DENOMINATOR"
-                        status_reason = f"Denominator metric '{denom_metric.code if denom_metric else 'UNKNOWN'}' not reported by any contributing entity"
-                    elif c_den_sum == 0.0:
-                        final_val = None
-                        calc_status = "UNDEFINED_ZERO_DENOMINATOR"
-                        status_reason = "Division by zero: contributing denominator sum is 0.0"
-                    elif c_den_sum < 0.0:
-                        final_val = None
-                        calc_status = "INVALID_NEGATIVE_DENOMINATOR"
-                        status_reason = f"Negative denominator sum ({c_den_sum}) is invalid for statutory ratio"
-                    elif c_num_sum == 0.0:
-                        final_val = 0.0
-                        calc_status = "VALID_ZERO"
-                        status_reason = None
-                    else:
-                        final_val = c_num_sum / c_den_sum
-                        calc_status = "CALCULATED"
-                        status_reason = None
-
-                    if calc_status != "CALCULATED" and calc_status != "VALID_ZERO":
-                        logger.warning(
-                            f"Ratio metric '{metric_code}' consolidated for entity '{parent.id}' as {calc_status}: {status_reason}"
-                        )
-
-            elif not child_records:
+            if not child_records:
                 continue
             elif roll_method in (AggregationType.SUM.value, "sum"):
                 final_val = sum_weighted_val

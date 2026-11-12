@@ -241,7 +241,7 @@ function ManualEntryModal({ isOpen, onClose, evidence, fuelSubtype, onSave }) {
                 <div style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{calc.ghg_tco2e} tCO₂e</div>
               </div>
               <div style={{ gridColumn: '1 / -1' }}>
-                <div style={{ color: 'var(--text-secondary)', fontSize: 11 }}>Emission Factor</div>
+                <div style={{ color: 'var(--text-secondary)', fontSize: 11 }}>Reference Basis</div>
                 <div style={{ fontFamily: 'monospace', fontSize: 11, color: 'var(--text-primary)' }}>{calc.factor}</div>
               </div>
             </div>
@@ -564,7 +564,7 @@ export default function EvidenceVault() {
               })}
             </div>
             <div style={{ marginTop: 8, fontSize: 11, color: 'var(--text-secondary)', background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 6, padding: '7px 12px' }}>
-              🔬 GHG Protocol emission factor will be applied automatically based on selected fuel type during calculation.
+              🔬 Fuel type metadata is recorded for operational audit trail.
             </div>
           </div>
         )}
@@ -1053,7 +1053,7 @@ export default function EvidenceVault() {
                       <div style={{ fontWeight: 800, fontSize: 20, color: '#10b981', fontFamily: 'ui-monospace, monospace' }}>{calc.ghg_tco2e} <span style={{ fontSize: 12, fontWeight: 600 }}>tCO₂e</span></div>
                     </div>
                     <div>
-                      <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>Emission Factor</div>
+                      <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>Reference Basis</div>
                       <div style={{ fontFamily: 'monospace', fontSize: 11.5, color: 'var(--text-primary)', fontWeight: 600, marginTop: 2 }}>{calc.factor}</div>
                     </div>
                     <div>
@@ -1064,7 +1064,7 @@ export default function EvidenceVault() {
                     </div>
                   </div>
                   <div style={{ marginTop: 10, fontSize: 11, color: 'var(--text-muted)' }}>
-                    Calculated using GHG Protocol / IPCC / India CEA emission factors. All figures are suggestions — verify against the source bill before submitting.
+                    All extracted figures are suggestions — verify against the source bill before submitting.
                   </div>
                 </div>
               );

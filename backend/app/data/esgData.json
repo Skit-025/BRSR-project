@@ -1,0 +1,1998 @@
+{
+  "fy": {
+    "current": "2024-25",
+    "previous": "2023-24"
+  },
+  "nodes": [
+    {
+      "id": "MEIL-GROUP",
+      "name": "Megha Engineering & Infrastructures Ltd (MEIL)",
+      "type": "group",
+      "parentId": null
+    },
+    {
+      "id": "MEGHA-ROAD-TRANS",
+      "name": "Megha Road and Transport Ltd",
+      "type": "subsidiary",
+      "parentId": "MEIL-GROUP"
+    },
+    {
+      "id": "BU-TRANS",
+      "name": "Transportation & Tunneling Business Unit",
+      "type": "bu",
+      "parentId": "MEGHA-ROAD-TRANS"
+    },
+    {
+      "id": "PRJ-ZOJILA-P7",
+      "name": "Tunnel Project P7 (Zojila Tunnel)",
+      "type": "project",
+      "parentId": "BU-TRANS"
+    },
+    {
+      "id": "PRJ-HWY-001",
+      "name": "Highway Asphalt & Batching Plant P-001",
+      "type": "plant",
+      "parentId": "BU-TRANS"
+    },
+    {
+      "id": "BU-INFRA",
+      "name": "Water & Civil Infrastructure Business Unit",
+      "type": "bu",
+      "parentId": "MEGHA-ROAD-TRANS"
+    },
+    {
+      "id": "PRJ-IRR-002",
+      "name": "Kaleshwaram Lift Irrigation Package-4",
+      "type": "project",
+      "parentId": "BU-INFRA"
+    },
+    {
+      "id": "MEGHA-POWER-EPC",
+      "name": "Megha Power & Energy EPC Ltd",
+      "type": "subsidiary",
+      "parentId": "MEIL-GROUP"
+    },
+    {
+      "id": "BU-POWER",
+      "name": "Power & Renewable EPC Business Unit",
+      "type": "bu",
+      "parentId": "MEGHA-POWER-EPC"
+    },
+    {
+      "id": "PRJ-SOLAR-003",
+      "name": "Telangana 250 MW Solar & Substation EPC",
+      "type": "project",
+      "parentId": "BU-POWER"
+    }
+  ],
+  "statuses": {
+    "PRJ-ZOJILA-P7": {
+      "project_supervisor": {
+        "status": "accepted",
+        "reason": null
+      },
+      "project_admin": {
+        "status": "accepted",
+        "reason": null
+      }
+    },
+    "PRJ-HWY-001": {
+      "project_supervisor": {
+        "status": "accepted",
+        "reason": null
+      },
+      "project_admin": {
+        "status": "accepted",
+        "reason": null
+      }
+    },
+    "BU-TRANS": {
+      "bu_supervisor": {
+        "status": "accepted",
+        "reason": null
+      },
+      "bu_admin": {
+        "status": "accepted",
+        "reason": null
+      }
+    },
+    "MEGHA-ROAD-TRANS": {
+      "subsidiary_supervisor": {
+        "status": "accepted",
+        "reason": null
+      },
+      "subsidiary_admin": {
+        "status": "accepted",
+        "reason": null
+      }
+    },
+    "MEIL-GROUP": {
+      "group_supervisor": {
+        "status": "accepted",
+        "reason": null
+      },
+      "group_admin": {
+        "status": "accepted",
+        "reason": null
+      }
+    },
+    "BU-INFRA": {
+      "bu_supervisor": {
+        "status": "accepted",
+        "reason": null
+      },
+      "bu_admin": {
+        "status": "accepted",
+        "reason": null
+      }
+    },
+    "PRJ-IRR-002": {
+      "project_supervisor": {
+        "status": "accepted",
+        "reason": null
+      },
+      "project_admin": {
+        "status": "accepted",
+        "reason": null
+      }
+    },
+    "MEGHA-POWER-EPC": {
+      "subsidiary_supervisor": {
+        "status": "accepted",
+        "reason": null
+      },
+      "subsidiary_admin": {
+        "status": "accepted",
+        "reason": null
+      }
+    },
+    "BU-POWER": {
+      "bu_supervisor": {
+        "status": "accepted",
+        "reason": null
+      },
+      "bu_admin": {
+        "status": "accepted",
+        "reason": null
+      }
+    },
+    "PRJ-SOLAR-003": {
+      "project_supervisor": {
+        "status": "accepted",
+        "reason": null
+      },
+      "project_admin": {
+        "status": "accepted",
+        "reason": null
+      }
+    }
+  },
+  "entries": {
+    "PRJ-ZOJILA-P7": {
+      "project_supervisor": {
+        "ei1_ren_elec": {
+          "current": 4200,
+          "previous": 3600,
+          "_sample": true
+        },
+        "ei1_ren_fuel": {
+          "current": 850,
+          "previous": 700,
+          "_sample": true
+        },
+        "ei1_ren_other": {
+          "current": 150,
+          "previous": 120,
+          "_sample": true
+        },
+        "ei1_nonren_elec": {
+          "current": 18500,
+          "previous": 19200,
+          "_sample": true
+        },
+        "ei1_nonren_fuel": {
+          "current": 24000,
+          "previous": 25500,
+          "_sample": true
+        },
+        "ei1_nonren_other": {
+          "current": 600,
+          "previous": 650,
+          "_sample": true
+        },
+        "ei3_surface": {
+          "current": 32000,
+          "previous": 34000,
+          "_sample": true
+        },
+        "ei3_groundwater": {
+          "current": 8500,
+          "previous": 9100,
+          "_sample": true
+        },
+        "ei3_third_party": {
+          "current": 4200,
+          "previous": 4000,
+          "_sample": true
+        },
+        "ei3_seawater": {
+          "current": 0,
+          "previous": 0,
+          "_sample": true
+        },
+        "ei3_others": {
+          "current": 1100,
+          "previous": 950,
+          "_sample": true
+        },
+        "ei3_water_consumption": {
+          "current": 38400,
+          "previous": 40200,
+          "_sample": true
+        },
+        "li2_surface_no": {
+          "current": 0,
+          "previous": 0,
+          "_sample": true
+        },
+        "li2_surface_primary": {
+          "current": 1200,
+          "previous": 1400,
+          "_sample": true
+        },
+        "li2_surface_secondary": {
+          "current": 2800,
+          "previous": 2600,
+          "_sample": true
+        },
+        "li2_surface_tertiary": {
+          "current": 1900,
+          "previous": 1700,
+          "_sample": true
+        },
+        "li2_ground_no": {
+          "current": 0,
+          "previous": 0,
+          "_sample": true
+        },
+        "li2_ground_primary": {
+          "current": 0,
+          "previous": 0,
+          "_sample": true
+        },
+        "li2_ground_secondary": {
+          "current": 400,
+          "previous": 450,
+          "_sample": true
+        },
+        "li2_ground_tertiary": {
+          "current": 300,
+          "previous": 250,
+          "_sample": true
+        },
+        "li2_sea_no": {
+          "current": 0,
+          "previous": 0,
+          "_sample": true
+        },
+        "li2_sea_primary": {
+          "current": 0,
+          "previous": 0,
+          "_sample": true
+        },
+        "li2_sea_secondary": {
+          "current": 0,
+          "previous": 0,
+          "_sample": true
+        },
+        "li2_sea_tertiary": {
+          "current": 0,
+          "previous": 0,
+          "_sample": true
+        },
+        "li2_third_no": {
+          "current": 0,
+          "previous": 0,
+          "_sample": true
+        },
+        "li2_third_primary": {
+          "current": 200,
+          "previous": 220,
+          "_sample": true
+        },
+        "li2_third_secondary": {
+          "current": 450,
+          "previous": 480,
+          "_sample": true
+        },
+        "li2_third_tertiary": {
+          "current": 150,
+          "previous": 140,
+          "_sample": true
+        },
+        "li2_other_no": {
+          "current": 0,
+          "previous": 0,
+          "_sample": true
+        },
+        "li2_other_primary": {
+          "current": 0,
+          "previous": 0,
+          "_sample": true
+        },
+        "li2_other_secondary": {
+          "current": 0,
+          "previous": 0,
+          "_sample": true
+        },
+        "li2_other_tertiary": {
+          "current": 0,
+          "previous": 0,
+          "_sample": true
+        },
+        "li3_water_stressed": {
+          "current": "No",
+          "previous": "No",
+          "_sample": true
+        },
+        "li3_area_name": {
+          "current": "Sindh Nallah Basin (Non-Stressed)",
+          "previous": "Sindh Nallah Basin (Non-Stressed)",
+          "_sample": true
+        },
+        "ei6_scope1": {
+          "current": 1820.5,
+          "previous": 1940.0,
+          "_sample": true
+        },
+        "ei6_scope2": {
+          "current": 3910.2,
+          "previous": 4120.8,
+          "_sample": true
+        },
+        "ei8_plastic": {
+          "current": 14.2,
+          "previous": 15.8,
+          "_sample": true
+        },
+        "ei8_ewaste": {
+          "current": 1.8,
+          "previous": 1.4,
+          "_sample": true
+        },
+        "ei8_biomedical": {
+          "current": 0.4,
+          "previous": 0.5,
+          "_sample": true
+        },
+        "ei8_cd": {
+          "current": 480.0,
+          "previous": 510.0,
+          "_sample": true
+        },
+        "ei8_battery": {
+          "current": 2.1,
+          "previous": 1.9,
+          "_sample": true
+        },
+        "ei8_radioactive": {
+          "current": 0,
+          "previous": 0,
+          "_sample": true
+        },
+        "ei8_other_haz": {
+          "current": 9.5,
+          "previous": 10.2,
+          "_sample": true
+        },
+        "ei8_other_nonhaz": {
+          "current": 86.0,
+          "previous": 91.5,
+          "_sample": true
+        },
+        "ei8_recycled": {
+          "current": 412.0,
+          "previous": 390.0,
+          "_sample": true
+        },
+        "ei8_reused": {
+          "current": 95.0,
+          "previous": 88.0,
+          "_sample": true
+        },
+        "ei8_other_recovery": {
+          "current": 18.0,
+          "previous": 15.0,
+          "_sample": true
+        },
+        "ei8_incineration": {
+          "current": 4.5,
+          "previous": 5.1,
+          "_sample": true
+        },
+        "ei8_landfilling": {
+          "current": 54.5,
+          "previous": 122.2,
+          "_sample": true
+        },
+        "ei8_other_disposal": {
+          "current": 10.0,
+          "previous": 11.0,
+          "_sample": true
+        }
+      },
+      "project_admin": {
+        "pa_ei7_has_project": {
+          "current": "Yes",
+          "previous": "Yes",
+          "_sample": true
+        },
+        "pa_ei7_rows": {
+          "current": [
+            {
+              "title": "Tunnel Ventilation VFD Retrofit",
+              "details": "Installed variable frequency drives on primary tunnel exhaust fans saving 480 MWh annually."
+            }
+          ],
+          "previous": [
+            {
+              "title": "Solar Rooftop Camp Microgrid",
+              "details": "120 kWp solar installation at Zojila base camp."
+            }
+          ],
+          "_sample": true
+        },
+        "pa_ei10_rows": {
+          "current": [
+            {
+              "location": "Zojila West Portal, Ganderbal",
+              "type_of_operations": "Tunnel excavation & portal works",
+              "compliant": "Yes",
+              "corrective_action": "All MoEFCC & Wildlife clearance conditions complied with; noise barriers installed."
+            }
+          ],
+          "previous": [],
+          "_sample": true
+        },
+        "pa_ei11_rows": {
+          "current": [
+            {
+              "project": "Zojila All-Weather Tunnel",
+              "notification_no": "F.No. 10-42/2019-IA.III",
+              "date": "2020-06-18",
+              "independent_agency": "Yes",
+              "public_domain": "Yes",
+              "web_link": "https://parivesh.nic.in/eia-zojila"
+            }
+          ],
+          "previous": [],
+          "_sample": true
+        },
+        "pa_ei12_compliant": {
+          "current": "Yes",
+          "previous": "Yes",
+          "_sample": true
+        },
+        "pa_ei12_rows": {
+          "current": [],
+          "previous": [],
+          "_sample": true
+        },
+        "pa_li5_rows": {
+          "current": [
+            {
+              "location": "Zojila West Portal, Ganderbal",
+              "biodiversity_impact": "Controlled blasting schedules, muck stabilization, and native plantation over 12 hectares."
+            }
+          ],
+          "previous": [],
+          "_sample": true
+        },
+        "pa_li6_rows": {
+          "current": [
+            {
+              "initiative": "Closed-loop Tunnel Washwater Recycling",
+              "details": "Sedimentation and filter-press plant reusing 72% of tunnel muck washwater.",
+              "outcome": "Saved 18,400 kL freshwater in FY 2024-25"
+            }
+          ],
+          "previous": [],
+          "_sample": true
+        }
+      }
+    },
+    "PRJ-HWY-001": {
+      "project_supervisor": {
+        "ei1_ren_elec": {
+          "current": 6100,
+          "previous": 4800,
+          "_sample": true
+        },
+        "ei1_ren_fuel": {
+          "current": 400,
+          "previous": 300,
+          "_sample": true
+        },
+        "ei1_ren_other": {
+          "current": 0,
+          "previous": 0,
+          "_sample": true
+        },
+        "ei1_nonren_elec": {
+          "current": 14200,
+          "previous": 15600,
+          "_sample": true
+        },
+        "ei1_nonren_fuel": {
+          "current": 19800,
+          "previous": 21100,
+          "_sample": true
+        },
+        "ei1_nonren_other": {
+          "current": 350,
+          "previous": 400,
+          "_sample": true
+        },
+        "ei3_surface": {
+          "current": 12000,
+          "previous": 13500,
+          "_sample": true
+        },
+        "ei3_groundwater": {
+          "current": 14500,
+          "previous": 15800,
+          "_sample": true
+        },
+        "ei3_third_party": {
+          "current": 3100,
+          "previous": 2900,
+          "_sample": true
+        },
+        "ei3_seawater": {
+          "current": 0,
+          "previous": 0,
+          "_sample": true
+        },
+        "ei3_others": {
+          "current": 500,
+          "previous": 450,
+          "_sample": true
+        },
+        "ei3_water_consumption": {
+          "current": 26200,
+          "previous": 28100,
+          "_sample": true
+        },
+        "li2_surface_no": {
+          "current": 0,
+          "previous": 0,
+          "_sample": true
+        },
+        "li2_surface_primary": {
+          "current": 600,
+          "previous": 700,
+          "_sample": true
+        },
+        "li2_surface_secondary": {
+          "current": 1400,
+          "previous": 1300,
+          "_sample": true
+        },
+        "li2_surface_tertiary": {
+          "current": 900,
+          "previous": 800,
+          "_sample": true
+        },
+        "li2_ground_no": {
+          "current": 0,
+          "previous": 0,
+          "_sample": true
+        },
+        "li2_ground_primary": {
+          "current": 0,
+          "previous": 0,
+          "_sample": true
+        },
+        "li2_ground_secondary": {
+          "current": 0,
+          "previous": 0,
+          "_sample": true
+        },
+        "li2_ground_tertiary": {
+          "current": 0,
+          "previous": 0,
+          "_sample": true
+        },
+        "li2_sea_no": {
+          "current": 0,
+          "previous": 0,
+          "_sample": true
+        },
+        "li2_sea_primary": {
+          "current": 0,
+          "previous": 0,
+          "_sample": true
+        },
+        "li2_sea_secondary": {
+          "current": 0,
+          "previous": 0,
+          "_sample": true
+        },
+        "li2_sea_tertiary": {
+          "current": 0,
+          "previous": 0,
+          "_sample": true
+        },
+        "li2_third_no": {
+          "current": 0,
+          "previous": 0,
+          "_sample": true
+        },
+        "li2_third_primary": {
+          "current": 300,
+          "previous": 350,
+          "_sample": true
+        },
+        "li2_third_secondary": {
+          "current": 450,
+          "previous": 500,
+          "_sample": true
+        },
+        "li2_third_tertiary": {
+          "current": 250,
+          "previous": 200,
+          "_sample": true
+        },
+        "li2_other_no": {
+          "current": 0,
+          "previous": 0,
+          "_sample": true
+        },
+        "li2_other_primary": {
+          "current": 0,
+          "previous": 0,
+          "_sample": true
+        },
+        "li2_other_secondary": {
+          "current": 0,
+          "previous": 0,
+          "_sample": true
+        },
+        "li2_other_tertiary": {
+          "current": 0,
+          "previous": 0,
+          "_sample": true
+        },
+        "li3_water_stressed": {
+          "current": "Yes",
+          "previous": "Yes",
+          "_sample": true
+        },
+        "li3_area_name": {
+          "current": "Balangir Semi-Critical Block, Odisha",
+          "previous": "Balangir Semi-Critical Block, Odisha",
+          "_sample": true
+        },
+        "ei5_air_rows": {
+          "current": [
+            {
+              "parameter": "NOx",
+              "unit": "mg/Nm3",
+              "current": 38.4,
+              "previous": 42.1
+            },
+            {
+              "parameter": "SOx",
+              "unit": "mg/Nm3",
+              "current": 16.2,
+              "previous": 19.0
+            },
+            {
+              "parameter": "Particulate matter (PM)",
+              "unit": "mg/Nm3",
+              "current": 54.0,
+              "previous": 61.5
+            }
+          ],
+          "previous": [],
+          "_sample": true
+        },
+        "ei6_scope1": {
+          "current": 1490.0,
+          "previous": 1610.5,
+          "_sample": true
+        },
+        "ei6_scope2": {
+          "current": 3010.4,
+          "previous": 3320.0,
+          "_sample": true
+        },
+        "ei8_plastic": {
+          "current": 9.8,
+          "previous": 11.0,
+          "_sample": true
+        },
+        "ei8_ewaste": {
+          "current": 0.9,
+          "previous": 0.7,
+          "_sample": true
+        },
+        "ei8_biomedical": {
+          "current": 0.2,
+          "previous": 0.2,
+          "_sample": true
+        },
+        "ei8_cd": {
+          "current": 310.0,
+          "previous": 340.0,
+          "_sample": true
+        },
+        "ei8_battery": {
+          "current": 1.4,
+          "previous": 1.2,
+          "_sample": true
+        },
+        "ei8_radioactive": {
+          "current": 0,
+          "previous": 0,
+          "_sample": true
+        },
+        "ei8_other_haz": {
+          "current": 6.2,
+          "previous": 7.0,
+          "_sample": true
+        },
+        "ei8_other_nonhaz": {
+          "current": 42.5,
+          "previous": 48.0,
+          "_sample": true
+        },
+        "ei8_recycled": {
+          "current": 275.0,
+          "previous": 260.0,
+          "_sample": true
+        },
+        "ei8_reused": {
+          "current": 58.0,
+          "previous": 52.0,
+          "_sample": true
+        },
+        "ei8_other_recovery": {
+          "current": 9.0,
+          "previous": 8.0,
+          "_sample": true
+        },
+        "ei8_incineration": {
+          "current": 3.0,
+          "previous": 3.5,
+          "_sample": true
+        },
+        "ei8_landfilling": {
+          "current": 22.0,
+          "previous": 78.6,
+          "_sample": true
+        },
+        "ei8_other_disposal": {
+          "current": 4.0,
+          "previous": 6.0,
+          "_sample": true
+        }
+      },
+      "project_admin": {
+        "pa_ei7_has_project": {
+          "current": "Yes",
+          "previous": "Yes",
+          "_sample": true
+        },
+        "pa_ei7_rows": {
+          "current": [
+            {
+              "title": "Hot-Mix Plant Baghouse & Warm-Mix Asphalt",
+              "details": "Reduced burner fuel temperature by 25 C cutting diesel usage by 11%."
+            }
+          ],
+          "previous": [],
+          "_sample": true
+        },
+        "pa_ei10_rows": {
+          "current": [],
+          "previous": [],
+          "_sample": true
+        },
+        "pa_ei11_rows": {
+          "current": [
+            {
+              "project": "Highway Batching & Crusher P-001",
+              "notification_no": "SEIAA-OD/2021/412",
+              "date": "2021-11-04",
+              "independent_agency": "Yes",
+              "public_domain": "Yes",
+              "web_link": "https://parivesh.nic.in/eia-odisha-p001"
+            }
+          ],
+          "previous": [],
+          "_sample": true
+        },
+        "pa_ei12_compliant": {
+          "current": "Yes",
+          "previous": "Yes",
+          "_sample": true
+        },
+        "pa_ei12_rows": {
+          "current": [],
+          "previous": [],
+          "_sample": true
+        },
+        "pa_li5_rows": {
+          "current": [],
+          "previous": [],
+          "_sample": true
+        },
+        "pa_li6_rows": {
+          "current": [
+            {
+              "initiative": "Reclaimed Asphalt Pavement (RAP) Blending",
+              "details": "20% milled asphalt reused in base course mixes.",
+              "outcome": "310 MT C&D aggregate conserved"
+            }
+          ],
+          "previous": [],
+          "_sample": true
+        }
+      }
+    },
+    "BU-TRANS": {
+      "bu_supervisor": {
+        "bu_li4_scope3": {
+          "current": 6420.0,
+          "previous": 6890.0,
+          "_sample": true
+        },
+        "bu_li8_adverse_impact": {
+          "current": "High embodied carbon in cement/bitumen haulage; mitigated via regional sourcing within 150 km and electric mixer fleet pilots.",
+          "previous": "Regional aggregate sourcing initiated.",
+          "_sample": true
+        },
+        "bu_li9_vc_assessed_pct": {
+          "current": 68.5,
+          "previous": 54.0,
+          "_sample": true
+        }
+      },
+      "bu_admin": {
+        "bu_ei2_pat_applicable": {
+          "current": "No",
+          "previous": "No",
+          "_sample": true
+        },
+        "bu_ei2_targets_achieved": {
+          "current": "No",
+          "previous": "No",
+          "_sample": true
+        },
+        "bu_ei2_remedial_action": {
+          "current": "Not a Designated Consumer under BEE PAT Cycle; voluntary energy audits conducted annually.",
+          "previous": "Voluntary energy audits completed.",
+          "_sample": true
+        },
+        "bu_ei4_zld_implemented": {
+          "current": "Yes",
+          "previous": "Yes",
+          "_sample": true
+        },
+        "bu_ei4_zld_details": {
+          "current": "Zero Liquid Discharge implemented at 100% of batching plants and tunnel portals via closed-loop settling tanks and STP reuse.",
+          "previous": "Implemented across 85% of sites.",
+          "_sample": true
+        },
+        "bu_ei9_waste_strategy": {
+          "current": "100% segregation at source; hazardous waste oil & batteries routed strictly through SPCB-authorized recyclers; C&D muck reused for embankment fill.",
+          "previous": "Source segregation and authorized disposal active.",
+          "_sample": true
+        },
+        "bu_li7_bcp_plan": {
+          "current": "ISO 22301-aligned Emergency Preparedness & Disaster Management Plan covering flash floods, landslides, and fuel spills.",
+          "previous": "Site emergency drills conducted quarterly.",
+          "_sample": true
+        }
+      }
+    },
+    "MEGHA-ROAD-TRANS": {
+      "subsidiary_supervisor": {
+        "sub_ei7_rows": {
+          "current": [
+            {
+              "title": "Solar Open-Access PPA for Highway Plants",
+              "details": "4.5 MWp captive solar procurement across Odisha & Telangana corridor plants."
+            }
+          ],
+          "previous": [],
+          "_sample": true
+        },
+        "sub_li6_rows": {
+          "current": [
+            {
+              "initiative": "Fly-Ash & GGBS Blended Concrete Adoption",
+              "details": "Replaced 30% OPC with fly-ash/slag in structural concrete.",
+              "outcome": "Reduced clinker emissions by ~1,120 tCO2e"
+            }
+          ],
+          "previous": [],
+          "_sample": true
+        }
+      },
+      "subsidiary_admin": {
+        "sub_ei12_compliant": {
+          "current": "Yes",
+          "previous": "Yes",
+          "_sample": true
+        },
+        "sub_ei12_statement": {
+          "current": "Compliant with Water Act 1974, Air Act 1981, and Environment (Protection) Act 1986; zero pending show-cause notices.",
+          "previous": "Fully compliant.",
+          "_sample": true
+        },
+        "sub_ei12_rows": {
+          "current": [],
+          "previous": [],
+          "_sample": true
+        },
+        "sub_ei11_rows": {
+          "current": [
+            {
+              "project": "Odisha Expressway Corridor Package-II",
+              "notification_no": "MoEFCC-IA/2022/901",
+              "date": "2022-03-15",
+              "independent_agency": "Yes",
+              "public_domain": "Yes",
+              "web_link": "https://parivesh.nic.in/eia-odisha-pkg2"
+            }
+          ],
+          "previous": [],
+          "_sample": true
+        }
+      }
+    },
+    "MEIL-GROUP": {
+      "group_supervisor": {
+        "grp_secb_1_policy_coverage": {
+          "current": "Yes",
+          "previous": "Yes",
+          "_sample": true
+        },
+        "grp_secb_2_board_approval": {
+          "current": "Yes",
+          "previous": "Yes",
+          "_sample": true
+        },
+        "grp_secb_3_web_link": {
+          "current": "https://www.meil.in/sustainability-policies",
+          "previous": "https://www.meil.in/sustainability-policies",
+          "_sample": true
+        },
+        "grp_secb_4_procedures": {
+          "current": "Yes",
+          "previous": "Yes",
+          "_sample": true
+        },
+        "grp_secb_5_value_chain_ext": {
+          "current": "Yes",
+          "previous": "Yes",
+          "_sample": true
+        },
+        "grp_secb_6_standards": {
+          "current": "ISO 14001:2015, ISO 45001:2018, ISO 9001:2015",
+          "previous": "ISO 14001:2015, ISO 45001:2018",
+          "_sample": true
+        },
+        "grp_secb_10_targets": {
+          "current": "25% renewable electricity share by FY 2027-28; 100% ZLD across batching plants.",
+          "previous": "20% renewable electricity share target.",
+          "_sample": true
+        },
+        "grp_secb_10_performance": {
+          "current": "Achieved 25.0% renewable energy share across active infrastructure sites in FY 2024-25.",
+          "previous": "Achieved 20.5% renewable energy share.",
+          "_sample": true
+        },
+        "grp_secb_10_review_rows": {
+          "current": [
+            {
+              "subject": "Performance against Environment & Climate Commitments (P6)",
+              "reviewed_by": "ESG & CSR Committee of the Board",
+              "frequency": "Quarterly"
+            },
+            {
+              "subject": "Compliance with Statutory Environmental Clearances",
+              "reviewed_by": "Audit & Risk Committee",
+              "frequency": "Half yearly"
+            }
+          ],
+          "previous": [],
+          "_sample": true
+        }
+      },
+      "group_admin": {
+        "grp_seca_1_24_rows": {
+          "current": [
+            {
+              "item_no": "1",
+              "particulars": "Corporate Identity Number (CIN)",
+              "response": "U45201TG2006PLC050271"
+            },
+            {
+              "item_no": "2",
+              "particulars": "Name of the Listed / Reporting Entity",
+              "response": "Megha Engineering & Infrastructures Ltd (MEIL)"
+            },
+            {
+              "item_no": "3",
+              "particulars": "Year of Incorporation",
+              "response": "2006"
+            },
+            {
+              "item_no": "4",
+              "particulars": "Registered Office Address",
+              "response": "S-2, Technocrat Industrial Estate, Balanagar, Hyderabad 500037"
+            },
+            {
+              "item_no": "13",
+              "particulars": "Reporting Boundary",
+              "response": "Consolidated Operational Control (Group, Subsidiaries, BUs & Sites)"
+            }
+          ],
+          "previous": [],
+          "_sample": true
+        },
+        "grp_secb_7_committee": {
+          "current": "MEIL remains committed to decarbonizing heavy civil infrastructure through renewable PPAs, water recycling, and zero-waste engineering.",
+          "previous": "Annual sustainability statement issued.",
+          "_sample": true
+        },
+        "grp_secb_8_highest_authority": {
+          "current": "Managing Director & Group Chief Sustainability Officer (CSO)",
+          "previous": "Managing Director",
+          "_sample": true
+        },
+        "grp_secb_9_independent_eval": {
+          "current": "Yes — Board-level ESG & Sustainability Committee chaired by Independent Director.",
+          "previous": "Yes — Board ESG Committee.",
+          "_sample": true
+        },
+        "grp_secb_11_external_assessment": {
+          "current": "Yes — Independent Limited Assurance carried out by DNV Business Assurance India Pvt. Ltd.",
+          "previous": "Yes — DNV Business Assurance.",
+          "_sample": true
+        },
+        "grp_p6_assurance_rows": {
+          "current": [
+            {
+              "indicator": "EI-1 (Total Energy)",
+              "assured": "Yes",
+              "agency_name": "DNV Business Assurance India Pvt. Ltd."
+            },
+            {
+              "indicator": "EI-3 (Water Withdrawal & Consumption)",
+              "assured": "Yes",
+              "agency_name": "DNV Business Assurance India Pvt. Ltd."
+            },
+            {
+              "indicator": "EI-5 (Air Emissions)",
+              "assured": "Yes",
+              "agency_name": "DNV Business Assurance India Pvt. Ltd."
+            },
+            {
+              "indicator": "EI-6 (Scope 1 & Scope 2 GHG)",
+              "assured": "Yes",
+              "agency_name": "DNV Business Assurance India Pvt. Ltd."
+            },
+            {
+              "indicator": "EI-8 (Waste Management)",
+              "assured": "Yes",
+              "agency_name": "DNV Business Assurance India Pvt. Ltd."
+            },
+            {
+              "indicator": "LI-1 (Energy Renewable/Non-Renewable)",
+              "assured": "Yes",
+              "agency_name": "DNV Business Assurance India Pvt. Ltd."
+            },
+            {
+              "indicator": "LI-2 (Water Discharge)",
+              "assured": "Yes",
+              "agency_name": "DNV Business Assurance India Pvt. Ltd."
+            },
+            {
+              "indicator": "LI-3 (Water-Stressed Areas)",
+              "assured": "Yes",
+              "agency_name": "DNV Business Assurance India Pvt. Ltd."
+            },
+            {
+              "indicator": "LI-4 (Scope 3 Emissions)",
+              "assured": "Yes",
+              "agency_name": "DNV Business Assurance India Pvt. Ltd."
+            }
+          ],
+          "previous": [],
+          "_sample": true
+        }
+      }
+    },
+    "PRJ-IRR-002": {
+      "project_supervisor": {
+        "ei1_ren_elec": {
+          "current": 3100,
+          "previous": 2700,
+          "_sample": true
+        },
+        "ei1_ren_fuel": {
+          "current": 500,
+          "previous": 420,
+          "_sample": true
+        },
+        "ei1_ren_other": {
+          "current": 100,
+          "previous": 80,
+          "_sample": true
+        },
+        "ei1_nonren_elec": {
+          "current": 22400,
+          "previous": 23100,
+          "_sample": true
+        },
+        "ei1_nonren_fuel": {
+          "current": 16800,
+          "previous": 17500,
+          "_sample": true
+        },
+        "ei1_nonren_other": {
+          "current": 400,
+          "previous": 450,
+          "_sample": true
+        },
+        "ei3_surface": {
+          "current": 28500,
+          "previous": 30000,
+          "_sample": true
+        },
+        "ei3_groundwater": {
+          "current": 6200,
+          "previous": 6800,
+          "_sample": true
+        },
+        "ei3_third_party": {
+          "current": 2400,
+          "previous": 2200,
+          "_sample": true
+        },
+        "ei3_seawater": {
+          "current": 0,
+          "previous": 0,
+          "_sample": true
+        },
+        "ei3_others": {
+          "current": 900,
+          "previous": 850,
+          "_sample": true
+        },
+        "ei3_water_consumption": {
+          "current": 31500,
+          "previous": 33000,
+          "_sample": true
+        },
+        "li2_surface_no": {
+          "current": 0,
+          "previous": 0,
+          "_sample": true
+        },
+        "li2_surface_primary": {
+          "current": 1100,
+          "previous": 1200,
+          "_sample": true
+        },
+        "li2_surface_secondary": {
+          "current": 2400,
+          "previous": 2300,
+          "_sample": true
+        },
+        "li2_surface_tertiary": {
+          "current": 1500,
+          "previous": 1400,
+          "_sample": true
+        },
+        "li2_ground_no": {
+          "current": 0,
+          "previous": 0,
+          "_sample": true
+        },
+        "li2_ground_primary": {
+          "current": 0,
+          "previous": 0,
+          "_sample": true
+        },
+        "li2_ground_secondary": {
+          "current": 300,
+          "previous": 320,
+          "_sample": true
+        },
+        "li2_ground_tertiary": {
+          "current": 200,
+          "previous": 180,
+          "_sample": true
+        },
+        "li2_sea_no": {
+          "current": 0,
+          "previous": 0,
+          "_sample": true
+        },
+        "li2_sea_primary": {
+          "current": 0,
+          "previous": 0,
+          "_sample": true
+        },
+        "li2_sea_secondary": {
+          "current": 0,
+          "previous": 0,
+          "_sample": true
+        },
+        "li2_sea_tertiary": {
+          "current": 0,
+          "previous": 0,
+          "_sample": true
+        },
+        "li2_third_no": {
+          "current": 0,
+          "previous": 0,
+          "_sample": true
+        },
+        "li2_third_primary": {
+          "current": 250,
+          "previous": 240,
+          "_sample": true
+        },
+        "li2_third_secondary": {
+          "current": 450,
+          "previous": 420,
+          "_sample": true
+        },
+        "li2_third_tertiary": {
+          "current": 300,
+          "previous": 280,
+          "_sample": true
+        },
+        "li2_other_no": {
+          "current": 0,
+          "previous": 0,
+          "_sample": true
+        },
+        "li2_other_primary": {
+          "current": 0,
+          "previous": 0,
+          "_sample": true
+        },
+        "li2_other_secondary": {
+          "current": 0,
+          "previous": 0,
+          "_sample": true
+        },
+        "li2_other_tertiary": {
+          "current": 0,
+          "previous": 0,
+          "_sample": true
+        },
+        "li3_water_stressed": {
+          "current": "No",
+          "previous": "No",
+          "_sample": true
+        },
+        "li3_area_name": {
+          "current": "",
+          "previous": "",
+          "_sample": true
+        },
+        "ei6_scope1": {
+          "current": 1350.0,
+          "previous": 1420.0,
+          "_sample": true
+        },
+        "ei6_scope2": {
+          "current": 4120.0,
+          "previous": 4280.0,
+          "_sample": true
+        },
+        "ei8_plastic": {
+          "current": 32.0,
+          "previous": 35.0,
+          "_sample": true
+        },
+        "ei8_ewaste": {
+          "current": 3.5,
+          "previous": 3.0,
+          "_sample": true
+        },
+        "ei8_biomedical": {
+          "current": 0.5,
+          "previous": 0.4,
+          "_sample": true
+        },
+        "ei8_cd": {
+          "current": 280.0,
+          "previous": 300.0,
+          "_sample": true
+        },
+        "ei8_battery": {
+          "current": 5.0,
+          "previous": 4.8,
+          "_sample": true
+        },
+        "ei8_radioactive": {
+          "current": 0.0,
+          "previous": 0.0,
+          "_sample": true
+        },
+        "ei8_other_haz": {
+          "current": 18.0,
+          "previous": 19.5,
+          "_sample": true
+        },
+        "ei8_other_nonhaz": {
+          "current": 95.0,
+          "previous": 102.0,
+          "_sample": true
+        },
+        "ei8_recycled": {
+          "current": 240.0,
+          "previous": 250.0,
+          "_sample": true
+        },
+        "ei8_reused": {
+          "current": 110.0,
+          "previous": 115.0,
+          "_sample": true
+        },
+        "ei8_other_recovery": {
+          "current": 22.0,
+          "previous": 20.0,
+          "_sample": true
+        },
+        "ei8_incineration": {
+          "current": 12.0,
+          "previous": 14.0,
+          "_sample": true
+        },
+        "ei8_landfilling": {
+          "current": 38.0,
+          "previous": 42.0,
+          "_sample": true
+        },
+        "ei8_other_disposal": {
+          "current": 12.0,
+          "previous": 23.7,
+          "_sample": true
+        }
+      },
+      "project_admin": {
+        "pa_ei7_has_project": {
+          "current": "Yes",
+          "previous": "Yes",
+          "_sample": true
+        },
+        "pa_ei7_rows": {
+          "current": [
+            {
+              "title": "Tunnel Ventilation VFD Retrofit",
+              "details": "Installed variable frequency drives on primary tunnel exhaust fans saving 480 MWh annually."
+            }
+          ],
+          "previous": [
+            {
+              "title": "Solar Rooftop Camp Microgrid",
+              "details": "120 kWp solar installation at Zojila base camp."
+            }
+          ],
+          "_sample": true
+        },
+        "pa_ei10_rows": {
+          "current": [
+            {
+              "location": "Zojila West Portal, Ganderbal",
+              "type_of_operations": "Tunnel excavation & portal works",
+              "compliant": "Yes",
+              "corrective_action": "All MoEFCC & Wildlife clearance conditions complied with; noise barriers installed."
+            }
+          ],
+          "previous": [],
+          "_sample": true
+        },
+        "pa_ei11_rows": {
+          "current": [
+            {
+              "project": "Zojila All-Weather Tunnel",
+              "notification_no": "F.No. 10-42/2019-IA.III",
+              "date": "2020-06-18",
+              "independent_agency": "Yes",
+              "public_domain": "Yes",
+              "web_link": "https://parivesh.nic.in/eia-zojila"
+            }
+          ],
+          "previous": [],
+          "_sample": true
+        },
+        "pa_ei12_compliant": {
+          "current": "Yes",
+          "previous": "Yes",
+          "_sample": true
+        },
+        "pa_ei12_rows": {
+          "current": [],
+          "previous": [],
+          "_sample": true
+        },
+        "pa_li5_rows": {
+          "current": [
+            {
+              "location": "Zojila West Portal, Ganderbal",
+              "biodiversity_impact": "Controlled blasting schedules, muck stabilization, and native plantation over 12 hectares."
+            }
+          ],
+          "previous": [],
+          "_sample": true
+        },
+        "pa_li6_rows": {
+          "current": [
+            {
+              "initiative": "Closed-loop Tunnel Washwater Recycling",
+              "details": "Sedimentation and filter-press plant reusing 72% of tunnel muck washwater.",
+              "outcome": "Saved 18,400 kL freshwater in FY 2024-25"
+            }
+          ],
+          "previous": [],
+          "_sample": true
+        }
+      }
+    },
+    "PRJ-SOLAR-003": {
+      "project_supervisor": {
+        "ei1_ren_elec": {
+          "current": 9800,
+          "previous": 8400,
+          "_sample": true
+        },
+        "ei1_ren_fuel": {
+          "current": 650,
+          "previous": 550,
+          "_sample": true
+        },
+        "ei1_ren_other": {
+          "current": 250,
+          "previous": 200,
+          "_sample": true
+        },
+        "ei1_nonren_elec": {
+          "current": 11200,
+          "previous": 12000,
+          "_sample": true
+        },
+        "ei1_nonren_fuel": {
+          "current": 12500,
+          "previous": 13200,
+          "_sample": true
+        },
+        "ei1_nonren_other": {
+          "current": 300,
+          "previous": 320,
+          "_sample": true
+        },
+        "ei3_surface": {
+          "current": 15400,
+          "previous": 16200,
+          "_sample": true
+        },
+        "ei3_groundwater": {
+          "current": 4800,
+          "previous": 5100,
+          "_sample": true
+        },
+        "ei3_third_party": {
+          "current": 3200,
+          "previous": 3000,
+          "_sample": true
+        },
+        "ei3_seawater": {
+          "current": 0,
+          "previous": 0,
+          "_sample": true
+        },
+        "ei3_others": {
+          "current": 600,
+          "previous": 550,
+          "_sample": true
+        },
+        "ei3_water_consumption": {
+          "current": 20500,
+          "previous": 21400,
+          "_sample": true
+        },
+        "li2_surface_no": {
+          "current": 0,
+          "previous": 0,
+          "_sample": true
+        },
+        "li2_surface_primary": {
+          "current": 700,
+          "previous": 750,
+          "_sample": true
+        },
+        "li2_surface_secondary": {
+          "current": 1400,
+          "previous": 1350,
+          "_sample": true
+        },
+        "li2_surface_tertiary": {
+          "current": 900,
+          "previous": 850,
+          "_sample": true
+        },
+        "li2_ground_no": {
+          "current": 0,
+          "previous": 0,
+          "_sample": true
+        },
+        "li2_ground_primary": {
+          "current": 0,
+          "previous": 0,
+          "_sample": true
+        },
+        "li2_ground_secondary": {
+          "current": 200,
+          "previous": 220,
+          "_sample": true
+        },
+        "li2_ground_tertiary": {
+          "current": 150,
+          "previous": 140,
+          "_sample": true
+        },
+        "li2_sea_no": {
+          "current": 0,
+          "previous": 0,
+          "_sample": true
+        },
+        "li2_sea_primary": {
+          "current": 0,
+          "previous": 0,
+          "_sample": true
+        },
+        "li2_sea_secondary": {
+          "current": 0,
+          "previous": 0,
+          "_sample": true
+        },
+        "li2_sea_tertiary": {
+          "current": 0,
+          "previous": 0,
+          "_sample": true
+        },
+        "li2_third_no": {
+          "current": 0,
+          "previous": 0,
+          "_sample": true
+        },
+        "li2_third_primary": {
+          "current": 100,
+          "previous": 110,
+          "_sample": true
+        },
+        "li2_third_secondary": {
+          "current": 200,
+          "previous": 210,
+          "_sample": true
+        },
+        "li2_third_tertiary": {
+          "current": 150,
+          "previous": 130,
+          "_sample": true
+        },
+        "li2_other_no": {
+          "current": 0,
+          "previous": 0,
+          "_sample": true
+        },
+        "li2_other_primary": {
+          "current": 0,
+          "previous": 0,
+          "_sample": true
+        },
+        "li2_other_secondary": {
+          "current": 0,
+          "previous": 0,
+          "_sample": true
+        },
+        "li2_other_tertiary": {
+          "current": 0,
+          "previous": 0,
+          "_sample": true
+        },
+        "li3_water_stressed": {
+          "current": "No",
+          "previous": "No",
+          "_sample": true
+        },
+        "li3_area_name": {
+          "current": "",
+          "previous": "",
+          "_sample": true
+        },
+        "ei6_scope1": {
+          "current": 980.0,
+          "previous": 1050.0,
+          "_sample": true
+        },
+        "ei6_scope2": {
+          "current": 2150.0,
+          "previous": 2300.0,
+          "_sample": true
+        },
+        "ei8_plastic": {
+          "current": 40.0,
+          "previous": 42.0,
+          "_sample": true
+        },
+        "ei8_ewaste": {
+          "current": 8.0,
+          "previous": 7.5,
+          "_sample": true
+        },
+        "ei8_biomedical": {
+          "current": 0.2,
+          "previous": 0.2,
+          "_sample": true
+        },
+        "ei8_cd": {
+          "current": 160.0,
+          "previous": 175.0,
+          "_sample": true
+        },
+        "ei8_battery": {
+          "current": 14.0,
+          "previous": 12.0,
+          "_sample": true
+        },
+        "ei8_radioactive": {
+          "current": 0.0,
+          "previous": 0.0,
+          "_sample": true
+        },
+        "ei8_other_haz": {
+          "current": 12.0,
+          "previous": 13.0,
+          "_sample": true
+        },
+        "ei8_other_nonhaz": {
+          "current": 75.8,
+          "previous": 80.3,
+          "_sample": true
+        },
+        "ei8_recycled": {
+          "current": 210.0,
+          "previous": 220.0,
+          "_sample": true
+        },
+        "ei8_reused": {
+          "current": 55.0,
+          "previous": 58.0,
+          "_sample": true
+        },
+        "ei8_other_recovery": {
+          "current": 10.0,
+          "previous": 12.0,
+          "_sample": true
+        },
+        "ei8_incineration": {
+          "current": 8.0,
+          "previous": 9.0,
+          "_sample": true
+        },
+        "ei8_landfilling": {
+          "current": 22.0,
+          "previous": 25.0,
+          "_sample": true
+        },
+        "ei8_other_disposal": {
+          "current": 5.0,
+          "previous": 6.0,
+          "_sample": true
+        }
+      },
+      "project_admin": {
+        "pa_ei7_has_project": {
+          "current": "Yes",
+          "previous": "Yes",
+          "_sample": true
+        },
+        "pa_ei7_rows": {
+          "current": [
+            {
+              "title": "Tunnel Ventilation VFD Retrofit",
+              "details": "Installed variable frequency drives on primary tunnel exhaust fans saving 480 MWh annually."
+            }
+          ],
+          "previous": [
+            {
+              "title": "Solar Rooftop Camp Microgrid",
+              "details": "120 kWp solar installation at Zojila base camp."
+            }
+          ],
+          "_sample": true
+        },
+        "pa_ei10_rows": {
+          "current": [
+            {
+              "location": "Zojila West Portal, Ganderbal",
+              "type_of_operations": "Tunnel excavation & portal works",
+              "compliant": "Yes",
+              "corrective_action": "All MoEFCC & Wildlife clearance conditions complied with; noise barriers installed."
+            }
+          ],
+          "previous": [],
+          "_sample": true
+        },
+        "pa_ei11_rows": {
+          "current": [
+            {
+              "project": "Zojila All-Weather Tunnel",
+              "notification_no": "F.No. 10-42/2019-IA.III",
+              "date": "2020-06-18",
+              "independent_agency": "Yes",
+              "public_domain": "Yes",
+              "web_link": "https://parivesh.nic.in/eia-zojila"
+            }
+          ],
+          "previous": [],
+          "_sample": true
+        },
+        "pa_ei12_compliant": {
+          "current": "Yes",
+          "previous": "Yes",
+          "_sample": true
+        },
+        "pa_ei12_rows": {
+          "current": [],
+          "previous": [],
+          "_sample": true
+        },
+        "pa_li5_rows": {
+          "current": [
+            {
+              "location": "Zojila West Portal, Ganderbal",
+              "biodiversity_impact": "Controlled blasting schedules, muck stabilization, and native plantation over 12 hectares."
+            }
+          ],
+          "previous": [],
+          "_sample": true
+        },
+        "pa_li6_rows": {
+          "current": [
+            {
+              "initiative": "Closed-loop Tunnel Washwater Recycling",
+              "details": "Sedimentation and filter-press plant reusing 72% of tunnel muck washwater.",
+              "outcome": "Saved 18,400 kL freshwater in FY 2024-25"
+            }
+          ],
+          "previous": [],
+          "_sample": true
+        }
+      }
+    },
+    "BU-INFRA": {
+      "bu_supervisor": {
+        "bu_li4_scope3": {
+          "current": 5180.0,
+          "previous": 5450.0,
+          "_sample": true
+        },
+        "bu_li8_adverse_impact": {
+          "current": "High embodied carbon in cement/bitumen haulage; mitigated via regional sourcing within 150 km and electric mixer fleet pilots.",
+          "previous": "Regional aggregate sourcing initiated.",
+          "_sample": true
+        },
+        "bu_li9_vc_assessed_pct": {
+          "current": 72.0,
+          "previous": 60.0,
+          "_sample": true
+        }
+      },
+      "bu_admin": {
+        "bu_ei2_pat_applicable": {
+          "current": "No",
+          "previous": "No",
+          "_sample": true
+        },
+        "bu_ei2_targets_achieved": {
+          "current": "No",
+          "previous": "No",
+          "_sample": true
+        },
+        "bu_ei2_remedial_action": {
+          "current": "Not a Designated Consumer under BEE PAT Cycle; voluntary energy audits conducted annually.",
+          "previous": "Voluntary energy audits completed.",
+          "_sample": true
+        },
+        "bu_ei4_zld_implemented": {
+          "current": "Yes",
+          "previous": "Yes",
+          "_sample": true
+        },
+        "bu_ei4_zld_details": {
+          "current": "Zero Liquid Discharge implemented at 100% of batching plants and tunnel portals via closed-loop settling tanks and STP reuse.",
+          "previous": "Implemented across 85% of sites.",
+          "_sample": true
+        },
+        "bu_ei9_waste_strategy": {
+          "current": "100% segregation at source; hazardous waste oil & batteries routed strictly through SPCB-authorized recyclers; C&D muck reused for embankment fill.",
+          "previous": "Source segregation and authorized disposal active.",
+          "_sample": true
+        },
+        "bu_li7_bcp_plan": {
+          "current": "ISO 22301-aligned Emergency Preparedness & Disaster Management Plan covering flash floods, landslides, and fuel spills.",
+          "previous": "Site emergency drills conducted quarterly.",
+          "_sample": true
+        }
+      }
+    },
+    "BU-POWER": {
+      "bu_supervisor": {
+        "bu_li4_scope3": {
+          "current": 4850.0,
+          "previous": 5100.0,
+          "_sample": true
+        },
+        "bu_li8_adverse_impact": {
+          "current": "High embodied carbon in cement/bitumen haulage; mitigated via regional sourcing within 150 km and electric mixer fleet pilots.",
+          "previous": "Regional aggregate sourcing initiated.",
+          "_sample": true
+        },
+        "bu_li9_vc_assessed_pct": {
+          "current": 76.0,
+          "previous": 65.0,
+          "_sample": true
+        }
+      },
+      "bu_admin": {
+        "bu_ei2_pat_applicable": {
+          "current": "No",
+          "previous": "No",
+          "_sample": true
+        },
+        "bu_ei2_targets_achieved": {
+          "current": "No",
+          "previous": "No",
+          "_sample": true
+        },
+        "bu_ei2_remedial_action": {
+          "current": "Not a Designated Consumer under BEE PAT Cycle; voluntary energy audits conducted annually.",
+          "previous": "Voluntary energy audits completed.",
+          "_sample": true
+        },
+        "bu_ei4_zld_implemented": {
+          "current": "Yes",
+          "previous": "Yes",
+          "_sample": true
+        },
+        "bu_ei4_zld_details": {
+          "current": "Zero Liquid Discharge implemented at 100% of batching plants and tunnel portals via closed-loop settling tanks and STP reuse.",
+          "previous": "Implemented across 85% of sites.",
+          "_sample": true
+        },
+        "bu_ei9_waste_strategy": {
+          "current": "100% segregation at source; hazardous waste oil & batteries routed strictly through SPCB-authorized recyclers; C&D muck reused for embankment fill.",
+          "previous": "Source segregation and authorized disposal active.",
+          "_sample": true
+        },
+        "bu_li7_bcp_plan": {
+          "current": "ISO 22301-aligned Emergency Preparedness & Disaster Management Plan covering flash floods, landslides, and fuel spills.",
+          "previous": "Site emergency drills conducted quarterly.",
+          "_sample": true
+        }
+      }
+    },
+    "MEGHA-POWER-EPC": {
+      "subsidiary_supervisor": {
+        "sub_ei7_rows": {
+          "current": [
+            {
+              "title": "Solar Open-Access PPA for Highway Plants",
+              "details": "4.5 MWp captive solar procurement across Odisha & Telangana corridor plants."
+            }
+          ],
+          "previous": [],
+          "_sample": true
+        },
+        "sub_li6_rows": {
+          "current": [
+            {
+              "initiative": "Fly-Ash & GGBS Blended Concrete Adoption",
+              "details": "Replaced 30% OPC with fly-ash/slag in structural concrete.",
+              "outcome": "Reduced clinker emissions by ~1,120 tCO2e"
+            }
+          ],
+          "previous": [],
+          "_sample": true
+        }
+      },
+      "subsidiary_admin": {
+        "sub_ei12_compliant": {
+          "current": "Yes",
+          "previous": "Yes",
+          "_sample": true
+        },
+        "sub_ei12_statement": {
+          "current": "Compliant with Water Act 1974, Air Act 1981, and Environment (Protection) Act 1986; zero pending show-cause notices.",
+          "previous": "Fully compliant.",
+          "_sample": true
+        },
+        "sub_ei12_rows": {
+          "current": [],
+          "previous": [],
+          "_sample": true
+        },
+        "sub_ei11_rows": {
+          "current": [
+            {
+              "project": "Odisha Expressway Corridor Package-II",
+              "notification_no": "MoEFCC-IA/2022/901",
+              "date": "2022-03-15",
+              "independent_agency": "Yes",
+              "public_domain": "Yes",
+              "web_link": "https://parivesh.nic.in/eia-odisha-pkg2"
+            }
+          ],
+          "previous": [],
+          "_sample": true
+        }
+      }
+    }
+  },
+  "evidence": {
+    "PRJ-ZOJILA-P7": {
+      "project_admin": {
+        "pa_ei7_has_project": {
+          "current": [
+            {
+              "evidence_id": "35cc39e3-6cc1-4f38-b9bb-f7ab7d1b0cdc",
+              "file_name": "bu.jpeg",
+              "file_path": "C:\\Users\\codes\\Desktop\\BRSR-project\\backend\\uploads\\evidence\\PRJ-ZOJILA-P7\\project_admin\\pa_ei7_has_project\\7dff555678914b66b2f29d7994e059d4_bu.jpeg",
+              "mime_type": "image/jpeg",
+              "uploaded_by": "project.admin@aarohan.in",
+              "uploaded_at": "2026-11-12T12:12:54.003352+00:00",
+              "fy_key": "current"
+            }
+          ]
+        }
+      },
+      "project_supervisor": {
+        "ei1_ren_elec": {
+          "current": [
+            {
+              "evidence_id": "29b5cc00-984c-4baa-a725-bb34824d42bf",
+              "file_name": "bu.jpeg",
+              "file_path": "C:\\Users\\codes\\Desktop\\BRSR-project\\backend\\uploads\\evidence\\PRJ-ZOJILA-P7\\project_supervisor\\ei1_ren_elec\\6eb80558bac94a5cbd785eb51e788afa_bu.jpeg",
+              "mime_type": "image/jpeg",
+              "uploaded_by": "project.supervisor@aarohan.in",
+              "uploaded_at": "2026-11-12T12:44:09.154001+00:00",
+              "fy_key": "current"
+            },
+            {
+              "evidence_id": "696a90f7-58f2-4737-bfd5-e5e58535e8f6",
+              "file_name": "proj.jpeg",
+              "file_path": "C:\\Users\\codes\\Desktop\\BRSR-project\\backend\\uploads\\evidence\\PRJ-ZOJILA-P7\\project_supervisor\\ei1_ren_elec\\275e93c08e654720a453b56d6f55ebf4_proj.jpeg",
+              "mime_type": "image/jpeg",
+              "uploaded_by": "project.supervisor@aarohan.in",
+              "uploaded_at": "2026-11-12T12:44:16.461612+00:00",
+              "fy_key": "current"
+            }
+          ]
+        }
+      }
+    }
+  }
+}

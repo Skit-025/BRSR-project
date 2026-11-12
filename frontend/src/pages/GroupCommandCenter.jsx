@@ -226,9 +226,9 @@ function TrendAreaChart({ trendPoints = [] }) {
         </defs>
 
         {/* Y Axis Guide Lines & Labels */}
-        {[0, 0.5, 1.0].map((ratio, idx) => {
-          const y = chartH - ratio * (chartH - 10);
-          const valNum = ratio * scaleMax;
+        {[0, 0.5, 1.0].map((tick, idx) => {
+          const y = chartH - tick * (chartH - 10);
+          const valNum = tick * scaleMax;
           const valLabel = scaleMax >= 1000 ? `${Math.round(valNum / 1000)}K` : `${Math.round(valNum)}t`;
           return (
             <g key={idx}>

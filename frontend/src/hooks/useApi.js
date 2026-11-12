@@ -49,6 +49,15 @@ export const useDashboardSummary = (periodId, entityId, opts) => {
   });
 };
 
+export const usePrinciple6Rolldown = (periodId, entityId, opts) => {
+  return useQuery({
+    queryKey: ['principle6-rolldown', periodId, entityId],
+    queryFn: () => dashboardsApi.getPrinciple6Rolldown(periodId, entityId).then(r => r.data),
+    enabled: Boolean(periodId && entityId),
+    ...opts,
+  });
+};
+
 export const useGroupOverview = (periodId, entityId, opts) => {
   return useQuery({
     queryKey: ['group-overview', periodId, entityId],

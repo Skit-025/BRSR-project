@@ -49,8 +49,8 @@ FULL_FACTOR_CATALOGUE = {
 }
 
 LLM_SYSTEM_PROMPT = """You are a senior GHG accounting specialist with expertise in SEBI BRSR Core, 
-the GHG Protocol Corporate Value Chain (Scope 3) Standard, and IPCC emission factors for Indian 
-infrastructure projects. Your role is to VALIDATE a formula-based Scope 3 emission estimate and 
+the GHG Protocol Corporate Value Chain (Scope 3) Standard for Indian 
+infrastructure projects. Your role is to VALIDATE a Scope 3 emission estimate and 
 provide enriched guidance for BRSR disclosure.
 
 Rules:
@@ -128,6 +128,9 @@ Return this exact JSON schema (no other text):
             schema_dict=schema,
             system_prompt=LLM_SYSTEM_PROMPT
         )
+        if is_fallback:
+            logger.info("E6 LLM validation skipped because AI gateway returned mock fallback.")
+            return None
         if raw_output and isinstance(raw_output, dict):
             logger.info(f"E6 LLM validation succeeded via {provider_used}: formula_appropriate={raw_output.get('formula_is_appropriate')}, adjusted={raw_output.get('adjusted_tco2e')}")
             return raw_output

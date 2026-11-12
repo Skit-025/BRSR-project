@@ -195,7 +195,9 @@ def build_scoped_digital_form(
 
     # Fetch existing data points if submission pack exists
     current_values: Dict[str, Any] = {}
+    current_units: Dict[str, str] = {}
     current_notes: Dict[str, str] = {}
+    current_evidences: Dict[str, List[Dict[str, Any]]] = {}
     sub_id = None
     sub_status = "DRAFT"
 
@@ -207,9 +209,32 @@ def build_scoped_digital_form(
         if sub:
             sub_id = str(sub.id)
             sub_status = sub.status
+            from app.modules.evidence.models import EvidenceLink, EvidenceFile
+            dp_ids = [dp.id for dp in sub.data_points]
+            ev_by_dp: Dict[str, List[Dict[str, Any]]] = {}
+            if dp_ids:
+                links = (
+                    db.query(EvidenceLink, EvidenceFile)
+                    .join(EvidenceFile, EvidenceLink.evidence_id == EvidenceFile.id)
+                    .filter(
+                        EvidenceLink.data_point_id.in_(dp_ids),
+                        EvidenceFile.deleted_at.is_(None),
+                    )
+                    .all()
+                )
+                for lnk, ef in links:
+                    ev_by_dp.setdefault(str(lnk.data_point_id), []).append({
+                        "id": str(ef.id),
+                        "display_id": ef.evidence_display_id or f"EVD-{str(ef.id)[:8].upper()}",
+                        "name": ef.original_name,
+                        "category": ef.doc_category or "Bill",
+                        "bill_type": ef.bill_type or "Unknown",
+                    })
             for dp in sub.data_points:
                 current_values[dp.metric_code] = dp.value_numeric if dp.value_numeric is not None else dp.value_text
+                current_units[dp.metric_code] = dp.unit
                 current_notes[dp.metric_code] = dp.notes
+                current_evidences[dp.metric_code] = ev_by_dp.get(str(dp.id), [])
 
     # Dynamic Applicable Metrics for this specific subsidiary/project
     applicable_metric_codes = set()
@@ -246,9 +271,9 @@ def build_scoped_digital_form(
 
     all_metrics = db.query(Metric).filter(Metric.is_deleted == False).order_by(Metric.principle, Metric.code).all()
 
-    # Role capability flags (Five-Role Architecture)
-    is_maker = user_role in [Role.PROJECT_ADMIN.value, Role.SYSTEM_ADMIN.value, Role.GROUP_ADMIN.value]
-    is_checker = user_role in [Role.BU_ADMIN.value, Role.SUBSIDIARY_ADMIN.value, Role.GROUP_ADMIN.value, Role.SYSTEM_ADMIN.value]
+    # Role capability flags
+    is_maker = user_role in [Role.PROJECT_SUPERVISOR.value, Role.PROJECT_ADMIN.value, Role.SYSTEM_ADMIN.value, Role.GROUP_ADMIN.value]
+    is_checker = user_role in [Role.PROJECT_ADMIN.value, Role.BU_ADMIN.value, Role.SUBSIDIARY_ADMIN.value, Role.GROUP_ADMIN.value, Role.SYSTEM_ADMIN.value]
     is_auditor = user_role == Role.SYSTEM_ADMIN.value
 
     # Determine the entity's node type for gating and entry_level filtering
@@ -277,13 +302,62 @@ def build_scoped_digital_form(
             return "SCOPE 2"
         if code.startswith("ENV-GHG-003"):
             return "SCOPE 3"
-        if code.startswith("ENV-ENERGY"):
+        if code.startswith("ENV-ENERGY") or code.startswith("ENV-FUEL"):
             return "ENERGY"
         if code.startswith("ENV-WATER"):
             return "WATER"
         if code.startswith("ENV-WASTE"):
             return "WASTE"
+        if code.startswith("ENV-AIR"):
+            return "AIR"
         return None
+
+    def _p6_group_and_ref(code: str) -> tuple[str | None, str | None]:
+        if code.startswith("ENV-ENERGY") or code.startswith("ENV-FUEL"):
+            return ("EI-1: Energy Consumption", "EI-1")
+        if code == "ENV-PAT-001":
+            return ("EI-2: PAT Scheme", "EI-2")
+        if code.startswith("ENV-WATER-DIS"):
+            return ("EI-4: Water Discharge", "EI-4")
+        if code == "ENV-WATER-ZLD":
+            return ("EI-5: Zero Liquid Discharge", "EI-5")
+        if code == "ENV-WATER-STRESSED-FLAG":
+            return ("LI-1: Water-Stressed Areas", "LI-1")
+        if code.startswith("ENV-WATER"):
+            return ("EI-3: Water Withdrawal & Consumption", "EI-3")
+        if code.startswith("ENV-AIR"):
+            return ("EI-6: Air Emissions (Non-GHG)", "EI-6")
+        if code.startswith("ENV-GHG-001") or code.startswith("ENV-GHG-002"):
+            return ("EI-7: GHG Emissions (Scope 1 & 2)", "EI-7")
+        if code == "ENV-GHG-REDUCE-001":
+            return ("EI-8: GHG Reduction Projects", "EI-8")
+        if code == "ENV-WASTE-STRAT-001":
+            return ("EI-10: Waste Strategy", "EI-10")
+        if code.startswith("ENV-WASTE"):
+            return ("EI-9: Waste Management", "EI-9")
+        if code == "ENV-ECO-SENSITIVE-001":
+            return ("EI-11: Eco-Sensitive Areas", "EI-11")
+        if code == "ENV-EIA-001":
+            return ("EI-12: Environmental Impact Assessment", "EI-12")
+        if code == "ENV-COMP-001":
+            return ("EI-13: Environmental Law Compliance", "EI-13")
+        if code.startswith("ENV-GHG-003"):
+            return ("LI-2: Scope 3 Value Chain Emissions", "LI-2")
+        if code == "ENV-BIO-001":
+            return ("LI-3: Biodiversity Impact", "LI-3")
+        if code == "ENV-EFFICIENCY-001":
+            return ("LI-4: Resource Efficiency Initiatives", "LI-4")
+        if code == "ENV-BCP-001":
+            return ("LI-5: Business Continuity & Disaster Plan", "LI-5")
+        if code == "ENV-VC-IMPACT-001":
+            return ("LI-6: Value Chain Environmental Impact", "LI-6")
+        if code == "ENV-VC-ASSESSED-PCT":
+            return ("LI-7: Value Chain Partners Assessed", "LI-7")
+        if code.startswith("ENV-GREEN-CREDITS"):
+            return ("LI-8: Green Credits", "LI-8")
+        if code == "ENV-ASSURANCE-P6":
+            return ("Assurance Parameters", "EI-1/3/7/9")
+        return (None, None)
 
     sections_dict: Dict[str, List[FormField]] = {}
     for m in all_metrics:
@@ -299,8 +373,10 @@ def build_scoped_digital_form(
             continue
 
         # ── GATE 3: Applicability rules (project type / flags) ───────────────
+        from app.modules.org.applicability.engine import APPLICABILITY_RULES
+        rule_governed_codes = {r["metric_code"] for r in APPLICABILITY_RULES}
         if entity and entity_node_type not in ("group", "company") and applicable_metric_codes:
-            if m.code not in applicable_metric_codes:
+            if m.code in rule_governed_codes and m.code not in applicable_metric_codes:
                 continue
 
         p = f"P{m.principle}" if m.principle else "P6"
@@ -309,6 +385,8 @@ def build_scoped_digital_form(
         ind_type = "Essential" if (getattr(m, 'indicator_type', None) == "essential" or m.brsr_core) else "Leadership"
         p_num = m.principle or 6
         disclosure_name = f"Principle {p_num}: {ind_type} Indicator — {m.name}"
+
+        p6_group, indicator_ref = _p6_group_and_ref(m.code) if p_num == 6 else (None, None)
 
         field = FormField(
             metric_code=m.code,
@@ -323,6 +401,8 @@ def build_scoped_digital_form(
             is_mandatory=bool(m.brsr_core),
             read_only=False,
             current_value=current_values.get(m.code),
+            current_unit=current_units.get(m.code),
+            existing_evidences=current_evidences.get(m.code, []),
             notes=current_notes.get(m.code),
             formula_ref=m.calc_formula_code,
             # ── New fields ──────────────────────────────────────────────────
@@ -331,6 +411,8 @@ def build_scoped_digital_form(
             why_needed=getattr(m, 'why_needed', None),
             document_hint=getattr(m, 'document_hint', None),
             scope_badge=_scope_badge(m.code),
+            p6_group=p6_group,
+            indicator_ref=indicator_ref,
             is_brsr_core=bool(m.brsr_core),
             evidence_rule=getattr(m, 'evidence_rule', 'mandatory') or 'mandatory',
         )

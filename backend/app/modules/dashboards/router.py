@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, Query, HTTPException, status
 from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.modules.org.models import OrgNode, ReportingPeriod
-from app.modules.dashboards.schemas import ExecutiveDashboardSummary, CommandCenterResponse, GroupOverviewResponse, GroupOverviewDesignResponse
+from app.modules.dashboards.schemas import ExecutiveDashboardSummary, CommandCenterResponse, GroupOverviewResponse, GroupOverviewDesignResponse, Principle6RolldownResponse
 from app.modules.dashboards.service import DashboardService
 
 router = APIRouter(prefix="/dashboards", tags=["ESG Analytics & Dashboards"])
@@ -127,6 +127,43 @@ def get_group_overview_design(
         entity_id=entity_id,
         current_user=current_user,
     )
+
+
+@router.get("/principle6-rolldown", response_model=Principle6RolldownResponse)
+def get_principle6_rolldown(
+    period_id: Optional[str] = Query(None),
+    entity_id: Optional[str] = Query(None),
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Top-down Principle 6 roll-down endpoint for all admin tiers (Group -> Subsidiary -> BU -> Project).
+    """
+    if not entity_id:
+        if current_user.role not in (
+            Role.SYSTEM_ADMIN.value,
+            Role.GROUP_ADMIN.value,
+            Role.GROUP_SUPERVISOR.value,
+            Role.GROUP_ESG_MANAGER.value,
+        ) and current_user.org_node_id:
+            entity_id = str(current_user.org_node_id)
+        else:
+            root = db.query(OrgNode).filter(OrgNode.type == "group", OrgNode.is_deleted == False).first() or db.query(OrgNode).filter(OrgNode.is_deleted == False).first()
+            if not root:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No organization nodes configured.")
+            entity_id = str(root.id)
+
+    if not period_id:
+        latest_p = db.query(ReportingPeriod).order_by(ReportingPeriod.start_date.desc()).first()
+        if not latest_p:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No reporting periods configured.")
+        period_id = str(latest_p.id)
+
+    if current_user.role != Role.SYSTEM_ADMIN.value:
+        assert_user_authorized_for_project(db, current_user, str(entity_id), "view Principle 6 dashboard for this entity")
+
+    service = DashboardService(db)
+    return service.get_principle6_rolldown(period_id=period_id, entity_id=entity_id, current_user=current_user)
 
 
 

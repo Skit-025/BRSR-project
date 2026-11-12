@@ -1,6 +1,6 @@
 """
 app/modules/valuechain/models.py
-SEBI BRSR Core Value Chain Partner and Assessment models (Top 75% spend/revenue rule).
+SEBI BRSR Core Value Chain Partner and Assessment models.
 """
 import enum
 from sqlalchemy import Column, String, Float, Boolean, Integer, DateTime, ForeignKey, text

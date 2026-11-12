@@ -29,7 +29,7 @@ TOPIC_KEYWORDS: Dict[str, List[str]] = {
     ],
     "ENV-WATER-001": [
         "water", "groundwater", "water withdrawal", "water discharge", "water consumption",
-        "water intensity", "kl", "kilolitre", "cubic meter", "sewerage", "third-party water"
+        "water withdrawal", "kl", "kilolitre", "cubic meter", "sewerage", "third-party water"
     ],
     "ENV-WASTE-001": [
         "waste", "hazardous", "non-hazardous", "plastic", "e-waste", "manifest",
@@ -44,7 +44,7 @@ TOPIC_KEYWORDS: Dict[str, List[str]] = {
     ],
     "SOC-EMP-001": [
         "employee", "employees", "worker", "workers", "headcount", "gender",
-        "diversity", "disability", "differently abled", "permanent", "turnover"
+        "diversity", "disability", "differently abled", "permanent", "attrition"
     ],
     "SOC-WELF-001": [
         "training", "skill", "upskilling", "development", "training hours", "skill upgradation"

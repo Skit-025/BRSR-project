@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 import { useOrgNodes, useOrgPeriods, useScopedForm, useSavePack, useSubmitPack, useFuelCatalog } from "../hooks/useApi";
 import { useAuth } from "../context/AuthContext";
-import { collectionApi, evidenceApi, calcApi, validationApi, aiApi } from "../api/client";
+import { collectionApi, evidenceApi, calcApi, validationApi, aiApi, workflowApi } from "../api/client";
 import Modal from "../components/Modal";
 import PageHelpButton from "../components/PageHelpButton";
 
@@ -77,6 +77,9 @@ function EvidenceAttachPanel({
   unit,
   evidenceRule,
   projectId,
+  entryMode = "manual",
+  existingEvidences = [],
+  readOnly = false,
   onUploaded,
   onDeleted,
   onValueConfirmed,
@@ -90,8 +93,22 @@ function EvidenceAttachPanel({
   const [isDragging, setIsDragging] = useState(false);
   const [error, setError] = useState(null);
   const [aiRejection, setAiRejection] = useState(null);
-  const [attachedFiles, setAttachedFiles] = useState([]);
+  const [attachedFiles, setAttachedFiles] = useState(() => existingEvidences || []);
   const [pendingEvidence, setPendingEvidence] = useState(null);
+
+  React.useEffect(() => {
+    if (Array.isArray(existingEvidences) && existingEvidences.length > 0) {
+      setAttachedFiles(prev => {
+        const byId = new Map(prev.map(x => [x.id, x]));
+        existingEvidences.forEach(ev => {
+          if (ev?.id && !byId.has(ev.id)) {
+            byId.set(ev.id, ev);
+          }
+        });
+        return Array.from(byId.values());
+      });
+    }
+  }, [existingEvidences]);
 
   // AI review & confirmation state
   const [extractedField, setExtractedField] = useState(null);
@@ -120,80 +137,72 @@ function EvidenceAttachPanel({
     e.preventDefault();
     e.stopPropagation();
     setIsDragging(false);
-    const files = e.dataTransfer?.files;
-    if (files && files.length > 0) {
-      handleFileSelected(files[0]);
+    const files = Array.from(e.dataTransfer?.files || []);
+    if (files.length > 0) {
+      handleFilesSelected(files);
     }
   };
 
   const handleFileInputChange = (e) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      handleFileSelected(file);
+    const files = Array.from(e.target.files || []);
+    if (files.length > 0) {
+      handleFilesSelected(files);
     }
     if (e.target) e.target.value = "";
   };
 
-  const handleFileSelected = async (file) => {
+  const handleFilesSelected = async (files) => {
     setError(null);
     setAiRejection(null);
     setExtractedField(null);
     setConfirmedSuccess(null);
 
-    // Size validation only — any format accepted (incl. browser-dragged images like .webp)
-    if (file.size > 25 * 1024 * 1024) {
-      setError("File exceeds maximum size limit (25 MB).");
-      return;
-    }
-
-    // Soft bill-type mismatch hint (non-blocking)
-    const ext = "." + (file.name.split(".").pop() || "").toLowerCase();
-    const BILL_TYPE_HINTS = {
-      Electricity: [".pdf", ".jpg", ".jpeg", ".png", ".webp"],
-      Fuel:        [".pdf", ".jpg", ".jpeg", ".png", ".webp"],
-      Gas:         [".pdf", ".jpg", ".jpeg", ".png", ".webp"],
-      Water:       [".pdf", ".jpg", ".jpeg", ".png", ".webp"],
-      Waste:       [".pdf", ".xlsx", ".xls", ".csv", ".jpg", ".jpeg", ".png", ".webp"],
-      Other:       null, // any format accepted
-    };
-    const allowedForType = BILL_TYPE_HINTS[billType];
-    if (allowedForType && !allowedForType.includes(ext)) {
-      // Still allow the upload but surface a contextual note
-      setError(
-        `Note: "${ext}" files are uncommon for a ${billType} bill. ` +
-        `Make sure this document actually contains ${billType} usage data.`
-      );
-      // Don't return — let the upload proceed
-    }
+    const validFiles = files.filter(file => {
+      if (file.size > 25 * 1024 * 1024) {
+        setError(`"${file.name}" exceeds maximum size limit (25 MB).`);
+        return false;
+      }
+      return true;
+    });
+    if (validFiles.length === 0) return;
 
     setUploading(true);
+    let lastUploaded = null;
     try {
-      const fd = new FormData();
-      fd.append("file", file);
-      fd.append("doc_category", stickyDocType || "Bill");
-      fd.append("bill_type", (stickyDocType || "Bill") === "Bill" ? billType : "Unknown");
-      fd.append("project_id", projectId || "__");
-      fd.append("esg_indicator", metricCode);
-      fd.append("doc_type_hint", (stickyDocType || "Bill") === "Bill" ? billType : "OTHER");
-      fd.append("run_ocr", "false"); // Immediate attachment without blocking
+      for (const file of validFiles) {
+        const fd = new FormData();
+        fd.append("file", file);
+        fd.append("doc_category", stickyDocType || "Bill");
+        fd.append("bill_type", (stickyDocType || "Bill") === "Bill" ? billType : "Unknown");
+        fd.append("project_id", projectId || "__");
+        fd.append("esg_indicator", metricCode);
+        fd.append("doc_type_hint", (stickyDocType || "Bill") === "Bill" ? billType : "OTHER");
+        fd.append("run_ocr", "false");
 
-      const res = await evidenceApi.upload(fd);
-      const ev = res.data?.evidence;
-      const displayId = ev?.evidence_display_id || ("EVD-" + (ev?.id || "").replace(/-/g, "").slice(0, 8).toUpperCase());
+        const res = await evidenceApi.upload(fd);
+        const ev = res.data?.evidence;
+        const displayId = ev?.evidence_display_id || ("EVD-" + (ev?.id || "").replace(/-/g, "").slice(0, 8).toUpperCase());
 
-      const item = {
-        id: ev?.id,
-        displayId: displayId,
-        name: file.name,
-        category: stickyDocType || "Bill",
-        billType: (stickyDocType || "Bill") === "Bill" ? billType : "Unknown",
-        uploadedAt: new Date().toLocaleTimeString(),
-        contributedValue: null,
-      };
+        const item = {
+          id: ev?.id,
+          displayId: displayId,
+          name: file.name,
+          category: stickyDocType || "Bill",
+          billType: (stickyDocType || "Bill") === "Bill" ? billType : "Unknown",
+          uploadedAt: new Date().toLocaleTimeString(),
+          contributedValue: null,
+        };
 
-      setAttachedFiles(prev => [...prev, item]);
-      setPendingEvidence(item);
-      onUploaded?.(ev?.id);
+        setAttachedFiles(prev => [...prev, item]);
+        onUploaded?.(ev?.id);
+        lastUploaded = item;
+      }
+
+      if (entryMode === "ai" && lastUploaded) {
+        setPendingEvidence(lastUploaded);
+      } else if (lastUploaded) {
+        setConfirmedSuccess(`✓ Attached ${validFiles.length} evidence file${validFiles.length > 1 ? "s" : ""} rapidly. You can add more or enter value manually.`);
+      }
     } catch (err) {
       setError(err.response?.data?.detail || "Upload failed. Please try again.");
     } finally {
@@ -386,8 +395,8 @@ function EvidenceAttachPanel({
         )}
       </div>
 
-      {/* ── Drag & Drop Upload Dropzone ── */}
-      {!pendingEvidence && !extractedField && (
+      {/* ── Drag & Drop Rapid Multi-Evidence Upload Dropzone ── */}
+      {!readOnly && !pendingEvidence && !extractedField && (
         <div
           onDragEnter={handleDragEnter}
           onDragOver={handleDragOver}
@@ -397,13 +406,14 @@ function EvidenceAttachPanel({
           style={{
             border: isDragging ? "2px dashed #2563eb" : "1.5px dashed #cbd5e1",
             background: isDragging ? "rgba(37, 99, 235, 0.05)" : "#fff",
-            borderRadius: 8, padding: "14px 16px", textAlign: "center", cursor: "pointer",
+            borderRadius: 8, padding: "12px 16px", textAlign: "center", cursor: "pointer",
             transition: "all 0.18s ease"
           }}
         >
           <input
             ref={fileInputRef}
             type="file"
+            multiple
             accept=".pdf,.jpg,.jpeg,.png,.xlsx,.xls,.csv"
             style={{ display: "none" }}
             onChange={handleFileInputChange}
@@ -416,10 +426,14 @@ function EvidenceAttachPanel({
               <Upload size={20} style={{ color: isDragging ? "#2563eb" : "#64748b" }} />
             )}
             <div style={{ fontSize: 12.5, fontWeight: 600, color: "#1e293b" }}>
-              {uploading ? "Registering document & generating Evidence ID…" : "Drag & drop document here, or click to upload"}
+              {uploading
+                ? "Registering evidence file(s) & generating Evidence IDs…"
+                : entryMode === "ai"
+                  ? "AI Mode: Drop or select 1 or more bills/manifests to extract"
+                  : "Manual Mode: Drop or select multiple evidence files rapidly"}
             </div>
             <div style={{ fontSize: 10.5, color: "#94a3b8" }}>
-              Supports PDF, JPG, PNG, XLSX, CSV (Max 25MB)
+              Multi-file supported · PDF, JPG, PNG, XLSX, CSV (Max 25MB each)
             </div>
           </div>
         </div>
@@ -660,6 +674,19 @@ function EvidenceAttachPanel({
                 )}
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                {!readOnly && entryMode === "ai" && f.id && (
+                  <button
+                    type="button"
+                    onClick={() => { setPendingEvidence(f); setExtractedField(null); setAiRejection(null); }}
+                    style={{
+                      background: "#eff6ff", border: "1px solid #bfdbfe", color: "#2563eb",
+                      borderRadius: 4, padding: "2px 6px", fontSize: 10.5, fontWeight: 700,
+                      cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 3
+                    }}
+                  >
+                    <Sparkles size={10} /> Extract AI
+                  </button>
+                )}
                 {f.id && (
                   <a
                     href={evidenceApi.getViewUrl(f.id)}
@@ -670,7 +697,7 @@ function EvidenceAttachPanel({
                     <ExternalLink size={11} /> View
                   </a>
                 )}
-                {f.id && (
+                {!readOnly && f.id && (
                   <button
                     type="button"
                     onClick={() => handlePromptDelete(f)}
@@ -811,10 +838,11 @@ function EvidenceAttachPanel({
 function GuidanceCard({ field, open, onToggle, isCalculated }) {
   const [aiLoading, setAiLoading] = useState(false);
   const [aiAnswer, setAiAnswer] = useState(null);
+  const [aiError, setAiError] = useState(null);
   const [customQuestion, setCustomQuestion] = useState("");
 
   const defaultWhy = field.why_needed || `Mandatory ESG disclosure parameter under BRSR ${field.scope_badge || 'reporting framework'}. Entered values are validated against historical thresholds and rolled up to corporate disclosures.`;
-  const defaultWhat = field.guidance_text || `Enter the exact raw operational quantity (${field.unit || 'units'}). Note: You only provide raw operational facts; the platform automatically calculates carbon emissions and intensities.`;
+  const defaultWhat = field.guidance_text || `Enter the exact raw operational quantity (${field.unit || 'units'}). Note: You only provide raw operational facts; the platform automatically computes roll-up totals.`;
   const defaultDocs = field.document_hint || `Upload original supplier invoices, utility bills, meter calibration logs, or weighbridge receipts verifying the reported quantity.`;
 
   // Realistic examples & sources for demonstration
@@ -830,6 +858,7 @@ function GuidanceCard({ field, open, onToggle, isCalculated }) {
   const handleAskAi = async (q) => {
     const query = q || `What constitutes ${field.metric_code} (${field.metric_name || field.name || 'this parameter'}) under SEBI BRSR Principle ${field.principle || 6}?`;
     setAiLoading(true);
+    setAiError(null);
     try {
       const res = await aiApi.explainField({
         indicator_code: field.metric_code,
@@ -838,10 +867,8 @@ function GuidanceCard({ field, open, onToggle, isCalculated }) {
       setAiAnswer(res.data);
     } catch (err) {
       console.error("AI RAG error:", err);
-      setAiAnswer({
-        answer: `Guidance Note reference: ${field.metric_code} reporting requires operational data substantiated by primary meter logs or utility invoices. Values roll up under Principle ${field.principle || 6}.`,
-        citations: [{ doc: "SEBI BRSR Guidance Note", version: "2023", section: `Principle ${field.principle || 6}` }]
-      });
+      setAiAnswer(null);
+      setAiError(err?.response?.data?.detail || "AI guidance service is currently unavailable. Please refer to the statutory guidance above.");
     } finally {
       setAiLoading(false);
     }
@@ -907,6 +934,12 @@ function GuidanceCard({ field, open, onToggle, isCalculated }) {
               </strong>
               {aiLoading && <span style={{ fontSize: 10, color: "#7c3aed", fontWeight: 600 }}>Querying Guidance Note...</span>}
             </div>
+
+            {aiError && (
+              <div style={{ background: "#fef2f2", padding: "8px 12px", borderRadius: 6, border: "1px solid #fecaca", fontSize: 11.5, color: "#991b1b", marginBottom: 8 }}>
+                {aiError}
+              </div>
+            )}
 
             {aiAnswer ? (
               <div style={{ background: "#f5f3ff", padding: "10px 12px", borderRadius: 6, border: "1px solid #ddd6fe" }}>
@@ -1091,11 +1124,28 @@ function PreSubmissionModal({ open, onClose, onConfirm, submitting, stats, valid
 }
 
 // ─── Single Parameter Field ─────────────────────────────────────────────────
-function ParameterField({ field, value, onChange, readOnly, submissionStatus, onEvidenceUploaded, onEvidenceDeleted, projectId, stickyDocType, setStickyDocType }) {
+function ParameterField({
+  field,
+  value,
+  selectedUnit,
+  entryMode = "manual",
+  onChange,
+  onUnitChange,
+  onEntryModeChange,
+  readOnly,
+  submissionStatus,
+  onEvidenceUploaded,
+  onEvidenceDeleted,
+  projectId,
+  stickyDocType,
+  setStickyDocType,
+}) {
   const [showGuidance, setShowGuidance] = useState(false);
   const [localError, setLocalError] = useState(null);
 
   const isLocked = readOnly || !["DRAFT", "RETURNED"].includes(submissionStatus || "DRAFT");
+  const activeUnit = selectedUnit || field.current_unit || field.unit || "";
+  const unitOptions = Array.from(new Set([field.unit, ...(field.allowed_units || [])].filter(Boolean)));
 
   const handleChange = (v) => {
     setLocalError(null);
@@ -1151,8 +1201,7 @@ function ParameterField({ field, value, onChange, readOnly, submissionStatus, on
     field.calc_formula_code ||
     field.formula_ref ||
     field.entry_level === "calculated" ||
-    (field.metric_code?.startsWith("ENV-GHG") && !field.metric_code?.includes("FUEL")) ||
-    field.metric_code?.includes("INTENSITY")
+    (field.metric_code?.startsWith("ENV-GHG") && !field.metric_code?.includes("FUEL"))
   );
 
   const effectiveLocked = isLocked || isCalculated;
@@ -1232,13 +1281,50 @@ function ParameterField({ field, value, onChange, readOnly, submissionStatus, on
             )}
           </div>
         </div>
-        <span style={{
-          fontSize: 10, color: "#94a3b8", background: "#f8fafc",
-          border: "1px solid #e2e8f0", borderRadius: 6, padding: "3px 8px",
-          whiteSpace: "nowrap", fontWeight: 600
-        }}>
-          {field.metric_code}
-        </span>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+          {!effectiveLocked && (
+            <div
+              role="group"
+              aria-label={`Entry mode for ${field.metric_code}`}
+              style={{
+                display: "inline-flex", background: "#f1f5f9", border: "1px solid #e2e8f0",
+                borderRadius: 7, padding: 2
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => onEntryModeChange?.(field.metric_code, "manual")}
+                style={{
+                  display: "inline-flex", alignItems: "center", gap: 4,
+                  padding: "3px 9px", fontSize: 11, fontWeight: 700, borderRadius: 5, border: "none", cursor: "pointer",
+                  background: entryMode === "manual" ? "#0f172a" : "transparent",
+                  color: entryMode === "manual" ? "#fff" : "#64748b",
+                }}
+              >
+                <Edit3 size={11} /> Manual
+              </button>
+              <button
+                type="button"
+                onClick={() => onEntryModeChange?.(field.metric_code, "ai")}
+                style={{
+                  display: "inline-flex", alignItems: "center", gap: 4,
+                  padding: "3px 9px", fontSize: 11, fontWeight: 700, borderRadius: 5, border: "none", cursor: "pointer",
+                  background: entryMode === "ai" ? "#2563eb" : "transparent",
+                  color: entryMode === "ai" ? "#fff" : "#64748b",
+                }}
+              >
+                <Sparkles size={11} /> AI
+              </button>
+            </div>
+          )}
+          <span style={{
+            fontSize: 10, color: "#94a3b8", background: "#f8fafc",
+            border: "1px solid #e2e8f0", borderRadius: 6, padding: "3px 8px",
+            whiteSpace: "nowrap", fontWeight: 600
+          }}>
+            {field.metric_code}
+          </span>
+        </div>
       </div>
 
       {/* Input Row */}
@@ -1274,13 +1360,29 @@ function ParameterField({ field, value, onChange, readOnly, submissionStatus, on
             min="0"
           />
         )}
-        <span style={{
-          padding: "10px 14px", background: "#f1f5f9", border: "1px solid #e2e8f0",
-          borderRadius: 8, fontSize: 13, fontWeight: 600, color: "#475569",
-          whiteSpace: "nowrap"
-        }}>
-          {field.unit}
-        </span>
+        {unitOptions.length > 1 && !effectiveLocked ? (
+          <select
+            aria-label={`Unit for ${field.metric_code}`}
+            value={activeUnit}
+            onChange={(e) => onUnitChange?.(field.metric_code, e.target.value)}
+            style={{
+              padding: "10px 12px", background: "#f8fafc", border: "1px solid #cbd5e1",
+              borderRadius: 8, fontSize: 13, fontWeight: 700, color: "#0f172a", cursor: "pointer"
+            }}
+          >
+            {unitOptions.map((u) => (
+              <option key={u} value={u}>{u}</option>
+            ))}
+          </select>
+        ) : (
+          <span style={{
+            padding: "10px 14px", background: "#f1f5f9", border: "1px solid #e2e8f0",
+            borderRadius: 8, fontSize: 13, fontWeight: 600, color: "#475569",
+            whiteSpace: "nowrap"
+          }}>
+            {activeUnit}
+          </span>
+        )}
       </div>
 
       {/* Validation error */}
@@ -1316,13 +1418,16 @@ function ParameterField({ field, value, onChange, readOnly, submissionStatus, on
       )}
 
       {/* Generalized Document Evidence Attachment Workflow — strictly for raw input metrics, omitted for auto-calculated */}
-      {!isLocked && !isCalculated && field.evidence_rule !== "none" && (
+      {!isCalculated && field.evidence_rule !== "none" && (!effectiveLocked || (field.existing_evidences && field.existing_evidences.length > 0)) && (
         <EvidenceAttachPanel
           metricCode={field.metric_code}
           metricName={field.metric_name || field.name}
-          unit={field.unit}
+          unit={activeUnit}
           evidenceRule={field.evidence_rule}
           projectId={projectId}
+          entryMode={entryMode}
+          existingEvidences={field.existing_evidences || []}
+          readOnly={effectiveLocked}
           onUploaded={(evId) => onEvidenceUploaded?.(field.metric_code, evId)}
           onDeleted={(evId) => onEvidenceDeleted?.(field.metric_code, evId)}
           onValueConfirmed={handleValueConfirmedFromBill}
@@ -1428,13 +1533,60 @@ function ProjectContextCard({ entity, form }) {
 }
 
 // ─── Domain Section ──────────────────────────────────────────────────────────
-function DomainSection({ domain, principle, fields, values, onChange, submissionStatus, onEvidenceUploaded, onEvidenceDeleted, projectId, stickyDocType, setStickyDocType }) {
+function DomainSection({
+  domain,
+  principle,
+  fields,
+  values,
+  units = {},
+  entryModes = {},
+  readOnly = false,
+  onChange,
+  onUnitChange,
+  onEntryModeChange,
+  submissionStatus,
+  onEvidenceUploaded,
+  onEvidenceDeleted,
+  projectId,
+  stickyDocType,
+  setStickyDocType,
+}) {
   const [collapsed, setCollapsed] = useState(false);
+  const [p6Filter, setP6Filter] = useState("ALL");
+  const [openSubGroups, setOpenSubGroups] = useState({});
+  const [showCalculated, setShowCalculated] = useState(false);
   const meta = DOMAIN_META[domain] || DOMAIN_META["Environment"];
   const DomainIcon = meta.icon;
 
-  const filled = fields.filter(f => values[f.metric_code] !== undefined && values[f.metric_code] !== "").length;
-  const pct = fields.length > 0 ? Math.round((filled / fields.length) * 100) : 0;
+  const isFieldCalculated = (f) => Boolean(
+    f.calc_formula_code ||
+    f.formula_ref ||
+    f.entry_level === "calculated" ||
+    (f.metric_code?.startsWith("ENV-GHG") && !f.metric_code?.includes("FUEL") && !f.metric_code?.includes("001B") && !f.metric_code?.includes("001D") && !f.metric_code?.includes("003"))
+  );
+  const inputFields = useMemo(() => fields.filter(f => !isFieldCalculated(f)), [fields]);
+  const calculatedFields = useMemo(() => fields.filter(f => isFieldCalculated(f)), [fields]);
+
+  const filled = inputFields.filter(f => values[f.metric_code] !== undefined && values[f.metric_code] !== "").length;
+  const pct = inputFields.length > 0 ? Math.round((filled / inputFields.length) * 100) : 0;
+
+  const p6Groups = useMemo(() => {
+    const groups = {};
+    inputFields.forEach((f) => {
+      const g = f.p6_group || "General";
+      if (!groups[g]) groups[g] = [];
+      groups[g].push(f);
+    });
+    return groups;
+  }, [inputFields]);
+
+  const hasP6Groups = inputFields.some((f) => Boolean(f.p6_group));
+  const groupNames = Object.keys(p6Groups);
+  const visibleGroupNames = p6Filter === "ALL" ? groupNames : groupNames.filter((g) => g === p6Filter);
+
+  const toggleSubGroup = (g) => {
+    setOpenSubGroups((prev) => ({ ...prev, [g]: prev[g] === false ? true : !(prev[g] ?? true) }));
+  };
 
   return (
     <div style={{ marginBottom: 20 }}>
@@ -1458,7 +1610,7 @@ function DomainSection({ domain, principle, fields, values, onChange, submission
         <div style={{ flex: 1 }}>
           <div style={{ fontSize: 14, fontWeight: 700, color: "#0f172a" }}>{domain}</div>
           <div style={{ fontSize: 11, color: "#64748b" }}>
-            {principle} · {fields.length} field{fields.length !== 1 ? "s" : ""} · {filled}/{fields.length} filled
+            {principle} · {inputFields.length} operational field{inputFields.length !== 1 ? "s" : ""} · {filled}/{inputFields.length} filled
           </div>
         </div>
         {/* Completion indicator (Spec §14: ✓ Complete, ◐ In Progress, ○ Not Started) */}
@@ -1484,20 +1636,125 @@ function DomainSection({ domain, principle, fields, values, onChange, submission
           border: `1px solid ${meta.color}20`,
           borderTop: "none", borderRadius: "0 0 12px 12px"
         }}>
-          {fields.map(field => (
-            <ParameterField
-              key={field.metric_code}
-              field={field}
-              value={values[field.metric_code]}
-              onChange={onChange}
-              submissionStatus={submissionStatus}
-              onEvidenceUploaded={onEvidenceUploaded}
-              onEvidenceDeleted={onEvidenceDeleted}
-              projectId={projectId}
-              stickyDocType={stickyDocType}
-              setStickyDocType={setStickyDocType}
-            />
-          ))}
+          {hasP6Groups ? (
+            <>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14, flexWrap: "wrap", gap: 8 }}>
+                <span style={{ fontSize: 12, fontWeight: 600, color: "#475569" }}>
+                  Filter Principle 6 Category:
+                </span>
+                <select
+                  aria-label="Filter Principle 6 Category"
+                  value={p6Filter}
+                  onChange={(e) => setP6Filter(e.target.value)}
+                  style={{
+                    padding: "6px 10px", borderRadius: 8, border: "1px solid #cbd5e1",
+                    fontSize: 12, fontWeight: 600, background: "#fff", color: "#0f172a"
+                  }}
+                >
+                  <option value="ALL">All Principle 6 Categories ({inputFields.length})</option>
+                  {groupNames.map((g) => (
+                    <option key={g} value={g}>{g} ({p6Groups[g].length})</option>
+                  ))}
+                </select>
+              </div>
+
+              {visibleGroupNames.map((g) => {
+                const subFields = p6Groups[g];
+                const subFilled = subFields.filter((f) => values[f.metric_code] !== undefined && values[f.metric_code] !== "").length;
+                const isOpen = openSubGroups[g] ?? true;
+                return (
+                  <div key={g} style={{ marginBottom: 12, border: "1px solid #e2e8f0", borderRadius: 10, background: "#fff", overflow: "hidden" }}>
+                    <div
+                      onClick={() => toggleSubGroup(g)}
+                      style={{
+                        display: "flex", justifyContent: "space-between", alignItems: "center",
+                        padding: "10px 14px", background: "#f8fafc", cursor: "pointer", userSelect: "none",
+                        borderBottom: isOpen ? "1px solid #e2e8f0" : "none"
+                      }}
+                    >
+                      <div style={{ fontSize: 13, fontWeight: 700, color: "#0f172a" }}>{g}</div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        <span style={{ fontSize: 11, fontWeight: 600, color: subFilled === subFields.length ? "#059669" : "#64748b" }}>
+                          {subFilled}/{subFields.length} filled
+                        </span>
+                        <ChevronDown size={15} color="#64748b" style={{ transform: isOpen ? "none" : "rotate(-90deg)", transition: "0.2s" }} />
+                      </div>
+                    </div>
+                    {isOpen && (
+                      <div style={{ padding: "12px 14px" }}>
+                        {subFields.map((field) => (
+                          <ParameterField
+                            key={field.metric_code}
+                            field={field}
+                            value={values[field.metric_code]}
+                            selectedUnit={units[field.metric_code]}
+                            entryMode={entryModes[field.metric_code] || "manual"}
+                            onChange={onChange}
+                            onUnitChange={onUnitChange}
+                            onEntryModeChange={onEntryModeChange}
+                            readOnly={readOnly}
+                            submissionStatus={submissionStatus}
+                            onEvidenceUploaded={onEvidenceUploaded}
+                            onEvidenceDeleted={onEvidenceDeleted}
+                            projectId={projectId}
+                            stickyDocType={stickyDocType}
+                            setStickyDocType={setStickyDocType}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </>
+          ) : (
+            inputFields.map(field => (
+              <ParameterField
+                key={field.metric_code}
+                field={field}
+                value={values[field.metric_code]}
+                selectedUnit={units[field.metric_code]}
+                entryMode={entryModes[field.metric_code] || "manual"}
+                onChange={onChange}
+                onUnitChange={onUnitChange}
+                onEntryModeChange={onEntryModeChange}
+                readOnly={readOnly}
+                submissionStatus={submissionStatus}
+                onEvidenceUploaded={onEvidenceUploaded}
+                onEvidenceDeleted={onEvidenceDeleted}
+                projectId={projectId}
+                stickyDocType={stickyDocType}
+                setStickyDocType={setStickyDocType}
+              />
+            ))
+          )}
+          {calculatedFields.length > 0 && (
+            <div style={{ marginTop: 10, border: "1px dashed #d8b4fe", borderRadius: 10, background: "#faf5ff", padding: "10px 14px" }}>
+              <button
+                type="button"
+                onClick={() => setShowCalculated(p => !p)}
+                style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", background: "none", border: "none", cursor: "pointer", padding: 0, color: "#6b21a8", fontSize: 12, fontWeight: 700 }}
+              >
+                <span>⚡ {calculatedFields.length} Auto-Calculated System Outputs (No Manual Entry Required)</span>
+                <span>{showCalculated ? "Hide" : "View"}</span>
+              </button>
+              {showCalculated && (
+                <div style={{ marginTop: 10 }}>
+                  {calculatedFields.map(field => (
+                    <ParameterField
+                      key={field.metric_code}
+                      field={field}
+                      value={values[field.metric_code]}
+                      selectedUnit={units[field.metric_code]}
+                      readOnly={true}
+                      submissionStatus={submissionStatus}
+                      projectId={projectId}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -1588,8 +1845,13 @@ export default function DataEntry() {
 
   // ── Local state for field values ────────────────────────────────────────
   const [values, setValues] = useState({});
+  const [units, setUnits] = useState({});
+  const [entryModes, setEntryModes] = useState({}); // "manual" (default) | "ai"
   const [saving, setSaving] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [reviewing, setReviewing] = useState(false);
+  const [reviewComment, setReviewComment] = useState("");
+  const isProjectAdminChecker = role === "project_admin";
   // Map of metricCode → array of uploaded evidence file IDs
   const [evidenceIds, setEvidenceIds] = useState({});
   const [submitted, setSubmitted] = useState(false);
@@ -1613,18 +1875,23 @@ export default function DataEntry() {
     } catch {}
   }, []);
 
-  // Populate values from API form data
+  // Populate values and units from API form data
   React.useEffect(() => {
     if (form?.sections) {
       const apiValues = {};
+      const apiUnits = {};
       form.sections.forEach(sec => {
         sec.fields?.forEach(f => {
           if (f.current_value !== null && f.current_value !== undefined) {
             apiValues[f.metric_code] = f.current_value;
           }
+          if (f.current_unit || f.unit) {
+            apiUnits[f.metric_code] = f.current_unit || f.unit;
+          }
         });
       });
       setValues(apiValues);
+      setUnits(apiUnits);
     }
   }, [form]);
 
@@ -1654,6 +1921,37 @@ export default function DataEntry() {
     setValues(prev => ({ ...prev, [metricCode]: value }));
   }, []);
 
+  const handleUnitChange = useCallback((metricCode, unit) => {
+    setUnits(prev => ({ ...prev, [metricCode]: unit }));
+  }, []);
+
+  const handleEntryModeChange = useCallback((metricCode, mode) => {
+    setEntryModes(prev => ({ ...prev, [metricCode]: mode }));
+  }, []);
+
+  const handleAdminReview = async (decision) => {
+    const subId = form?.submission_id || activeSubmissionId;
+    if (!subId) return;
+    if (decision === "return" && !reviewComment.trim()) {
+      setNotice({ type: "error", msg: "Please enter a review comment before returning the submission." });
+      return;
+    }
+    setReviewing(true);
+    try {
+      await workflowApi.review(subId, { decision, comments: reviewComment.trim() || undefined });
+      setNotice({
+        type: "success",
+        msg: decision === "approve" ? "Submission approved and forwarded to BU!" : "Submission returned to Project Supervisor with comments.",
+      });
+      setReviewComment("");
+      refetchForm();
+    } catch (e) {
+      setNotice({ type: "error", msg: e?.response?.data?.detail || "Review action failed." });
+    } finally {
+      setReviewing(false);
+    }
+  };
+
   const handleEvidenceUploaded = useCallback((metricCode, evidenceId) => {
     if (!evidenceId) return;
     setEvidenceIds(prev => ({
@@ -1678,9 +1976,9 @@ export default function DataEntry() {
         metric_code,
         value_numeric: typeof val === "number" || (val && !isNaN(Number(val))) ? Number(val) : null,
         value_text: typeof val === "string" && isNaN(Number(val)) ? val : null,
-        unit: form?.sections?.flatMap(s => s.fields || []).find(f => f.metric_code === metric_code)?.unit || "",
+        unit: units[metric_code] || form?.sections?.flatMap(s => s.fields || []).find(f => f.metric_code === metric_code)?.unit || "",
         status: "ACTUAL",
-        entry_method: "manual_form",
+        entry_method: entryModes[metric_code] === "ai" ? "ocr_prefill" : "manual_form",
         evidence_file_ids: evidenceIds[metric_code] || [],
       }));
       const res = await savePack({
@@ -1715,9 +2013,9 @@ export default function DataEntry() {
           metric_code,
           value_numeric: typeof val === "number" || (val && !isNaN(Number(val))) ? Number(val) : null,
           value_text: typeof val === "string" && isNaN(Number(val)) ? val : null,
-          unit: form?.sections?.flatMap(s => s.fields || []).find(f => f.metric_code === metric_code)?.unit || "",
+          unit: units[metric_code] || form?.sections?.flatMap(s => s.fields || []).find(f => f.metric_code === metric_code)?.unit || "",
           status: "ACTUAL",
-          entry_method: "manual_form",
+          entry_method: entryModes[metric_code] === "ai" ? "ocr_prefill" : "manual_form",
           evidence_file_ids: evidenceIds[metric_code] || [],
         }));
         const res = await savePack({
@@ -1779,8 +2077,7 @@ export default function DataEntry() {
     f.calc_formula_code ||
     f.formula_ref ||
     f.entry_level === "calculated" ||
-    (f.metric_code?.startsWith("ENV-GHG") && !f.metric_code?.includes("FUEL")) ||
-    f.metric_code?.includes("INTENSITY")
+    (f.metric_code?.startsWith("ENV-GHG") && !f.metric_code?.includes("FUEL"))
   ));
   const filledCount = (rawFields.length > 0 ? rawFields : allFields).filter(f => values[f.metric_code] !== undefined && values[f.metric_code] !== "").length;
   const totalFields = rawFields.length > 0 ? rawFields.length : allFields.length;
@@ -1886,7 +2183,7 @@ export default function DataEntry() {
                 YOU PROVIDE RAW OPERATIONAL FACTS · SYSTEM CALCULATES EMISSIONS
               </div>
               <div style={{ fontSize: 12, color: "#0C4A6E", marginTop: 2 }}>
-                As a site engineer, you only report <strong>physical quantities</strong> (kWh electricity, Litres diesel, kL water, Tonnes waste) and attach vouchers. You do <strong>not</strong> calculate emission factors or tCO₂e — the platform calculates Scope 1/2/3 and intensities deterministically upon BU review.
+                As a site engineer, you only report <strong>physical quantities</strong> (kWh electricity, Litres diesel, kL water, Tonnes waste) and attach vouchers. The platform aggregates totals deterministically upon BU review.
               </div>
             </div>
           </div>
@@ -2064,7 +2361,12 @@ export default function DataEntry() {
                 principle={principle}
                 fields={fields}
                 values={values}
+                units={units}
+                entryModes={entryModes}
+                readOnly={isProjectAdminChecker}
                 onChange={handleFieldChange}
+                onUnitChange={handleUnitChange}
+                onEntryModeChange={handleEntryModeChange}
                 submissionStatus={submissionStatus}
                 onEvidenceUploaded={handleEvidenceUploaded}
                 onEvidenceDeleted={handleEvidenceDeleted}
@@ -2091,8 +2393,66 @@ export default function DataEntry() {
           </div>
         )}
 
-        {/* ── Action Bar ───────────────────────────────────────────────── */}
-        {!formLoading && form && !isLocked && (
+        {/* ── Project Admin Verification Bar (Checker Mode) ───────────── */}
+        {!formLoading && form && isProjectAdminChecker && (
+          <div style={{
+            position: "sticky", bottom: 16,
+            padding: "14px 18px", background: "rgba(255,255,255,0.98)",
+            backdropFilter: "blur(12px)", borderRadius: 10,
+            border: "1px solid #cbd5e1", boxShadow: "0 4px 16px rgba(0,0,0,0.08)",
+            marginTop: 20, display: "flex", flexWrap: "wrap", alignItems: "center", gap: 10
+          }}>
+            <div style={{ flex: 1, minWidth: 240 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "#0f172a", marginBottom: 4 }}>
+                Project Admin Verification ({submissionStatus})
+              </div>
+              <input
+                type="text"
+                value={reviewComment}
+                onChange={(e) => setReviewComment(e.target.value)}
+                placeholder="Review comments (required if returning to Project Supervisor)..."
+                disabled={submissionStatus !== "SUBMITTED"}
+                style={{
+                  width: "100%", padding: "7px 10px", fontSize: 12.5,
+                  borderRadius: 6, border: "1px solid #cbd5e1", outline: "none"
+                }}
+              />
+            </div>
+            {submissionStatus === "SUBMITTED" ? (
+              <div style={{ display: "flex", gap: 8 }}>
+                <button
+                  type="button"
+                  disabled={reviewing}
+                  onClick={() => handleAdminReview("return")}
+                  style={{
+                    padding: "8px 16px", borderRadius: 6, border: "1px solid #fca5a5",
+                    background: "#fef2f2", color: "#b91c1c", fontSize: 12.5, fontWeight: 700, cursor: "pointer"
+                  }}
+                >
+                  Return with Comments
+                </button>
+                <button
+                  type="button"
+                  disabled={reviewing}
+                  onClick={() => handleAdminReview("approve")}
+                  style={{
+                    padding: "8px 18px", borderRadius: 6, border: "none",
+                    background: "#16a34a", color: "#fff", fontSize: 12.5, fontWeight: 700, cursor: "pointer"
+                  }}
+                >
+                  {reviewing ? "Processing…" : "Approve & Forward to BU"}
+                </button>
+              </div>
+            ) : (
+              <span style={{ fontSize: 12, color: "#64748b", fontWeight: 600 }}>
+                Waiting for Project Supervisor to submit (current status: {submissionStatus}).
+              </span>
+            )}
+          </div>
+        )}
+
+        {/* ── Action Bar (Maker Mode) ──────────────────────────────────── */}
+        {!formLoading && form && !isLocked && !isProjectAdminChecker && (
           <div style={{
             position: "sticky", bottom: 16,
             display: "flex", justifyContent: "flex-end", gap: 10,

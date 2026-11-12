@@ -13,6 +13,8 @@ class FormField(BaseModel):
     is_mandatory: bool = True
     read_only: bool = False
     current_value: Optional[Any] = None
+    current_unit: Optional[str] = None
+    existing_evidences: List[Dict[str, Any]] = []
     notes: Optional[str] = None
     formula_ref: Optional[str] = None
     indicator_disclosure_name: Optional[str] = None
@@ -25,6 +27,8 @@ class FormField(BaseModel):
     document_hint: Optional[str] = None     # "Upload IOCL fuel challan or DG logbook"
     # ── Display Badges ────────────────────────────────────────────────────────
     scope_badge: Optional[str] = None       # "SCOPE 1", "SCOPE 2", "SCOPE 3", etc.
+    p6_group: Optional[str] = None          # "EI-1 Energy", "EI-3 Water Withdrawal", etc.
+    indicator_ref: Optional[str] = None     # "EI-1", "EI-3", "LI-2", etc.
     is_brsr_core: bool = False              # SEBI BRSR Core mandatory indicator
     evidence_rule: str = "mandatory"        # mandatory | conditional | optional | none
 

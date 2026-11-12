@@ -787,7 +787,7 @@ export default function Header({ onToggleSidebar, isSidebarOpen }) {
                 color: '#1E40AF',
                 lineHeight: 1.5
               }}>
-                <strong>Platform Architecture &amp; Workflow Guide:</strong> Click any step below to inspect the live interface. Notice that project site engineers provide raw measurements, while the system deterministically calculates carbon intensities and rolls them up through the organizational boundary.
+                <strong>Platform Architecture &amp; Workflow Guide:</strong> Click any step below to inspect the live interface. Notice that project site engineers provide raw measurements, while the system deterministically sums and rolls them up through the organizational boundary.
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 10, marginTop: 6 }}>

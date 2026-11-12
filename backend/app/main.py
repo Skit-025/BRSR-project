@@ -15,18 +15,11 @@ async def lifespan(app: FastAPI):
     # Fast startup: run quick DB table check synchronously
     init_db()
 
-    # Seed admins & emission factors asynchronously so server accepts requests immediately
+    # Seed admins asynchronously so server accepts requests immediately
     def _seed_worker():
         try:
             from app.db.seed_admins import seed_system_admins
             seed_system_admins()
-            from app.db.session import SessionLocal
-            from app.modules.calc.service import seed_emission_factors
-            _db = SessionLocal()
-            try:
-                seed_emission_factors(_db)
-            finally:
-                _db.close()
         except Exception as e:
             logger.warning(f"Background seeding notice: {e}")
 

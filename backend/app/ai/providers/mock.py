@@ -49,25 +49,21 @@ class MockFallbackProvider(BaseAIProvider):
             }
         elif "scope 3" in prompt.lower() or "value chain" in prompt.lower() or "proxy" in prompt.lower() or "validation" in prompt.lower():
             return {
-                "validated": True,
+                "validated": False,
                 "formula_is_appropriate": True,
-                "adjusted_tco2e": 0.15,
-                "adjusted_factor": 0.0150,
-                "adjusted_factor_unit": "tCO₂e/INR Lakh",
+                "adjusted_tco2e": None,
+                "adjusted_factor": None,
+                "adjusted_factor_unit": None,
                 "suggested_method": "spend-based",
-                "confidence_note": "Spend-based proxy factor aligned with India GHG Program and SEBI BRSR Core guidelines.",
-                "reasoning": "The classified activity matches standard infrastructure supply chain expenditure. The spend-based proxy factor from India GHG Program is appropriate in the absence of supplier-specific primary activity data. Standard Scope 3 Category 1 (Purchased Goods and Services) guidance applies.",
-                "brsr_reference": "SEBI BRSR Principle 6 (Essential Indicator 1) & GHG Protocol Corporate Value Chain (Scope 3) Standard Category 1",
-                "data_gaps": [
-                    "Supplier-specific primary electricity/fuel activity data",
-                    "Physical material quantities (cement/steel tonnage) for hybrid activity-based calculation",
-                    "Tier-1 vendor ESG audit certificates"
-                ]
+                "confidence_note": "AI provider unavailable; deterministic proxy factor retained without LLM adjustment.",
+                "reasoning": "Live LLM validation is unavailable. Calculation relies strictly on deterministic proxy factors.",
+                "brsr_reference": "SEBI BRSR Principle 6 & GHG Protocol Scope 3",
+                "data_gaps": []
             }
         elif "narrative" in prompt.lower():
             return {
-                "draft": "In FY 2025-26, our total Scope 1 emissions were 18,650 tCO2e, with zero reported high-severity environmental infractions. All data reflects verified meter reads across participating business units.",
-                "numbers_found": ["18650", "2025", "2026", "0"]
+                "draft": "AI narrative provider is currently unavailable. Please configure an AI provider or enter the disclosure narrative manually.",
+                "numbers_found": []
             }
         
         return {}

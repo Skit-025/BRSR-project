@@ -22,7 +22,7 @@ BRSR_KNOWLEDGE_BASE = {
     },
     "ENV-GHG-002": {
         "section": "Principle 6 - Essential Indicator 3",
-        "guidance": "Disclose Scope 2 greenhouse gas emissions arising from the consumption of purchased or acquired electricity, heating, cooling or steam, as applicable. Report emissions in metric tonnes of CO2 equivalent (tCO2e) using the applicable documented grid or supplier emission factors and methodology. Supporting evidence should include electricity consumption records, DISCOM invoices and emission-factor calculations.",
+        "guidance": "Disclose Scope 2 greenhouse gas emissions arising from the consumption of purchased or acquired electricity, heating, cooling or steam, as applicable. Report emissions in metric tonnes of CO2 equivalent (tCO2e). Supporting evidence should include electricity consumption records and DISCOM invoices.",
         "version": "BRSR-2023"
     },
     "ENV-WATER-001": {

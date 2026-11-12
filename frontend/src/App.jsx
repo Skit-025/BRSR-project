@@ -62,7 +62,7 @@ import Dashboard      from './pages/Dashboard';
 import UserManagement from './pages/UserManagement';
 import OrgHierarchy   from './pages/OrgHierarchy';
 import MetricCatalogue from './pages/MetricCatalogue';
-import DataEntry      from './pages/DataEntry';
+import RoleESGForm    from './pages/RoleESGForm';
 import Workflow       from './pages/Workflow';
 import Consolidation  from './pages/Consolidation';
 import Reporting      from './pages/Reporting';
@@ -243,10 +243,11 @@ export default function App() {
                   </PermissionGuard>
                 } />
 
-                {/* Data Collection — project-level users */}
+                {/* Role-Specific Principle 6 ESG Form */}
+                <Route path="/esg-form" element={<RoleESGForm />} />
                 <Route path="/collection" element={
                   <PermissionGuard perms={['form:submit', 'submission:create']}>
-                    <DataEntry />
+                    <RoleESGForm />
                   </PermissionGuard>
                 } />
 
@@ -278,26 +279,20 @@ export default function App() {
                   </PermissionGuard>
                 } />
 
-                {/* Level-Specific Disclosures (Type 3 Forms - spec §46) */}
+                {/* Level-Specific Disclosures (Role-scoped via /p6-forms/schema) */}
                 <Route path="/disclosure/bu" element={
                   <PermissionGuard perms={['bu_disclosure:read']}>
-                    <React.Suspense fallback={<div style={{ padding: 40, color: 'var(--text-secondary)' }}>Loading BU Disclosures...</div>}>
-                      <BUDisclosure />
-                    </React.Suspense>
+                    <RoleESGForm />
                   </PermissionGuard>
                 } />
                 <Route path="/disclosure/subsidiary" element={
                   <PermissionGuard perms={['subsidiary_disclosure:read']}>
-                    <React.Suspense fallback={<div style={{ padding: 40, color: 'var(--text-secondary)' }}>Loading Subsidiary Disclosures...</div>}>
-                      <SubsidiaryDisclosure />
-                    </React.Suspense>
+                    <RoleESGForm />
                   </PermissionGuard>
                 } />
                 <Route path="/disclosure/group" element={
                   <PermissionGuard perms={['group_disclosure:read']}>
-                    <React.Suspense fallback={<div style={{ padding: 40, color: 'var(--text-secondary)' }}>Loading Group Disclosures...</div>}>
-                      <GroupDisclosure />
-                    </React.Suspense>
+                    <RoleESGForm />
                   </PermissionGuard>
                 } />
 

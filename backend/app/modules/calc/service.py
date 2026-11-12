@@ -12,8 +12,6 @@ from app.modules.calc.formulas import (
     calculate_scope1_stationary_combustion,
     calculate_scope2_electricity,
     calculate_total_energy,
-    calculate_energy_intensity,
-    calculate_ghg_intensity,
     calculate_ltifr,
 )
 
@@ -93,34 +91,6 @@ class CalculationService:
             org_node_id=org_node_id,
             period_id=period_id,
             inputs={"electricity_mwh": str(electricity_mwh), "renewable_ppa_mwh": str(renewable_ppa_mwh)},
-            output={"result_value": str(result["result_value"]), "result_unit": result["result_unit"]},
-            factors=result["factors_applied"],
-            executed_by=user_id,
-        )
-        return CalculationResult(
-            formula_code=result["formula_code"],
-            result_value=result["result_value"],
-            result_unit=result["result_unit"],
-            intermediate_steps=result["intermediate_steps"],
-            factors_applied=result["factors_applied"],
-            timestamp=now_iso,
-        )
-
-    def run_energy_intensity(
-        self,
-        total_energy_gj: Decimal,
-        turnover_inr_crores: Decimal,
-        org_node_id: Optional[str] = None,
-        period_id: Optional[str] = None,
-        user_id: Optional[str] = None,
-    ) -> CalculationResult:
-        result = calculate_energy_intensity(total_energy_gj, turnover_inr_crores)
-        now_iso = datetime.now(timezone.utc).isoformat()
-        self._persist_log(
-            formula_code="CALC-INTENSITY-ENERGY",
-            org_node_id=org_node_id,
-            period_id=period_id,
-            inputs={"total_energy_gj": str(total_energy_gj), "turnover_inr_crores": str(turnover_inr_crores)},
             output={"result_value": str(result["result_value"]), "result_unit": result["result_unit"]},
             factors=result["factors_applied"],
             executed_by=user_id,
@@ -264,52 +234,3 @@ class CalculationService:
             "timestamp": now_iso,
             "categories": categories,
         }
-
-
-def seed_emission_factors(db: Session):
-    """Seeds and reconciles statutory Indian government emission factors in PostgreSQL."""
-    from app.modules.calc.models import EmissionFactor
-
-    INITIAL_FACTORS = [
-        {"code": "COAL-ANT", "category": "Coal", "subtype": "Anthracite", "unit": "kg", "co2e_factor": Decimal("0.00262000"), "source": "MoEFCC / IPCC AR4 India", "effective_year": "2023-24"},
-        {"code": "COAL-BIT", "category": "Coal", "subtype": "Bituminous", "unit": "kg", "co2e_factor": Decimal("0.00235000"), "source": "MoEFCC / CEA 2023", "effective_year": "2023-24"},
-        {"code": "COAL-LIG", "category": "Coal", "subtype": "Lignite / Brown Coal", "unit": "kg", "co2e_factor": Decimal("0.00155000"), "source": "CEA / NLC India", "effective_year": "2023-24"},
-        {"code": "DIESEL-HSD", "category": "Diesel", "subtype": "High Speed Diesel", "unit": "L", "co2e_factor": Decimal("0.00268000"), "source": "BEE PAT Manual 2023 / MoPNG PPAC", "effective_year": "2023-24"},
-        {"code": "DIESEL-LDO", "category": "Diesel", "subtype": "Light Diesel Oil", "unit": "L", "co2e_factor": Decimal("0.00260000"), "source": "BEE PAT Manual 2023", "effective_year": "2023-24"},
-        {"code": "GAS-CNG", "category": "Gas", "subtype": "Compressed Natural Gas", "unit": "kg", "co2e_factor": Decimal("0.00221000"), "source": "MoPNG PPAC 2023 / MoEFCC", "effective_year": "2023-24"},
-        {"code": "GAS-PNG", "category": "Gas", "subtype": "Piped Natural Gas", "unit": "kg", "co2e_factor": Decimal("0.00203000"), "source": "MoPNG PPAC 2023 / CEA", "effective_year": "2023-24"},
-        {"code": "GAS-LPG", "category": "Gas", "subtype": "Liquefied Petroleum Gas", "unit": "kg", "co2e_factor": Decimal("0.00298000"), "source": "BEE PAT Manual 2023 / MoPNG", "effective_year": "2023-24"},
-        {"code": "PETROL", "category": "Petrol", "subtype": "Regular Motor Spirit", "unit": "L", "co2e_factor": Decimal("0.00231000"), "source": "BEE PAT Manual 2023 / MoPNG", "effective_year": "2023-24"},
-        {"code": "GRID-CEA", "category": "Electricity", "subtype": "National Grid Average", "unit": "MWh", "co2e_factor": Decimal("0.71600000"), "source": "CEA CO2 Baseline Database Ver. 19/20", "effective_year": "2023-24"},
-        {"code": "TRAVEL-FLIGHT", "category": "Travel", "subtype": "Domestic Air Travel", "unit": "passenger-km", "co2e_factor": Decimal("0.00013000"), "source": "ICAO Carbon Calculator / DEFRA India", "effective_year": "2023-24"},
-
-        # State-specific CEA grid emission factors (CEA Table 4)
-        {"code": "GRID-CEA-AP", "category": "Electricity", "subtype": "Andhra Pradesh Grid Average", "unit": "MWh", "co2e_factor": Decimal("0.81300000"), "source": "CEA CO2 Baseline Database Ver. 19/20", "effective_year": "2023-24"},
-        {"code": "GRID-CEA-TG", "category": "Electricity", "subtype": "Telangana Grid Average", "unit": "MWh", "co2e_factor": Decimal("0.81300000"), "source": "CEA CO2 Baseline Database Ver. 19/20", "effective_year": "2023-24"},
-        {"code": "GRID-CEA-KA", "category": "Electricity", "subtype": "Karnataka Grid Average", "unit": "MWh", "co2e_factor": Decimal("0.57200000"), "source": "CEA CO2 Baseline Database Ver. 19/20", "effective_year": "2023-24"},
-        {"code": "GRID-CEA-MH", "category": "Electricity", "subtype": "Maharashtra Grid Average", "unit": "MWh", "co2e_factor": Decimal("0.75100000"), "source": "CEA CO2 Baseline Database Ver. 19/20", "effective_year": "2023-24"},
-        {"code": "GRID-CEA-GJ", "category": "Electricity", "subtype": "Gujarat Grid Average", "unit": "MWh", "co2e_factor": Decimal("0.74200000"), "source": "CEA CO2 Baseline Database Ver. 19/20", "effective_year": "2023-24"},
-        {"code": "GRID-CEA-RJ", "category": "Electricity", "subtype": "Rajasthan Grid Average", "unit": "MWh", "co2e_factor": Decimal("0.67700000"), "source": "CEA CO2 Baseline Database Ver. 19/20", "effective_year": "2023-24"},
-        {"code": "GRID-CEA-UP", "category": "Electricity", "subtype": "Uttar Pradesh Grid Average", "unit": "MWh", "co2e_factor": Decimal("0.94100000"), "source": "CEA CO2 Baseline Database Ver. 19/20", "effective_year": "2023-24"},
-        {"code": "GRID-CEA-MP", "category": "Electricity", "subtype": "Madhya Pradesh Grid Average", "unit": "MWh", "co2e_factor": Decimal("0.91800000"), "source": "CEA CO2 Baseline Database Ver. 19/20", "effective_year": "2023-24"},
-        {"code": "GRID-CEA-OR", "category": "Electricity", "subtype": "Odisha Grid Average", "unit": "MWh", "co2e_factor": Decimal("0.95300000"), "source": "CEA CO2 Baseline Database Ver. 19/20", "effective_year": "2023-24"},
-        {"code": "GRID-CEA-WB", "category": "Electricity", "subtype": "West Bengal Grid Average", "unit": "MWh", "co2e_factor": Decimal("0.88100000"), "source": "CEA CO2 Baseline Database Ver. 19/20", "effective_year": "2023-24"},
-        {"code": "GRID-CEA-TN", "category": "Electricity", "subtype": "Tamil Nadu Grid Average", "unit": "MWh", "co2e_factor": Decimal("0.60100000"), "source": "CEA CO2 Baseline Database Ver. 19/20", "effective_year": "2023-24"},
-        {"code": "GRID-CEA-KL", "category": "Electricity", "subtype": "Kerala Grid Average", "unit": "MWh", "co2e_factor": Decimal("0.48100000"), "source": "CEA CO2 Baseline Database Ver. 19/20", "effective_year": "2023-24"},
-        {"code": "GRID-CEA-HR", "category": "Electricity", "subtype": "Haryana Grid Average", "unit": "MWh", "co2e_factor": Decimal("0.92400000"), "source": "CEA CO2 Baseline Database Ver. 19/20", "effective_year": "2023-24"},
-        {"code": "GRID-CEA-PB", "category": "Electricity", "subtype": "Punjab Grid Average", "unit": "MWh", "co2e_factor": Decimal("0.89500000"), "source": "CEA CO2 Baseline Database Ver. 19/20", "effective_year": "2023-24"},
-        {"code": "GRID-CEA-DL", "category": "Electricity", "subtype": "Delhi Grid Average", "unit": "MWh", "co2e_factor": Decimal("0.78500000"), "source": "CEA CO2 Baseline Database Ver. 19/20", "effective_year": "2023-24"},
-        {"code": "GRID-CEA-JH", "category": "Electricity", "subtype": "Jharkhand Grid Average", "unit": "MWh", "co2e_factor": Decimal("0.94700000"), "source": "CEA CO2 Baseline Database Ver. 19/20", "effective_year": "2023-24"},
-    ]
-    for f in INITIAL_FACTORS:
-        existing = db.query(EmissionFactor).filter(EmissionFactor.code == f["code"]).first()
-        if not existing:
-            factor = EmissionFactor(**f)
-            db.add(factor)
-        else:
-            # Reconcile any existing factors with correct statutory units and values
-            existing.co2e_factor = f["co2e_factor"]
-            existing.unit = f["unit"]
-            existing.source = f["source"]
-            existing.effective_year = f["effective_year"]
-    db.commit()

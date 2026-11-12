@@ -11,72 +11,55 @@ import PageHelpButton from '../components/PageHelpButton';
 const GROUP_TABS = [
   { id: 'group_general', label: 'Enterprise Boundary', icon: Globe2, desc: 'Group structure, subsidiaries in scope, consolidation approach' },
   { id: 'group_policies', label: 'Group Commitments', icon: Award, desc: 'Enterprise Net-Zero targets, RE100, and group ESG policies' },
+  { id: 'group_p6', label: 'Principle 6: Group Params', icon: FileCheck, desc: 'Principle 6 external assurance and LI-8 Green Credits' },
   { id: 'group_governance', label: 'Board Governance', icon: ShieldCheck, desc: 'Board committee oversight, CSR charter, and assurance provider' },
 ];
-const getInitialFormData = (groupNode) => {
-  const code = groupNode?.code || '';
-  const isSeed = code === 'MEIL-GROUP';
-
-  if (isSeed) {
-    return {
-      group_general: {
-        group_legal_name: groupNode?.name || 'Megha Engineering & Infrastructures Ltd (MEIL)',
-        consolidation_approach: 'Operational Control (100% boundary for fully managed entities)',
-        subsidiaries_count_in_scope: '7',
-        joint_ventures_count: '6',
-        total_group_revenue_cr: '28450.00',
-        statutory_financial_year: 'FY 2024-25',
-      },
-      group_policies: {
-        enterprise_net_zero_year: '2045',
-        renewable_target_2030_pct: '60',
-        water_neutral_target_year: '2030',
-        supplier_code_of_conduct_enforced: true,
-        human_rights_due_diligence_published: true,
-        executive_compensation_linked_to_esg: true,
-        whistleblower_ombudsperson_active: true
-      },
-      group_governance: {
-        board_committee_title: 'Enterprise Sustainability, Risk and CSR Committee',
-        committee_chair_name: 'Independent Director & Board Member',
-        independent_directors_on_committee_pct: '66',
-        assurance_standard: 'ISAE 3000 (Revised) & SEBI BRSR Core Guidance',
-        assurance_provider: 'Independent Statutory Assurance Firm',
-        assurance_scope: 'BRSR Core Key Performance Indicators (Reasonable Assurance)',
-        assurance_opinion_type: 'Unmodified / Clean'
-      }
-    };
+const getInitialFormData = (groupNode) => ({
+  group_general: {
+    group_legal_name: groupNode?.name || '',
+    consolidation_approach: '',
+    subsidiaries_count_in_scope: '',
+    joint_ventures_count: '',
+    total_group_revenue_cr: '',
+    statutory_financial_year: '',
+  },
+  group_policies: {
+    enterprise_net_zero_year: '',
+    renewable_target_2030_pct: '',
+    water_neutral_target_year: '',
+    supplier_code_of_conduct_enforced: false,
+    human_rights_due_diligence_published: false,
+    executive_compensation_linked_to_esg: false,
+    whistleblower_ombudsperson_active: false
+  },
+  group_p6: {
+    imf_ppp_rate: '20.66',
+    prev_imf_ppp_rate: '22.40',
+    p6_assurance_status: 'Reasonable Assurance',
+    p6_assurance_agency: '',
+    p6_assurance_report_ref: '',
+    indicator_assurance: {
+      'EI-1': { status: 'Reasonable Assurance', agency: '', report_ref: '' },
+      'EI-3': { status: 'Reasonable Assurance', agency: '', report_ref: '' },
+      'EI-4': { status: 'Reasonable Assurance', agency: '', report_ref: '' },
+      'EI-6': { status: 'Limited Assurance', agency: '', report_ref: '' },
+      'EI-7': { status: 'Reasonable Assurance', agency: '', report_ref: '' },
+      'EI-9': { status: 'Reasonable Assurance', agency: '', report_ref: '' },
+      'LI-2': { status: 'Not Assured', agency: '', report_ref: '' },
+    },
+    green_credits_entity: '',
+    green_credits_value_chain: '',
+  },
+  group_governance: {
+    board_committee_title: '',
+    committee_chair_name: '',
+    independent_directors_on_committee_pct: '',
+    assurance_standard: '',
+    assurance_provider: '',
+    assurance_scope: '',
+    assurance_opinion_type: ''
   }
-
-  return {
-    group_general: {
-      group_legal_name: groupNode?.name || '',
-      consolidation_approach: '',
-      subsidiaries_count_in_scope: '',
-      joint_ventures_count: '',
-      total_group_revenue_cr: '',
-      statutory_financial_year: '',
-    },
-    group_policies: {
-      enterprise_net_zero_year: '',
-      renewable_target_2030_pct: '',
-      water_neutral_target_year: '',
-      supplier_code_of_conduct_enforced: false,
-      human_rights_due_diligence_published: false,
-      executive_compensation_linked_to_esg: false,
-      whistleblower_ombudsperson_active: false
-    },
-    group_governance: {
-      board_committee_title: '',
-      committee_chair_name: '',
-      independent_directors_on_committee_pct: '',
-      assurance_standard: '',
-      assurance_provider: '',
-      assurance_scope: '',
-      assurance_opinion_type: ''
-    }
-  };
-};
+});
 
 export default function GroupDisclosure() {
   const { user, isSystemAdmin, isGroupAdmin, isGroupEsgManager } = useAuth();
@@ -341,12 +324,12 @@ export default function GroupDisclosure() {
 
                   <div>
                     <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6 }}>
-                      Consolidated Revenue (₹ Crores)
+                      Reporting Boundary Standard
                     </label>
                     <input
-                      type="number"
-                      value={formData.group_general.total_group_revenue_cr || ''}
-                      onChange={e => handleFieldChange('group_general', 'total_group_revenue_cr', e.target.value)}
+                      type="text"
+                      value={formData.group_general.consolidation_approach || ''}
+                      onChange={e => handleFieldChange('group_general', 'consolidation_approach', e.target.value)}
                       style={{ width: '100%', padding: '10px 14px', borderRadius: 8, border: '1px solid var(--border-default)', background: 'var(--bg-base)', color: 'var(--text-primary)' }}
                     />
                   </div>
@@ -451,6 +434,116 @@ export default function GroupDisclosure() {
                 </div>
               </div>
             )}
+
+            {activeTab === 'group_p6' && (() => {
+              const p6 = formData.group_p6 || {};
+              const indAssurance = p6.indicator_assurance || {};
+              const P6_ASSURED_INDICATORS = [
+                { key: 'EI-1', label: 'EI-1: Energy Consumption' },
+                { key: 'EI-3', label: 'EI-3: Water Withdrawal & Consumption' },
+                { key: 'EI-4', label: 'EI-4: Water Discharge by Destination' },
+                { key: 'EI-6', label: 'EI-6: Air Emissions (NOx, SOx, PM)' },
+                { key: 'EI-7', label: 'EI-7: GHG Emissions (Scope 1 & 2)' },
+                { key: 'EI-9', label: 'EI-9: Waste Generated, Recovered & Disposed' },
+                { key: 'LI-2', label: 'LI-2: Scope 3 Emissions' },
+              ];
+              const updateIndAssurance = (indKey, field, val) => {
+                const next = {
+                  ...indAssurance,
+                  [indKey]: { ...(indAssurance[indKey] || { status: 'Not Assured', agency: '', report_ref: '' }), [field]: val },
+                };
+                handleFieldChange('group_p6', 'indicator_assurance', next);
+              };
+
+              return (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+                  <div>
+                    <h2 style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4 }}>
+                      Principle 6 — Per-Indicator Assurance &amp; Green Credits (EI-1/3/4/6/7/9, LI-2, LI-8)
+                    </h2>
+                    <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: 0 }}>
+                      Per-indicator external assurance metadata and LI-8 Green Credits.
+                    </p>
+                  </div>
+
+                  {/* Green Credits */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                    <div>
+                      <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6 }}>
+                        Overall Principle 6 External Assurance Level
+                      </label>
+                      <select value={p6.p6_assurance_status || 'Reasonable Assurance'}
+                        onChange={e => handleFieldChange('group_p6', 'p6_assurance_status', e.target.value)}
+                        style={{ width: '100%', padding: '10px 14px', borderRadius: 8, border: '1px solid var(--border-default)', background: 'var(--bg-base)' }}>
+                        <option value="Reasonable Assurance">Reasonable Assurance (BRSR Core)</option>
+                        <option value="Limited Assurance">Limited Assurance</option>
+                        <option value="Not Assured">Not Assured</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6 }}>
+                        Default Assurance Agency &amp; Report Ref
+                      </label>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <input type="text" value={p6.p6_assurance_agency || ''}
+                          onChange={e => handleFieldChange('group_p6', 'p6_assurance_agency', e.target.value)}
+                          placeholder="e.g. Deloitte / DNV / KPMG"
+                          style={{ flex: 1, padding: '10px 12px', borderRadius: 8, border: '1px solid var(--border-default)', background: 'var(--bg-base)' }} />
+                        <input type="text" value={p6.p6_assurance_report_ref || ''}
+                          onChange={e => handleFieldChange('group_p6', 'p6_assurance_report_ref', e.target.value)}
+                          placeholder="Report Ref / UDIN"
+                          style={{ flex: 1, padding: '10px 12px', borderRadius: 8, border: '1px solid var(--border-default)', background: 'var(--bg-base)' }} />
+                      </div>
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6 }}>
+                        LI-8A: Green Credits Generated/Procured (Listed Entity)
+                      </label>
+                      <input type="number" value={p6.green_credits_entity || ''}
+                        onChange={e => handleFieldChange('group_p6', 'green_credits_entity', e.target.value)}
+                        style={{ width: '100%', padding: '10px 14px', borderRadius: 8, border: '1px solid var(--border-default)', background: 'var(--bg-base)' }} />
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6 }}>
+                        LI-8B: Green Credits (Top 10 Value Chain Partners)
+                      </label>
+                      <input type="number" value={p6.green_credits_value_chain || ''}
+                        onChange={e => handleFieldChange('group_p6', 'green_credits_value_chain', e.target.value)}
+                        style={{ width: '100%', padding: '10px 14px', borderRadius: 8, border: '1px solid var(--border-default)', background: 'var(--bg-base)' }} />
+                    </div>
+                  </div>
+
+                  {/* Per-Indicator External Assurance Details */}
+                  <div style={{ padding: 14, borderRadius: 10, border: '1px solid var(--border-default)', background: 'var(--bg-base)' }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 10 }}>
+                      Per-Indicator External Assurance Details (EI-1, EI-3, EI-4, EI-6, EI-7, EI-9, LI-2)
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      {P6_ASSURED_INDICATORS.map(ind => {
+                        const row = indAssurance[ind.key] || {};
+                        return (
+                          <div key={ind.key} style={{ display: 'grid', gridTemplateColumns: '1.6fr 1.1fr 1fr 1fr', gap: 8, alignItems: 'center' }}>
+                            <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' }}>{ind.label}</span>
+                            <select value={row.status || 'Reasonable Assurance'} onChange={e => updateIndAssurance(ind.key, 'status', e.target.value)}
+                              style={{ padding: '7px 8px', borderRadius: 6, border: '1px solid #cbd5e1', fontSize: 12, background: '#fff' }}>
+                              <option value="Reasonable Assurance">Reasonable</option>
+                              <option value="Limited Assurance">Limited</option>
+                              <option value="Not Assured">Not Assured</option>
+                            </select>
+                            <input type="text" value={row.agency || ''} placeholder={p6.p6_assurance_agency || 'Agency (DNV/KPMG/EY)'}
+                              onChange={e => updateIndAssurance(ind.key, 'agency', e.target.value)}
+                              style={{ padding: '7px 8px', borderRadius: 6, border: '1px solid #cbd5e1', fontSize: 12 }} />
+                            <input type="text" value={row.report_ref || ''} placeholder="Report Reference"
+                              onChange={e => updateIndAssurance(ind.key, 'report_ref', e.target.value)}
+                              style={{ padding: '7px 8px', borderRadius: 6, border: '1px solid #cbd5e1', fontSize: 12 }} />
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* Action Bar */}
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 28, paddingTop: 20, borderTop: '1px solid var(--border-default)' }}>

@@ -46,7 +46,7 @@ def calculate_scope1_stationary_combustion(
             "energy_content_gj": str(energy_gj.quantize(Decimal("0.01"))),
         },
         "factors_applied": {
-            "emission_factor": str(factor_val),
+            "factor_value": str(factor_val),
             "factor_unit": f"tCO2e/{expected_unit}",
             "source": factor_meta["source"],
         }
@@ -93,7 +93,7 @@ def calculate_scope1_mobile_combustion(
             "energy_content_gj": str(energy_gj.quantize(Decimal("0.01"))),
         },
         "factors_applied": {
-            "emission_factor": str(factor_val),
+            "factor_value": str(factor_val),
             "factor_unit": f"tCO2e/{expected_unit}",
             "source": factor_meta["source"],
         },
@@ -104,7 +104,7 @@ def calculate_scope1_process_emissions(
     process_type: str,
     quantity: Decimal,
     input_unit: str,
-    emission_factor_tco2e_per_unit: Decimal,
+    factor_tco2e_per_unit: Decimal,
     source_reference: str = "IPCC 2006 Tier 2 / MoEFCC",
 ) -> Dict[str, Any]:
     """
@@ -112,12 +112,10 @@ def calculate_scope1_process_emissions(
     These arise from chemical or industrial transformation, not combustion:
     e.g. acetylene consumption in welding, calcination in cement, galvanizing.
 
-    Because process emission factors are highly process-specific,
-    the caller must supply the emission_factor_tco2e_per_unit directly
-    (sourced from facility-specific process data or IPCC Tier 2 defaults).
+    The caller supplies the factor_tco2e_per_unit directly.
     """
     qty_in_unit = convert_unit(quantity, input_unit, input_unit)   # normalise but preserve unit
-    emissions_tco2e = qty_in_unit * emission_factor_tco2e_per_unit
+    emissions_tco2e = qty_in_unit * factor_tco2e_per_unit
 
     return {
         "formula_code": "CALC-GHG-SCOPE1-PROCESS",
@@ -129,7 +127,7 @@ def calculate_scope1_process_emissions(
             "unit": input_unit,
         },
         "factors_applied": {
-            "emission_factor": str(emission_factor_tco2e_per_unit),
+            "factor_value": str(factor_tco2e_per_unit),
             "factor_unit": f"tCO2e/{input_unit}",
             "source": source_reference,
         },
@@ -145,7 +143,7 @@ def calculate_scope1_fugitive_emissions(
     Covers HVAC refrigerant top-ups (HCFC-22, HFC-32, HFC-410A) and
     SF6 from HV electrical switchgear.
 
-    Emission factor = GWP (100-year) as per IPCC AR4, adopted by MoEFCC India.
+    Factor = GWP (100-year) as per IPCC AR4, adopted by MoEFCC India.
     `quantity_kg` = refrigerant purchased/refilled (inventory-based method).
     """
     from app.modules.calc.factors import get_fuel_factor as _get_factor

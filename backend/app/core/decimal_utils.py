@@ -31,17 +31,17 @@ def round_dp(value: Number, places: int = 4) -> Decimal:
 
 
 def safe_divide(
-    numerator: Number,
-    denominator: Number,
+    top: Number,
+    bottom: Number,
     default: Decimal = Decimal("0"),
     places: int = 4,
 ) -> Decimal:
     """
-    Divide numerator by denominator; return `default` on division-by-zero.
+    Divide top by bottom; return `default` on division-by-zero.
     Result is rounded to `places` decimal places.
     """
-    n = to_decimal(numerator, Decimal("0"))
-    d = to_decimal(denominator, Decimal("0"))
+    n = to_decimal(top, Decimal("0"))
+    d = to_decimal(bottom, Decimal("0"))
     if d == 0:
         return default
     return round_dp(n / d, places)

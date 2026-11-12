@@ -111,7 +111,7 @@ export default function Consolidation() {
             { metric_code: 'GHG-SCOPE2-ELEC', value: 254.60, unit: 'tCO2e', method: 'SUM' },
             { metric_code: 'ENV-WATER-TOTAL', value: 14800, unit: 'kL', method: 'SUM' },
             { metric_code: 'ENV-WASTE-TOTAL', value: 240.5, unit: 'MT', method: 'SUM' },
-            { metric_code: 'SOC-LTIFR', value: 0.12, unit: 'rate', method: 'RATIO' }
+            { metric_code: 'SOC-LTIFR', value: 0.12, unit: 'rate', method: 'SUM' }
           ],
           projects: [
             {
@@ -189,7 +189,7 @@ export default function Consolidation() {
   const tabs = [
     { key: 'bu_drilldown',           label: 'BU Drill-Down View (§18-§20)', icon: <Building2 size={13} /> },
     { key: 'subsidiary_comparison',  label: 'Cross-Subsidiary View (§31)',  icon: <BarChart2 size={13} /> },
-    { key: 'ratio_integrity',        label: 'Ratio & Intensity Rule (§17)', icon: <Calculator size={13} /> },
+    { key: 'calc_ledger',            label: 'Calculation Ledger (§17)',     icon: <Calculator size={13} /> },
     { key: 'history',                label: `Run History (${history.length})`, icon: <GitMerge size={13} /> },
   ];
 
@@ -481,7 +481,7 @@ export default function Consolidation() {
                                     </span>
                                   </div>
                                   <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: 4 }}>
-                                    Formula: {calc.formula || 'Energy Input × Emission Factor (GHG Protocol)'}
+                                    Formula: {calc.formula || 'Direct SUM Roll-up (BRSR Principle 6)'}
                                   </div>
                                 </div>
                               ))}
@@ -553,51 +553,16 @@ export default function Consolidation() {
         </div>
       )}
 
-      {/* ── TAB 3: RATIO & INTENSITY INTEGRITY (SPEC §16-§17) ───────── */}
-      {activeTab === 'ratio_integrity' && (
+      {/* ── TAB 3: CALCULATION LEDGER (PLAIN SUM) ───────── */}
+      {activeTab === 'calc_ledger' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
           <div className="card" style={{ padding: 24 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
-              <div style={{ width: 36, height: 36, borderRadius: 8, background: 'rgba(59, 130, 246, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--brand-400)' }}>
-                <Calculator size={20} />
-              </div>
-              <div>
-                <h3 style={{ fontSize: '16px', fontWeight: 700, color: '#fff', margin: 0 }}>
-                  Mathematical Rule: Ratio & Intensity Aggregation Integrity
-                </h3>
-                <p style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: '4px 0 0 0' }}>
-                  Enforcing SEBI & GHG Protocol standard: Intensities must be recomputed from aggregated numerators and denominators.
-                </p>
-              </div>
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20 }}>
-              {/* Correct Method */}
-              <div style={{ padding: '16px', borderRadius: 8, background: 'rgba(16, 185, 129, 0.08)', border: '1px solid rgba(16, 185, 129, 0.3)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--emerald-400)', fontWeight: 700, fontSize: '13px', marginBottom: 8 }}>
-                  <CheckCircle2 size={16} /> CORRECT (Implemented in Aggregation Engine)
-                </div>
-                <div style={{ fontSize: '13px', color: 'var(--text-primary)', lineHeight: 1.6, fontFamily: 'monospace', fontWeight: 600 }}>
-                  BU Intensity = Σ(Emissions) / Σ(Production) = (100 + 300) / (1,000 + 2,000) = 400 / 3,000 = 0.1333
-                </div>
-                <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: 8 }}>
-                  Preserves true volume-weighted physical relationship. Numerator and denominator are tracked independently.
-                </div>
-              </div>
-
-              {/* Incorrect Method */}
-              <div style={{ padding: '16px', borderRadius: 8, background: 'rgba(239, 68, 68, 0.08)', border: '1px solid rgba(239, 68, 68, 0.3)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--rose-400)', fontWeight: 700, fontSize: '13px', marginBottom: 8 }}>
-                  <AlertTriangle size={16} /> INCORRECT (Forbidden Flat Average)
-                </div>
-                <div style={{ fontSize: '13px', color: 'var(--text-primary)', lineHeight: 1.6, fontFamily: 'monospace', fontWeight: 600 }}>
-                  Flat Mean = (0.10 + 0.15) / 2 = 0.1250 (Error of 6.2%)
-                </div>
-                <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: 8 }}>
-                  Averaging ratios distorts corporate emissions inventory and fails SEBI statutory assurance audits.
-                </div>
-              </div>
-            </div>
+            <h3 style={{ fontSize: '16px', fontWeight: 700, color: '#fff', margin: 0 }}>
+              Plain SUM Aggregation Rule
+            </h3>
+            <p style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: '4px 0 0 0' }}>
+              All quantitative Principle 6 totals are computed as plain SUMs of accepted child values plus own values.
+            </p>
           </div>
         </div>
       )}

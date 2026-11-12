@@ -76,14 +76,19 @@ UNRELATED_STRONG_SIGNALS = [
 ]
 
 METRIC_MAP = {
-    "electricity_bill": ("ENV-ENERGY-001", "kWh"),
-    "fuel_receipt":     ("ENV-ENERGY-002", "Litres"),
-    "water_manifest":   ("ENV-WATER-001", "kL"),
-    "waste_manifest":   ("ENV-WASTE-001", "tonnes"),
-    "safety_log":       ("SOC-SAFE-001", "incidents"),
-    "gas_bill":         ("ENV-ENERGY-001", "SCM"),
-    "other_bill":       ("ENV-ENERGY-001", "units"),
-    "other":            ("ENV-ENERGY-001", "units"),
+    "electricity_bill":    ("ENV-ENERGY-001", "kWh"),
+    "fuel_receipt":        ("ENV-ENERGY-002", "Litres"),
+    "water_manifest":      ("ENV-WATER-001", "kL"),
+    "waste_manifest":      ("ENV-WASTE-001", "tonnes"),
+    "safety_log":          ("SOC-SAFE-001", "incidents"),
+    "gas_bill":            ("ENV-ENERGY-001", "SCM"),
+    "air_monitoring":      ("ENV-AIR-001", "mg/m3"),
+    "lab_report":          ("ENV-AIR-001", "mg/m3"),
+    "travel_expense":      ("ENV-GHG-003", "km"),
+    "carbon_credit":       ("ENV-EMISSIONS-004", "credits"),
+    "environment_penalty": ("GOV-LEGAL-001", "INR"),
+    "other_bill":          ("ENV-ENERGY-001", "units"),
+    "other":               ("ENV-ENERGY-001", "units"),
 }
 
 # User-facing hint aliases (from frontend dropdown)
@@ -95,14 +100,18 @@ HINT_ALIASES: Dict[str, str] = {
     "water_bill": "water_manifest",
     "water_log": "water_manifest",
     "waste_log": "waste_manifest",
+    "waste_disposal": "waste_manifest",
     "safety_report": "safety_log",
     "electricity": "electricity_bill",
     "energy_bill": "electricity_bill",
     "power_bill": "electricity_bill",
     "electric_bill": "electricity_bill",
+    "renewable_energy": "electricity_bill",
     "gas": "gas_bill",
     "gas_receipt": "gas_bill",
     "gas_bill": "gas_bill",
+    "stack_monitoring": "air_monitoring",
+    "air_report": "air_monitoring",
     "other": "other_bill",
     "other_bill": "other_bill",
 }
@@ -374,18 +383,217 @@ def _extract_common_metadata(text: str) -> Dict[str, Any]:
 # Helper: Deterministic regex extraction per doc type
 # ---------------------------------------------------------------------------
 
-def _extract_deterministic(text: str, doc_type: str) -> List[ExtractedField]:
+def _select_relevant_text(
+    text: str,
+    doc_type: str,
+    target_metric: Optional[str] = None,
+    metric_name: Optional[str] = None,
+    max_chars: int = 10000,
+) -> str:
+    """
+    For long multi-page documents, keeps the header (first 2500 chars) plus the
+    highest-relevance lines/context around target_metric / metric_name / doc_type keywords
+    instead of blindly truncating at 5000 chars.
+    """
+    if not text or len(text) <= max_chars:
+        return text
+
+    header = text[:2500]
+    rest = text[2500:]
+    lines = rest.splitlines()
+
+    keywords = set()
+    for src in (target_metric or "", metric_name or "", doc_type or ""):
+        for tok in re.findall(r"[a-zA-Z0-9]{3,}", src.lower()):
+            if tok not in {"the", "and", "for", "from", "with", "total", "other", "bill", "env", "soc", "gov"}:
+                keywords.add(tok)
+
+    # Add domain keywords
+    domain_kws = {
+        "electricity_bill": {"kwh", "mwh", "units", "consumed", "billed", "meter", "reading", "solar", "ppa", "renewable", "grid"},
+        "fuel_receipt": {"diesel", "hsd", "petrol", "coal", "biomass", "litres", "ltr", "qty", "quantity", "mt", "tonnes", "png", "lpg", "cng"},
+        "water_manifest": {"water", "surface", "groundwater", "borewell", "municipal", "seawater", "discharge", "effluent", "kl", "m3", "consumed"},
+        "waste_manifest": {"waste", "plastic", "ewaste", "e-waste", "biomedical", "battery", "hazardous", "recycled", "incineration", "landfill", "mt", "tonnes", "kg"},
+        "air_monitoring": {"nox", "sox", "so2", "particulate", "voc", "hap", "pop", "mg/m3", "mg/nm3", "stack", "emission"},
+        "gas_bill": {"gas", "png", "scm", "cubic", "consumed"},
+    }
+    keywords.update(domain_kws.get(doc_type, set()))
+
+    scored_indices = []
+    for idx, ln in enumerate(lines):
+        ln_low = ln.lower()
+        score = sum(2 for kw in keywords if kw in ln_low)
+        if score > 0 and re.search(r"\d", ln):
+            score += 1
+        if score > 0:
+            scored_indices.append((score, idx))
+
+    if not scored_indices:
+        return text[:max_chars]
+
+    # Pick top matching windows (+/- 2 lines) without overlapping
+    scored_indices.sort(key=lambda x: (-x[0], x[1]))
+    selected = set()
+    budget = max_chars - len(header) - 100
+    used = 0
+    for _, idx in scored_indices:
+        start = max(0, idx - 2)
+        end = min(len(lines), idx + 3)
+        chunk_len = sum(len(lines[i]) + 1 for i in range(start, end) if i not in selected)
+        if used + chunk_len > budget:
+            continue
+        for i in range(start, end):
+            selected.add(i)
+        used += chunk_len
+
+    snippet = "\n".join(lines[i] for i in sorted(selected))
+    return f"{header}\n...\n{snippet}"
+
+
+def _extract_number_from_line(line: str, allow_currency: bool = False) -> Optional[Tuple[float, str]]:
+    """
+    Extract a physical number + optional unit from a single line or table row,
+    skipping currency-prefixed numbers (₹/Rs/INR) unless allow_currency=True,
+    and skipping calendar years (1990-2035).
+    """
+    # Remove currency-prefixed values when looking for physical quantities
+    cleaned = line
+    if not allow_currency:
+        cleaned = re.sub(r"(?:rs\.?|inr|₹)\s*[0-9,]+(?:\.[0-9]+)?", " ", cleaned, flags=re.IGNORECASE)
+
+    # Prefer number followed by an explicit physical unit
+    unit_match = re.search(
+        r"([0-9,]+(?:\.[0-9]+)?)\s*(kwh|mwh|kvah|gj|mj|litres|liters|ltrs?|kl|m3|cum|mt|tonnes?|tons|kg|scm|mg/n?m3|mg/m3|tonne-km|tkm|pkm|km|units)\b",
+        cleaned,
+        re.IGNORECASE,
+    )
+    if unit_match:
+        try:
+            v = float(unit_match.group(1).replace(",", ""))
+            u = unit_match.group(2)
+            if v > 0:
+                return v, u
+        except ValueError:
+            pass
+
+    # Fallback: last plausible number on the line (in tables, label is left, value is right)
+    matches = re.findall(r"(?<![A-Za-z0-9./-])([0-9,]+(?:\.[0-9]+)?)(?![A-Za-z0-9./-])", cleaned)
+    for raw in reversed(matches):
+        try:
+            v = float(raw.replace(",", ""))
+            if 0 < v <= 100_000_000 and not (1990 <= v <= 2035 and "." not in raw):
+                return v, ""
+        except ValueError:
+            continue
+    return None
+
+
+def _extract_targeted_by_keywords(
+    text: str,
+    target_metric: Optional[str],
+    metric_name: Optional[str],
+    default_unit: str = "units",
+) -> Optional[ExtractedField]:
+    """
+    Finds lines matching specific keywords from metric_name / target_metric and extracts
+    the exact numeric value on that line (ideal for multi-row reports, SPCB lab reports,
+    water breakdowns, waste matrices, and BRSR/utility tables).
+    """
+    if not (metric_name or target_metric):
+        return None
+
+    stop = {"the", "and", "for", "from", "with", "total", "other", "consumed", "consumption", "generated", "amount", "data", "level", "site"}
+    raw_terms = re.findall(r"[a-zA-Z0-9]{2,}", f"{metric_name or ''} {target_metric or ''}".lower())
+    terms = [t for t in raw_terms if t not in stop and not t.isdigit()]
+    # Map common abbreviations
+    expanded = list(dict.fromkeys(terms))
+    if "nox" in expanded:
+        expanded.extend(["nitrogen oxides", "no2", "nox"])
+    if "sox" in expanded:
+        expanded.extend(["sulphur dioxide", "sulfur dioxide", "so2", "sox"])
+    if "pm" in expanded or "particulate" in expanded:
+        expanded.extend(["pm10", "pm2.5", "particulate matter", "spm"])
+    if "groundwater" in expanded or "borewell" in expanded:
+        expanded.extend(["ground water", "bore well", "borewell", "tube well"])
+    if "surface" in expanded:
+        expanded.extend(["surface water", "river", "canal", "lake"])
+    if "municipal" in expanded or "third" in expanded:
+        expanded.extend(["third party", "third-party", "municipal", "tanker"])
+    if "renewable" in expanded or "ppa" in expanded or "captive" in expanded:
+        expanded.extend(["solar", "wind", "ppa", "open access", "captive", "renewable", "green energy"])
+    if "grid" in expanded:
+        expanded.extend(["grid electricity", "discom", "non-renewable", "utility grid"])
+    if "ewaste" in expanded or ("e" in raw_terms and "waste" in expanded):
+        expanded.extend(["e-waste", "electronic waste", "ewaste"])
+    if "biomedical" in expanded:
+        expanded.extend(["bio-medical", "biomedical"])
+
+    allow_curr = any(k in (metric_name or "").lower() for k in ("spend", "penalty", "fine", "inr", "cost"))
+    lines = text.splitlines()
+    best_score = 0
+    best_hit: Optional[Tuple[float, str, str]] = None
+
+    for ln in lines:
+        ln_clean = ln.strip()
+        if not ln_clean:
+            continue
+        ln_low = ln_clean.lower()
+        # Score how many target terms appear on this line
+        score = sum(1 for t in set(expanded) if re.search(rf"\b{re.escape(t)}\b", ln_low))
+        if score == 0:
+            continue
+        # Penalize lines that look like tariff/rate/sanctioned load when looking for consumption
+        if any(bad in ln_low for bad in ("sanctioned load", "contracted demand", "tariff", "per kwh", "/kwh", "rate/unit", "previous reading", "old reading")):
+            continue
+        extracted = _extract_number_from_line(ln_clean, allow_currency=allow_curr)
+        if extracted:
+            val, unit = extracted
+            if score > best_score:
+                best_score = score
+                best_hit = (val, unit or default_unit, ln_clean)
+
+    if best_hit:
+        val, unit, quote = best_hit
+        return ExtractedField(
+            metric=target_metric or "ENV-TARGET-001",
+            value=val,
+            unit=unit,
+            confidence=0.88 if best_score >= 2 else 0.80,
+            page=1,
+            metadata={"field_name": metric_name or target_metric, "evidence_quote": quote[:220]},
+        )
+    return None
+
+
+def _extract_deterministic(
+    text: str,
+    doc_type: str,
+    target_metric: Optional[str] = None,
+    metric_name: Optional[str] = None,
+) -> List[ExtractedField]:
     """
     Regex-based deterministic extraction for real values in the document.
-    Never hallucinates or confuses currency amounts with volumetric quantities.
+    Never hallucinates, never fabricates values from hardcoded tariffs,
+    and never grabs random invoice/date numbers.
     """
     fields: List[ExtractedField] = []
     meta = _extract_common_metadata(text)
+    target_low = f"{target_metric or ''} {metric_name or ''}".lower()
+
+    # If a specific non-generic target field is requested, try targeted line-matching first
+    # for specialized metrics (Air, Fugitive, Water subtypes, Waste subtypes, Renewable/PPA)
+    if metric_name or (target_metric and target_metric not in ("ENV-ENERGY-001", "ENV-ENERGY-002", "ENV-WATER-001", "ENV-WASTE-001")):
+        targeted = _extract_targeted_by_keywords(text, target_metric, metric_name)
+        if targeted and targeted.confidence >= 0.85:
+            if targeted.metadata is not None:
+                for k, v in meta.items():
+                    targeted.metadata.setdefault(k, v)
+            fields.append(targeted)
 
     if doc_type == "electricity_bill":
-        # Extract Bill Amount in INR if available
+        # Extract Bill Amount in INR if available (strictly as metadata, NEVER as kWh!)
         amt_match = re.search(
-            r"(?:total\s+bill\s+amount|bill\s+amount|net\s+payable|total\s+payable|amount\s+due|total\s+charges)[:.\s]*(?:rs\.?|inr|₹)?\s*([0-9,]+(?:\.[0-9]+)?)",
+            r"(?:total\s+bill\s+amount|bill\s+amount|net\s+payable|total\s+payable|amount\s+due|total\s+charges(?:\s+payable)?)[:.\s|]*(?:rs\.?|inr|₹)?\s*([0-9,]+(?:\.[0-9]+)?)",
             text, re.IGNORECASE
         )
         if amt_match:
@@ -396,94 +604,151 @@ def _extract_deterministic(text: str, doc_type: str) -> List[ExtractedField]:
             except ValueError:
                 pass
 
-        # Match electricity consumption specifically
-        patterns = [
-            r"(?:total\s+billed\s+units|units\s+consumed|billed\s+units|total\s+units|net\s+energy|energy\s+consumed|total\s+consumption)[:.\s]*([0-9,]+(?:\.[0-9]+)?)\s*(?:kwh|units)?",
-            r"([0-9,]+(?:\.[0-9]+)?)\s*(?:kwh|kvah|k\.w\.h)\b",
-            r"\bunits[:.\s]+([0-9,]+(?:\.[0-9]+)?)\b",
-            r"(?:avg\s+monthly\s+units)[:.\s]*([0-9,]+(?:\.[0-9]+)?)",
-        ]
+        # If target asks specifically for renewable/solar/PPA/captive, look for that first
         val = None
-        for pat in patterns:
-            m = re.search(pat, text, re.IGNORECASE)
-            if m:
+        unit_found = "kWh"
+        if any(k in target_low for k in ("renewable", "solar", "ppa", "captive", "wind", "open access")):
+            ren_m = re.search(
+                r"(?:solar|renewable|ppa|captive|open\s+access|green\s+energy)[^\n\r]{0,60}?([0-9,]+(?:\.[0-9]+)?)\s*(kwh|mwh|gj)?",
+                text, re.IGNORECASE
+            )
+            if ren_m:
                 try:
-                    v = float(m.group(1).replace(",", ""))
+                    v = float(ren_m.group(1).replace(",", ""))
                     if v > 0:
                         val = v
-                        break
+                        if ren_m.group(2):
+                            unit_found = ren_m.group(2)
                 except ValueError:
+                    pass
+
+        # Match explicit electricity consumption labels (table-aware with `|`)
+        if val is None:
+            patterns = [
+                r"(?:total\s+billed\s+units|units\s+consumed|billed\s+units|net\s+energy(?:\s+consumed)?|energy\s+consumed|total\s+consumption|consumption\s*\(?kwh\)?|total\s+kwh)[:.\s|]*([0-9,]+(?:\.[0-9]+)?)\s*(kwh|mwh|kvah)?",
+                r"(?:total\s+units)[:.\s|]*([0-9,]+(?:\.[0-9]+)?)\s*(kwh|mwh|units)?",
+                r"(?:avg\s+monthly\s+units)[:.\s|]*([0-9,]+(?:\.[0-9]+)?)",
+            ]
+            for pat in patterns:
+                m = re.search(pat, text, re.IGNORECASE)
+                if m:
+                    try:
+                        v = float(m.group(1).replace(",", ""))
+                        if v > 0:
+                            val = v
+                            if m.lastindex and m.lastindex >= 2 and m.group(2) and m.group(2).lower() in ("kwh", "mwh", "kvah"):
+                                unit_found = m.group(2)
+                            break
+                    except ValueError:
+                        continue
+
+        # Second: Compute from Meter Reading (Current/New - Previous/Old) if available
+        if val is None:
+            curr_m = re.search(r"(?:current|new|present|closing)\s*(?:meter\s*)?reading[:.\s|]*([0-9,]+(?:\.[0-9]+)?)", text, re.IGNORECASE)
+            prev_m = re.search(r"(?:previous|old|initial|opening)\s*(?:meter\s*)?reading[:.\s|]*([0-9,]+(?:\.[0-9]+)?)", text, re.IGNORECASE)
+            if curr_m and prev_m:
+                try:
+                    curr_r = float(curr_m.group(1).replace(",", ""))
+                    prev_r = float(prev_m.group(1).replace(",", ""))
+                    diff = curr_r - prev_r
+                    if 0 < diff < 10_000_000:
+                        mf = 1.0
+                        mf_m = re.search(r"(?:multiplying\s+factor|mf)[:.\s|]*([0-9]+(?:\.[0-9]+)?)", text, re.IGNORECASE)
+                        if mf_m:
+                            mf = float(mf_m.group(1))
+                        val = round(diff * mf, 2)
+                        meta["meter_reading_previous"] = prev_r
+                        meta["meter_reading_current"] = curr_r
+                        meta["multiplying_factor"] = mf
+                        meta["calculation_basis"] = f"Meter reading difference ({curr_r} - {prev_r}) × MF {mf} = {val} kWh"
+                except ValueError:
+                    pass
+
+        # Third: Line-by-line `<number> kWh/MWh` excluding sanctioned load, tariff, or previous reading lines
+        if val is None:
+            for ln in text.splitlines():
+                ln_low = ln.lower()
+                if any(bad in ln_low for bad in ("sanctioned", "contracted", "tariff", "rate", "per kwh", "/kwh", "rs/", "inr/", "previous", "old reading")):
                     continue
+                m = re.search(r"([0-9,]+(?:\.[0-9]+)?)\s*(kwh|mwh)\b", ln, re.IGNORECASE)
+                if m:
+                    try:
+                        v = float(m.group(1).replace(",", ""))
+                        if v > 0:
+                            val = v
+                            unit_found = "MWh" if m.group(2).lower() == "mwh" else "kWh"
+                            break
+                    except ValueError:
+                        continue
 
-        # If explicit consumption units not printed, but bill amount is present, derive plausible units
-        if val is None and "bill_amount_inr" in meta:
-            amt = meta["bill_amount_inr"]
-            # Standard commercial tariff ~ ₹7.50 / kWh
-            derived_units = round(amt / 7.50, 1)
-            val = derived_units
-            meta["calculation_basis"] = f"Derived as Bill Amount (₹{amt:,.2f}) ÷ Avg Commercial Tariff (₹7.50/kWh) = {derived_units} kWh"
-
-        if val is not None and val > 0:
+        if val is not None and val > 0 and not any(f.metric == (target_metric or "ENV-ENERGY-001") for f in fields):
             fields.append(ExtractedField(
-                metric="ENV-ENERGY-001",
+                metric=target_metric or "ENV-ENERGY-001",
                 value=val,
-                unit="kWh",
-                confidence=0.92 if "calculation_basis" not in meta else 0.85,
+                unit=unit_found,
+                confidence=0.92 if "calculation_basis" not in meta else 0.88,
                 page=1,
                 metadata=meta
             ))
 
     elif doc_type == "fuel_receipt":
-        # ── Coal: mass in tonnes ─────────────────────────────────────────────
-        coal_detected = any(sig in text.lower() for sig in ["coal", "lignite", "anthracite", "coking coal"])
+        # ── Coal / Biomass: mass in tonnes ───────────────────────────────────
+        coal_detected = any(sig in text.lower() for sig in ["coal", "lignite", "anthracite", "coking coal", "biomass", "briquette"])
         if coal_detected:
             coal_patterns = [
-                r"(?:quantity|coal supplied|coal delivered|weight|net weight|total coal)[:.\s]*([0-9,]+(?:\.[0-9]+)?)\s*(?:tonnes?|mt|t\b)",
-                r"([0-9,]+(?:\.[0-9]+)?)\s*(?:mt|tonnes?)",
+                r"(?:quantity|coal supplied|coal delivered|net weight|weight|total coal)[:.\s|]*([0-9,]+(?:\.[0-9]+)?)\s*(tonnes?|mt|kg|t\b)",
+                r"([0-9,]+(?:\.[0-9]+)?)\s*(mt|tonnes?)\b",
             ]
             val = None
+            unit_c = "tonnes"
             for pat in coal_patterns:
                 m = re.search(pat, text, re.IGNORECASE)
                 if m:
                     try:
-                        val = float(m.group(1).replace(",", ""))
-                        if val > 0:
+                        v = float(m.group(1).replace(",", ""))
+                        if v > 0:
+                            if m.lastindex and m.lastindex >= 2 and m.group(2).lower() == "kg":
+                                val = round(v / 1000.0, 4)
+                            else:
+                                val = v
                             break
                     except ValueError:
                         continue
             if val is not None and val > 0:
                 fields.append(ExtractedField(
-                    metric="ENV-ENERGY-002",
+                    metric=target_metric or "ENV-ENERGY-002",
                     value=val,
-                    unit="tonnes",          # frontend will convert: val * 25 GJ/t
+                    unit=unit_c,
                     confidence=0.90,
                     page=1,
                     metadata=meta
                 ))
         else:
-            # ── Liquid fuels (petrol / diesel): volume in litres ────────────
-            # 1. Search for volume in Litres
+            # ── Liquid fuels (petrol / diesel / HSD / LDO): volume in litres ─
             vol_patterns = [
-                r"(?:quantity\s*delivered|volume\s*\(?l?\)?|fuel\s*supplied|qty\s*\(?l?\)?|quantity)[:.\s]*([0-9,]+(?:\.[0-9]+)?)\s*(?:litres|liters|ltrs?|l\b|kl\b)?",
-                r"([0-9,]+(?:\.[0-9]+)?)\s*(?:litres|liters|ltrs?|ltr\b|lt\b)",
-                r"(?:volume|qty)[:.\s]*([0-9,]+(?:\.[0-9]+)?)",
+                r"(?:quantity\s*delivered|volume\s*\(?l?\)?|fuel\s*supplied|qty\s*\(?l?\)?|quantity)[:.\s|]*([0-9,]+(?:\.[0-9]+)?)\s*(litres|liters|ltrs?|l\b|kl\b)?",
+                r"([0-9,]+(?:\.[0-9]+)?)\s*(litres|liters|ltrs?|ltr\b|lt\b|kl\b)",
+                r"(?:volume|qty)[:.\s|]*([0-9,]+(?:\.[0-9]+)?)",
             ]
             vol = None
+            vol_unit = "Litres"
             for pat in vol_patterns:
                 m = re.search(pat, text, re.IGNORECASE)
                 if m:
                     try:
                         v = float(m.group(1).replace(",", ""))
                         if 0.5 <= v <= 500000:
-                            vol = v
+                            if m.lastindex and m.lastindex >= 2 and m.group(2) and m.group(2).lower() == "kl":
+                                vol = v * 1000.0
+                            else:
+                                vol = v
                             break
                     except ValueError:
                         continue
 
-            # 2. Search for Rate / Price in INR/Litre
             rate = None
             rate_patterns = [
-                r"(?:rate|price|rsp|unit\s*price)[:.\s]*(?:rs\.?|inr|₹)?\s*([0-9,]+(?:\.[0-9]+)?)",
+                r"(?:rate|price|rsp|unit\s*price)[:.\s|]*(?:rs\.?|inr|₹)?\s*([0-9,]+(?:\.[0-9]+)?)",
                 r"([0-9]{2,3}(?:\.[0-9]{2})?)\s*(?:rs/l|inr/l|per\s*l)",
                 r"\b(?:rate|rsp)\b[^\n\d]*([0-9]{2,3}(?:\.[0-9]{2})?)",
             ]
@@ -492,17 +757,16 @@ def _extract_deterministic(text: str, doc_type: str) -> List[ExtractedField]:
                 if m:
                     try:
                         r = float(m.group(1).replace(",", ""))
-                        if 50.0 <= r <= 200.0:  # standard fuel price range
+                        if 40.0 <= r <= 250.0:
                             rate = r
                             meta["rate_inr_per_litre"] = rate
                             break
                     except ValueError:
                         continue
 
-            # 3. Search for Amount / Total Bill in INR
             amt = None
             amt_patterns = [
-                r"(?:amount|total\s*amount|total|sale(?:\s*\(?rs?\)?|)|bill\s*amount|net\s*payable)[:.\s]*(?:rs\.?|inr|₹)?\s*([0-9,]+(?:\.[0-9]+)?)",
+                r"(?:total\s*amount|bill\s*amount|net\s*payable|amount|total|sale(?:\s*\(?rs?\)?)?)[:.\s|]*(?:rs\.?|inr|₹)?\s*([0-9,]+(?:\.[0-9]+)?)",
                 r"(?:rs\.?|inr|₹)\s*([0-9,]+(?:\.[0-9]+)?)",
             ]
             for pat in amt_patterns:
@@ -517,49 +781,52 @@ def _extract_deterministic(text: str, doc_type: str) -> List[ExtractedField]:
                     except ValueError:
                         continue
 
-            # Determine true volume in Litres
             val = None
             if vol is not None and vol > 0:
                 val = vol
-                if amt and not rate and vol > 0:
+                if amt and not rate:
                     meta["rate_inr_per_litre"] = round(amt / vol, 2)
-            elif amt is not None and amt > 0:
-                # If only amount is printed (e.g. ₹4000), calculate volume using stated rate or standard ~₹102.0/L
-                eff_rate = rate or 102.0
-                calc_vol = round(amt / eff_rate, 2)
+            elif amt is not None and rate is not None and rate > 0:
+                # Only derive from explicit printed rate + printed amount (never hardcode 102.0!)
+                calc_vol = round(amt / rate, 2)
                 val = calc_vol
-                meta["rate_inr_per_litre"] = eff_rate
-                meta["calculation_basis"] = f"Calculated as Amount (₹{amt:,.2f}) ÷ Rate (₹{eff_rate:.2f}/L) = {calc_vol} Litres"
+                meta["calculation_basis"] = f"Calculated as Amount (₹{amt:,.2f}) ÷ Printed Rate (₹{rate:.2f}/L) = {calc_vol} Litres"
 
             if val is not None and val > 0:
                 fields.append(ExtractedField(
-                    metric="ENV-ENERGY-002",
+                    metric=target_metric or "ENV-ENERGY-002",
                     value=val,
-                    unit="Litres",          # frontend applies petrol/diesel density formula
-                    confidence=0.92 if vol is not None else 0.88,
+                    unit=vol_unit,
+                    confidence=0.92 if vol is not None else 0.85,
                     page=1,
                     metadata=meta
                 ))
 
     elif doc_type == "water_manifest":
         patterns = [
-            r"(?:net water consumed|total water|quantity|water consumed|consumption)[:.\s]*([0-9,]+(?:\.[0-9]+)?)\s*(?:kl|kilolitres|m3|cum)?",
-            r"([0-9,]+(?:\.[0-9]+)?)\s*(?:kl|kilolitres)",
+            r"(?:net\s+water\s+consumed|total\s+water(?:\s+consumed)?|water\s+consumed|water\s+withdrawal|discharge\s+volume|quantity|consumption)[:.\s|]*([0-9,]+(?:\.[0-9]+)?)\s*(kl|kilolitres?|m3|cum|litres?|l\b)?",
+            r"([0-9,]+(?:\.[0-9]+)?)\s*(kl|kilolitres?|m3|cum)\b",
         ]
         val = None
+        w_unit = "kL"
         for pat in patterns:
             m = re.search(pat, text, re.IGNORECASE)
             if m:
                 try:
-                    val = float(m.group(1).replace(",", ""))
+                    raw_v = float(m.group(1).replace(",", ""))
+                    u_str = (m.group(2) or "kl").lower() if (m.lastindex and m.lastindex >= 2) else "kl"
+                    if u_str in ("l", "litre", "litres"):
+                        val = round(raw_v / 1000.0, 4)
+                    else:
+                        val = raw_v
                     break
                 except ValueError:
                     continue
-        if val is not None and val > 0:
+        if val is not None and val > 0 and not fields:
             fields.append(ExtractedField(
-                metric="ENV-WATER-001",
+                metric=target_metric or "ENV-WATER-001",
                 value=val,
-                unit="kL",
+                unit=w_unit,
                 confidence=0.92,
                 page=1,
                 metadata=meta
@@ -567,7 +834,8 @@ def _extract_deterministic(text: str, doc_type: str) -> List[ExtractedField]:
 
     elif doc_type == "waste_manifest":
         patterns = [
-            r"(?:quantity|waste generated|weight|total waste)[:.\s]*([0-9,]+(?:\.[0-9]+)?)\s*(?:tonnes|tons|mt|kg)?",
+            r"(?:total\s+waste(?:\s+generated)?|waste\s+generated|net\s+weight|quantity|weight)[:.\s|]*([0-9,]+(?:\.[0-9]+)?)\s*(tonnes?|tons|mt|kg)?",
+            r"([0-9,]+(?:\.[0-9]+)?)\s*(tonnes?|mt|kg)\b",
         ]
         val = None
         for pat in patterns:
@@ -575,13 +843,14 @@ def _extract_deterministic(text: str, doc_type: str) -> List[ExtractedField]:
             if m:
                 try:
                     raw = float(m.group(1).replace(",", ""))
-                    val = raw / 1000 if raw > 10000 else raw
+                    u_str = (m.group(2) or "mt").lower() if (m.lastindex and m.lastindex >= 2) else "mt"
+                    val = round(raw / 1000.0, 4) if u_str == "kg" else raw
                     break
                 except ValueError:
                     continue
-        if val is not None and val > 0:
+        if val is not None and val > 0 and not fields:
             fields.append(ExtractedField(
-                metric="ENV-WASTE-001",
+                metric=target_metric or "ENV-WASTE-001",
                 value=val,
                 unit="tonnes",
                 confidence=0.90,
@@ -589,73 +858,96 @@ def _extract_deterministic(text: str, doc_type: str) -> List[ExtractedField]:
                 metadata=meta
             ))
 
-    elif doc_type == "safety_log":
-        lti = re.search(r"(?:lti|lost time injur\w*)[:.\s]*([0-9]+)", text, re.IGNORECASE)
-        val = int(lti.group(1)) if lti else 0
-        fields.append(ExtractedField(
-            metric="SOC-SAFE-001",
-            value=val,
-            unit="incidents",
-            confidence=0.88,
-            page=1,
-            metadata=meta
-        ))
-
-    elif doc_type == "gas_bill":
-        patterns = [
-            r"(?:gas consumed|consumption|scm consumed|volume|units consumed|quantity)[:\.\s]*([0-9,]+(?:\.[0-9]+)?)\s*(?:scm|m3|cu\.?m|cubic\.?m)?",
-            r"([0-9,]+(?:\.[0-9]+)?)\s*(?:scm|standard cubic metre)",
+    elif doc_type in ("air_monitoring", "lab_report"):
+        air_patterns = [
+            ("ENV-AIR-001", "NOx", r"\b(?:nox|nitrogen\s+oxides?|no2)\b(?:\s*\([^)]*\))?[:.\s|]*([0-9,]+(?:\.[0-9]+)?)\s*(mg/n?m3|mg/m3|ppm|tonnes?|kg)?"),
+            ("ENV-AIR-002", "SOx", r"\b(?:sox|so2|sul[ph]+ur\s+dioxide)\b(?:\s*\([^)]*\))?[:.\s|]*([0-9,]+(?:\.[0-9]+)?)\s*(mg/n?m3|mg/m3|ppm|tonnes?|kg)?"),
+            ("ENV-AIR-003", "Particulate Matter (PM)", r"\b(?:particulate\s+matter|pm\s*10|pm\s*2\.5|spm|pm)\b(?:\s*\([^)]*\))?[:.\s|]*([0-9,]+(?:\.[0-9]+)?)\s*(mg/n?m3|mg/m3|ug/m3|tonnes?|kg)?"),
+            ("ENV-AIR-004", "VOC", r"\b(?:voc|volatile\s+organic(?:\s+compounds?)?)\b(?:\s*\([^)]*\))?[:.\s|]*([0-9,]+(?:\.[0-9]+)?)\s*(mg/n?m3|mg/m3|ppm|kg)?"),
         ]
-        val = None
-        for pat in patterns:
+        for code, label, pat in air_patterns:
             m = re.search(pat, text, re.IGNORECASE)
             if m:
                 try:
-                    val = float(m.group(1).replace(",", ""))
-                    if val > 0:
-                        break
+                    v = float(m.group(1).replace(",", ""))
+                    u = (m.group(2) if (m.lastindex and m.lastindex >= 2 and m.group(2)) else "mg/m3")
+                    if v >= 0 and not any(f.metric == code for f in fields):
+                        f_meta = dict(meta)
+                        f_meta["field_name"] = label
+                        fields.append(ExtractedField(
+                            metric=code,
+                            value=v,
+                            unit=u,
+                            confidence=0.90,
+                            page=1,
+                            metadata=f_meta
+                        ))
                 except ValueError:
                     continue
-        if val is None or val <= 0:
-            nums = re.findall(r"\b\d+(?:\.\d+)?\b", text)
-            for n in nums:
-                try:
-                    fn = float(n)
-                    if 1 <= fn <= 5000000 and not (1990 <= fn <= 2035):
-                        val = fn
-                        break
-                except ValueError:
-                    pass
-        if val is not None and val > 0:
+
+    elif doc_type == "safety_log":
+        lti = re.search(r"(?:lti|lost time injur\w*|total\s+incidents)[:.\s|]*([0-9]+)", text, re.IGNORECASE)
+        if lti:
             fields.append(ExtractedField(
-                metric="ENV-ENERGY-001",
-                value=val,
-                unit="SCM",
+                metric=target_metric or "SOC-SAFE-001",
+                value=int(lti.group(1)),
+                unit="incidents",
                 confidence=0.88,
                 page=1,
                 metadata=meta
             ))
 
-    elif doc_type in ("other_bill", "other"):
-        nums = re.findall(r"\b([0-9,]+(?:\.[0-9]+)?)\b", text)
+    elif doc_type == "gas_bill":
+        patterns = [
+            r"(?:gas\s+consumed|scm\s+consumed|consumption|volume|units\s+consumed|quantity)[:.\s|]*([0-9,]+(?:\.[0-9]+)?)\s*(scm|m3|cu\.?m|cubic\.?m|kg)?",
+            r"([0-9,]+(?:\.[0-9]+)?)\s*(scm|standard\s+cubic\s+metre)\b",
+        ]
         val = None
-        for n in nums:
-            try:
-                fn = float(n.replace(",", ""))
-                if 0.1 <= fn <= 99999999 and not (1990 <= fn <= 2035):
-                    val = fn
-                    break
-            except ValueError:
-                pass
-        if val is not None and val > 0:
+        g_unit = "SCM"
+        for pat in patterns:
+            m = re.search(pat, text, re.IGNORECASE)
+            if m:
+                try:
+                    val = float(m.group(1).replace(",", ""))
+                    if m.lastindex and m.lastindex >= 2 and m.group(2) and m.group(2).lower() == "kg":
+                        g_unit = "kg"
+                    if val > 0:
+                        break
+                except ValueError:
+                    continue
+        if val is not None and val > 0 and not fields:
             fields.append(ExtractedField(
-                metric="ENV-ENERGY-001",
+                metric=target_metric or "ENV-ENERGY-001",
                 value=val,
-                unit="units",
-                confidence=0.75,
+                unit=g_unit,
+                confidence=0.88,
                 page=1,
                 metadata=meta
             ))
+
+    elif doc_type in ("other_bill", "other", "travel_expense", "carbon_credit", "environment_penalty"):
+        # If no targeted match yet, try explicit unit-labeled quantities (never random numbers!)
+        if not fields:
+            unit_pat = re.search(
+                r"(?:quantity|consumed|consumption|total|distance|credits|penalty|fine|weight|volume)[:.\s|]*([0-9,]+(?:\.[0-9]+)?)\s*(kwh|mwh|gj|litres|kl|m3|mt|tonnes?|kg|scm|mg/m3|tonne-km|pkm|km|credits)\b",
+                text,
+                re.IGNORECASE,
+            )
+            if unit_pat:
+                try:
+                    v = float(unit_pat.group(1).replace(",", ""))
+                    u = unit_pat.group(2)
+                    if v > 0:
+                        fields.append(ExtractedField(
+                            metric=target_metric or METRIC_MAP.get(doc_type, ("ENV-ENERGY-001", "units"))[0],
+                            value=v,
+                            unit=u,
+                            confidence=0.82,
+                            page=1,
+                            metadata=meta,
+                        ))
+                except ValueError:
+                    pass
 
     return fields
 
@@ -664,26 +956,183 @@ def _extract_deterministic(text: str, doc_type: str) -> List[ExtractedField]:
 # Helper: LLM text extraction
 # ---------------------------------------------------------------------------
 
-def _extract_with_llm(text: str, doc_type: str, evidence_id: str) -> Optional[List[ExtractedField]]:
+def _parse_llm_fields_response(
+    raw_result: Dict[str, Any],
+    default_metric: str,
+    default_unit: str,
+    provider_used: str,
+    target_metric: Optional[str] = None,
+    metric_name: Optional[str] = None,
+    source_text: Optional[str] = None,
+) -> List[ExtractedField]:
+    """
+    Normalizes single-field or multi-field JSON from text/vision LLM into List[ExtractedField],
+    reconciling physical meter readings and preventing Rupee-amount confusion.
+    """
+    common_meta: Dict[str, Any] = {}
+    for k in (
+        "invoice_number", "meter_id", "billing_period", "consumer_name",
+        "vendor_name", "account_number", "bill_date", "bill_amount", "amount",
+        "total_amount", "amount_after_due_date", "meter_reading_previous",
+        "meter_reading_current", "units_consumed", "evidence_quote",
+    ):
+        if raw_result.get(k) is not None and raw_result.get(k) != "":
+            common_meta[k] = raw_result[k]
+    common_meta["ai_provider"] = provider_used
+
+    amt = raw_result.get("bill_amount") or raw_result.get("amount") or raw_result.get("total_amount")
+    amt_after = raw_result.get("amount_after_due_date")
+    curr = raw_result.get("meter_reading_current")
+    prev = raw_result.get("meter_reading_previous")
+    units_c = raw_result.get("units_consumed")
+
+    def _safe_float(v: Any) -> Optional[float]:
+        if v is None:
+            return None
+        try:
+            s = re.sub(r"[^\d.]", "", str(v).strip())
+            if s.count(".") > 1:
+                return None
+            return float(s) if s else None
+        except (ValueError, TypeError):
+            return None
+
+    extracted: List[ExtractedField] = []
+    raw_items = raw_result.get("fields")
+    if isinstance(raw_items, list) and len(raw_items) > 0:
+        for item in raw_items:
+            if not isinstance(item, dict):
+                continue
+            v = _safe_float(item.get("value"))
+            if v is None or v <= 0:
+                continue
+            # Reject if LLM accidentally put the Rupee bill amount into a physical field
+            if amt is not None and v == _safe_float(amt) and not any(
+                c in str(item.get("unit") or "").lower() for c in ("inr", "rs", "rupee")
+            ):
+                if units_c and _safe_float(units_c):
+                    v = _safe_float(units_c) or v
+                else:
+                    continue
+            f_meta = dict(common_meta)
+            if item.get("field_name"):
+                f_meta["field_name"] = item["field_name"]
+            if item.get("evidence_quote"):
+                f_meta["evidence_quote"] = item["evidence_quote"]
+            extracted.append(ExtractedField(
+                metric=str(item.get("metric") or target_metric or default_metric),
+                value=v,
+                unit=str(item.get("unit") or default_unit),
+                confidence=min(1.0, max(0.0, float(item.get("confidence", raw_result.get("confidence", 0.90))))),
+                page=int(item.get("page", 1) or 1),
+                metadata=f_meta,
+            ))
+
+    # Also parse primary top-level value if not already represented
+    val = raw_result.get("value")
+    if val is None:
+        for alt_k in ("units_kwh", "consumption", "primary_quantity", "billed_units", "units", "quantity", "litres"):
+            if raw_result.get(alt_k) is not None:
+                val = raw_result[alt_k]
+                break
+    val_clean = _safe_float(val)
+
+    if val_clean is not None and val_clean > 0:
+        # Reconcile physical meter readings if available
+        if curr is not None and prev is not None:
+            curr_f, prev_f = _safe_float(curr), _safe_float(prev)
+            if curr_f is not None and prev_f is not None:
+                diff = abs(curr_f - prev_f)
+                if diff > 0 and (
+                    val_clean in (_safe_float(amt), _safe_float(amt_after))
+                    or val_clean == 0
+                    or (units_c and _safe_float(units_c) == diff)
+                ):
+                    logger.info(f"LLM extraction reconciled val from {val_clean} to meter difference {diff}")
+                    val_clean = diff
+        elif units_c is not None and val_clean in (_safe_float(amt), _safe_float(amt_after)):
+            uc_flt = _safe_float(units_c)
+            if uc_flt and uc_flt > 0:
+                val_clean = uc_flt
+
+        primary_metric = str(raw_result.get("metric") or target_metric or default_metric)
+        primary_unit = str(raw_result.get("unit") or default_unit)
+        p_meta = dict(common_meta)
+        if raw_result.get("field_name") or metric_name:
+            p_meta["field_name"] = raw_result.get("field_name") or metric_name
+        if not any(abs(float(e.value) - val_clean) < 1e-6 and e.metric == primary_metric for e in extracted):
+            extracted.insert(0, ExtractedField(
+                metric=primary_metric,
+                value=val_clean,
+                unit=primary_unit,
+                confidence=min(1.0, max(0.0, float(raw_result.get("confidence", 0.90)))),
+                page=1,
+                metadata=p_meta,
+            ))
+
+    # Grounding check when source_text is known: slightly lower confidence if value isn't visibly in text or meter diff
+    if source_text and extracted:
+        compact_text = source_text.replace(",", "")
+        for ef in extracted:
+            v_str = str(int(ef.value)) if float(ef.value).is_integer() else str(ef.value)
+            if v_str not in compact_text:
+                # Check if it came from meter diff
+                curr_f, prev_f = _safe_float(curr), _safe_float(prev)
+                is_meter_diff = curr_f is not None and prev_f is not None and abs(abs(curr_f - prev_f) - float(ef.value)) < 0.5
+                if not is_meter_diff:
+                    ef.confidence = max(0.45, round(ef.confidence - 0.25, 2))
+                    if ef.metadata is not None:
+                        ef.metadata["grounding_warning"] = "Value not matched verbatim in extracted text; please verify."
+
+    return extracted
+
+
+def _extract_with_llm(
+    text: str,
+    doc_type: str,
+    evidence_id: str,
+    target_metric: Optional[str] = None,
+    metric_name: Optional[str] = None,
+    target_unit: Optional[str] = None,
+) -> Optional[List[ExtractedField]]:
     """Try LLM-based extraction from document text via AI Gateway cascade (OpenRouter / Gemini)."""
     from app.ai.gateway import ai_gateway
 
     metric_code, expected_unit = METRIC_MAP.get(doc_type, ("UNKNOWN", "units"))
+    eff_metric = target_metric or metric_code
+    eff_unit = target_unit or expected_unit
+    focused_text = _select_relevant_text(text, doc_type, target_metric, metric_name, max_chars=10000)
+
+    target_block = ""
+    if target_metric or metric_name:
+        target_block = (
+            f"SPECIFIC TARGET FIELD REQUESTED:\n"
+            f"- Field Name: {metric_name or target_metric}\n"
+            f"- Metric Code: {eff_metric}\n"
+            f"- Expected Unit: {eff_unit}\n"
+            f"You MUST locate the EXACT value for THIS specific field in the document. "
+            f"Do NOT return a different line item (e.g. do not return Grid Electricity when Renewable/Solar is requested, "
+            f"do not return Total Water when Groundwater/Borewell is requested, do not return SOx when NOx is requested).\n\n"
+        )
+    else:
+        target_block = (
+            f"Extract ALL distinct ESG physical consumption/emission fields present in the document into the 'fields' array, "
+            f"with the primary headline metric in top-level 'value' and 'unit'.\n\n"
+        )
 
     prompt = (
-        f"You are a Senior Statutory ESG auditor extracting verified metrics from utility documents.\n\n"
+        f"You are a Senior Statutory ESG auditor extracting verified metrics from utility bills, lab reports, and manifests.\n\n"
         f"Document Type: {doc_type}\n"
-        f"Expected BRSR Metric Code: {metric_code} (default unit: {expected_unit})\n\n"
+        f"Default BRSR Metric Code: {eff_metric} (unit: {eff_unit})\n\n"
+        f"{target_block}"
         f"CRITICAL AUDIT RULES (STRICT PHYSICAL VERIFICATION):\n"
-        f"1. NEVER confuse monetary amounts (in Rupees ₹ / INR / Rs) with physical consumption (kWh, Litres, m³, tonnes)!\n"
-        f"   - On electricity bills: 'Amount', 'Total Charges Payable', 'Net Payable', 'Amount Payable after due date' (e.g., 458, 471) are MONEY / CURRENCY in Rupees. Put them into 'bill_amount'.\n"
-        f"   - On electricity bills: Check the meter reading table. 'Units Consumed' or 'BILLED UNITS' = (Current/New Reading - Previous/Old Reading). Put this physical energy consumption into 'value' (e.g., 110 kWh).\n"
-        f"   - NEVER return monetary rupee amounts as 'value'!\n"
-        f"2. Extract ONLY numbers that actually appear in the document text below. DO NOT invent or assume values.\n"
-        f"3. Return the verified physical consumption quantity in 'value' (e.g., total kWh for electricity, Litres for fuel, kL for water, tonnes for waste).\n"
-        f"4. Also extract vendor_name (supplier/discom), consumer_name, invoice_number, meter_id, billing_period, bill_amount, meter_reading_previous, meter_reading_current, units_consumed.\n"
-        f"5. Confidence should reflect how explicitly the consumption value was stated (0.0 to 1.0).\n\n"
-        f"Document Content:\n{text[:5000]}\n\n"
+        f"1. NEVER confuse monetary amounts (in Rupees ₹ / INR / Rs) with physical consumption (kWh, MWh, Litres, kL, m³, tonnes, mg/m³)!\n"
+        f"   - On electricity bills: 'Amount', 'Total Charges Payable', 'Net Payable', 'Amount Payable after due date' are MONEY in Rupees -> put in 'bill_amount'.\n"
+        f"   - On electricity bills: 'Units Consumed' or 'BILLED UNITS' = (Current/New Reading - Previous/Old Reading). NEVER return Sanctioned Load, Contracted Demand (kVA), or Tariff Rate (₹/kWh) as consumption!\n"
+        f"2. Extract ONLY numbers that actually appear in the document text below. DO NOT invent, estimate, or divide bill amount by an assumed tariff.\n"
+        f"3. Include 'evidence_quote' containing the exact verbatim line/phrase from the document where you read the value.\n"
+        f"4. Also extract vendor_name, consumer_name, invoice_number, meter_id, billing_period, bill_amount, meter_reading_previous, meter_reading_current, units_consumed.\n\n"
+        f"Document Content:\n{focused_text}\n\n"
         f"Return strictly valid JSON matching the schema."
     )
 
@@ -691,19 +1140,34 @@ def _extract_with_llm(text: str, doc_type: str, evidence_id: str) -> Optional[Li
         "type": "object",
         "properties": {
             "metric": {"type": "string"},
+            "field_name": {"type": "string"},
             "value": {"type": "number"},
-            "units_kwh": {"type": "number"},
+            "unit": {"type": "string"},
+            "confidence": {"type": "number"},
+            "evidence_quote": {"type": "string"},
             "units_consumed": {"type": "number"},
             "meter_reading_previous": {"type": "number"},
             "meter_reading_current": {"type": "number"},
-            "unit": {"type": "string"},
-            "confidence": {"type": "number"},
             "invoice_number": {"type": "string"},
             "meter_id": {"type": "string"},
             "billing_period": {"type": "string"},
             "consumer_name": {"type": "string"},
             "vendor_name": {"type": "string"},
-            "bill_amount": {"type": "number"}
+            "bill_amount": {"type": "number"},
+            "fields": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "field_name": {"type": "string"},
+                        "metric": {"type": "string"},
+                        "value": {"type": "number"},
+                        "unit": {"type": "string"},
+                        "confidence": {"type": "number"},
+                        "evidence_quote": {"type": "string"},
+                    }
+                }
+            }
         },
         "required": ["metric", "value", "unit", "confidence"]
     }
@@ -716,53 +1180,16 @@ def _extract_with_llm(text: str, doc_type: str, evidence_id: str) -> Optional[Li
         )
         if is_mock or not raw_result:
             return None
-        val = raw_result.get("value")
-        if val is None:
-            for alt_k in ("units_kwh", "consumption", "quantity", "litres", "total_units"):
-                if raw_result.get(alt_k) is not None:
-                    val = raw_result[alt_k]
-                    break
-        if val is None:
-            return None
-        val_clean = float(re.sub(r"[^\d.]", "", str(val)))
-        if val_clean <= 0:
-            return None
-
-        meta = {}
-        for k in ("invoice_number", "meter_id", "billing_period", "consumer_name", "vendor_name", "bill_amount", "meter_reading_previous", "meter_reading_current", "units_consumed"):
-            if raw_result.get(k):
-                meta[k] = raw_result[k]
-        meta["ai_provider"] = provider_used
-
-        # Reconcile physical meter readings if available
-        curr = raw_result.get("meter_reading_current")
-        prev = raw_result.get("meter_reading_previous")
-        units_c = raw_result.get("units_consumed")
-        amt = raw_result.get("bill_amount")
-        if curr is not None and prev is not None:
-            try:
-                diff = abs(float(curr) - float(prev))
-                if diff > 0 and (val_clean == amt or val_clean == 0 or (units_c and float(units_c) == diff)):
-                    logger.info(f"LLM extraction reconciled val_clean from {val_clean} to meter difference {diff}")
-                    val_clean = diff
-            except (ValueError, TypeError):
-                pass
-        elif units_c is not None and val_clean == amt:
-            try:
-                uc_flt = float(units_c)
-                if uc_flt > 0:
-                    val_clean = uc_flt
-            except (ValueError, TypeError):
-                pass
-
-        return [ExtractedField(
-            metric=raw_result.get("metric", metric_code),
-            value=val_clean,
-            unit=raw_result.get("unit") or expected_unit,
-            confidence=float(raw_result.get("confidence", 0.90)),
-            page=1,
-            metadata=meta
-        )]
+        parsed = _parse_llm_fields_response(
+            raw_result,
+            default_metric=eff_metric,
+            default_unit=eff_unit,
+            provider_used=provider_used,
+            target_metric=target_metric,
+            metric_name=metric_name,
+            source_text=text,
+        )
+        return parsed if parsed else None
     except Exception as e:
         logger.warning(f"AI Gateway LLM text extraction failed ({doc_type}): {e}")
         return None
@@ -777,6 +1204,9 @@ def _extract_with_vision(
     mime_type: str,
     doc_type: str,
     run_relevance_check: bool = False,
+    target_metric: Optional[str] = None,
+    metric_name: Optional[str] = None,
+    target_unit: Optional[str] = None,
 ) -> Tuple[bool, Optional[str], List[ExtractedField]]:
     """
     Vision LLM extraction for image files.
@@ -787,6 +1217,8 @@ def _extract_with_vision(
     from app.ai.gateway import ai_gateway
 
     metric_code, expected_unit = METRIC_MAP.get(doc_type, ("UNKNOWN", "units"))
+    eff_metric = target_metric or metric_code
+    eff_unit = target_unit or expected_unit
 
     vision_schema = {
         "type": "object",
@@ -804,145 +1236,120 @@ def _extract_with_vision(
             "meter_reading_previous": {"type": "number"},
             "meter_reading_current": {"type": "number"},
             "units_consumed": {"type": "number"},
+            "field_name": {"type": "string"},
+            "metric": {"type": "string"},
             "value": {"type": "number"},
             "units_kwh": {"type": "number"},
             "unit": {"type": "string"},
+            "evidence_quote": {"type": "string"},
             "amount": {"type": "number"},
             "amount_after_due_date": {"type": "number"},
-            "confidence": {"type": "number"}
+            "confidence": {"type": "number"},
+            "fields": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "field_name": {"type": "string"},
+                        "metric": {"type": "string"},
+                        "value": {"type": "number"},
+                        "unit": {"type": "string"},
+                        "confidence": {"type": "number"},
+                        "evidence_quote": {"type": "string"},
+                    }
+                }
+            }
         }
     }
 
     if run_relevance_check:
         relevance_instruction = (
             "Determine if this document is an ESG utility document (electricity bill, fuel receipt, "
-            "water bill, waste manifest, or safety log). If NOT, set is_relevant=false and provide rejection_reason. "
+            "water bill, waste manifest, lab report, or safety log). If NOT, set is_relevant=false and provide rejection_reason. "
             "If YES, set is_relevant=true and extract all consumption and invoice figures."
         )
     else:
         relevance_instruction = (
-            f"This is confirmed as a '{doc_type}' document. Extract all consumption and billing data."
+            f"This is confirmed as a '{doc_type}' document. Extract exact physical consumption and billing data."
+        )
+
+    target_block = ""
+    if target_metric or metric_name:
+        target_block = (
+            f"SPECIFIC TARGET FIELD REQUESTED:\n"
+            f"- Field Name: {metric_name or target_metric}\n"
+            f"- Metric Code: {eff_metric}\n"
+            f"- Expected Unit: {eff_unit}\n"
+            f"Extract the EXACT value for THIS specific field (not other line items or totals).\n\n"
+        )
+    else:
+        target_block = (
+            "If multiple ESG metrics appear (e.g. NOx + SOx + PM, or Grid + Solar, or multiple waste types), "
+            "return all of them in the 'fields' array with accurate 'field_name' and 'unit', plus the primary headline metric in 'value'.\n\n"
         )
 
     vision_prompt = (
         f"You are a Senior Statutory ESG auditor extracting verified metrics from utility documents.\n\n"
         f"{relevance_instruction}\n\n"
-        f"Target BRSR Metric: {metric_code} ({expected_unit})\n\n"
+        f"Target BRSR Metric: {eff_metric} ({eff_unit})\n\n"
+        f"{target_block}"
         f"CRITICAL EXTRACTION RULES (STRICT PHYSICAL VERIFICATION):\n"
         f"1. NEVER confuse monetary amounts (in Rupees ₹ / INR / Rs) with physical consumption (kWh, Litres, m³, tonnes)!\n"
-        f"   - On electricity bills: 'Amount', 'Total Charges Payable', 'Net Amount', 'Amount Payable after due date' (e.g. 458, 471) are MONETARY CURRENCY in Rupees. Put them into 'amount' or 'amount_after_due_date'.\n"
-        f"   - On electricity bills: Find the physical meter table. Look for 'Meter Reading New' (Current Reading) and 'Meter Reading Old' (Previous Reading). The real energy consumed is (New Reading - Old Reading) or the column 'Units Consumed' / 'BILLED UNITS' (e.g. 6277 - 6167 = 110 kWh).\n"
-        f"   - Return the physical energy consumption in 'value' (and 'units_kwh', 'units_consumed') and set 'unit' to 'kWh'.\n"
-        f"   - NEVER return monetary rupee amounts (like 458 or 471) as kWh!\n"
-        f"2. Fuel/Diesel receipts: Extract the volumetric quantity in Litres (e.g. from 'Volume' or 'Qty (L)'), NOT the total sale price in Rs.\n"
+        f"   - On electricity bills: 'Amount', 'Total Charges Payable', 'Net Amount', 'Amount Payable after due date' are MONETARY CURRENCY in Rupees. Put them into 'amount' or 'amount_after_due_date'.\n"
+        f"   - On electricity bills: Find the physical meter table. Look for 'Meter Reading New' (Current Reading) and 'Meter Reading Old' (Previous Reading). The real energy consumed is (New Reading - Old Reading) or 'Units Consumed' / 'BILLED UNITS'. NEVER return Sanctioned Load, Contracted Demand (kVA), or Tariff Rate (₹/kWh) as consumption!\n"
+        f"   - Return the physical energy consumption in 'value' (and 'units_consumed') and set 'unit' to 'kWh' (or MWh as printed).\n"
+        f"2. Fuel/Diesel receipts: Extract the volumetric quantity in Litres (or tonnes for coal), NOT the total sale price in Rs.\n"
         f"3. Water bills: Extract volumetric water consumed in kL or m³, NOT bill charges.\n"
-        f"4. Waste manifests: Extract net weight in metric tonnes.\n"
+        f"4. Waste manifests: Extract net weight in metric tonnes or kg.\n"
         f"5. Safety logs: Extract total incidents count.\n"
-        f"6. Also extract: vendor_name, consumer_name, account_number, invoice_number, meter_id, bill_date, billing_period, amount, meter_reading_previous, meter_reading_current, units_consumed.\n"
-        f"7. Return strictly valid JSON matching the schema."
+        f"6. Include 'evidence_quote' with the exact printed text/row where you read the value.\n"
+        f"7. Also extract: vendor_name, consumer_name, account_number, invoice_number, meter_id, bill_date, billing_period, amount, meter_reading_previous, meter_reading_current, units_consumed.\n"
+        f"8. Return strictly valid JSON matching the schema."
     )
 
     result = None
-    last_err = None
 
     # --- Try via AIGateway cascade (respects AI_PROVIDER order) ---
     try:
-        raw_result, provider_used, _ = ai_gateway._call_provider_cascade(
+        raw_result, provider_used, is_mock = ai_gateway._call_provider_cascade(
             "generate_vision_json",
             prompt=vision_prompt,
             image_bytes=file_bytes,
             mime_type=mime_type,
             schema_dict=vision_schema
         )
-        result = raw_result
+        if not is_mock:
+            result = raw_result
         logger.info(f"E1 vision extraction via {provider_used}: keys={list(result.keys()) if result else []}")
     except Exception as e:
-        last_err = e
         logger.warning(f"E1 vision extraction failed via gateway: {e}")
 
     if result is None:
-        logger.warning("E1 vision extraction: all providers exhausted")
-        return True, None, []  # Don't reject on LLM error
+        logger.warning("E1 vision extraction: all providers exhausted or mock")
+        return True, None, []  # Don't reject on LLM error; let local OCR + regex handle it
 
     if run_relevance_check and result.get("is_relevant") is False:
         rej = result.get("rejection_reason", "Document is not a recognized ESG utility bill.")
         return False, rej, []
 
-    # Find consumption value from multiple possible model keys
-    raw_val = None
-    for k in ("value", "units_kwh", "consumption", "primary_quantity", "billed_units", "units", "quantity", "litres"):
-        if result.get(k) is not None:
-            raw_val = result[k]
-            break
+    llm_detected = str(result.get("doc_type_detected") or "").strip().lower()
+    if llm_detected and llm_detected in METRIC_MAP and not target_metric:
+        eff_metric, eff_unit = METRIC_MAP[llm_detected]
 
-    val = None
-    if raw_val is not None:
-        try:
-            clean_str = re.sub(r"[^\d.]", "", str(raw_val).strip())
-            if clean_str:
-                val = float(clean_str)
-        except Exception:
-            val = None
-
-    if val is None or val <= 0:
+    parsed_fields = _parse_llm_fields_response(
+        result,
+        default_metric=eff_metric,
+        default_unit=eff_unit,
+        provider_used=provider_used,
+        target_metric=target_metric,
+        metric_name=metric_name,
+    )
+    if not parsed_fields:
         logger.info("Vision extracted no positive consumption value")
         return True, None, []
 
-    # Use LLM-detected doc_type if provided
-    llm_detected = result.get("doc_type_detected", "").strip().lower()
-    if llm_detected and llm_detected in METRIC_MAP:
-        metric_code, expected_unit = METRIC_MAP[llm_detected]
-
-    unit_str = result.get("unit") or expected_unit
-
-    meta = {}
-    for k in (
-        "invoice_number", "meter_id", "billing_period", "consumer_name",
-        "vendor_name", "account_number", "bill_date", "amount", "total_amount",
-        "amount_after_due_date", "meter_reading_previous", "meter_reading_current",
-        "units_consumed"
-    ):
-        if result.get(k):
-            meta[k] = result[k]
-
-    # Reconcile physical meter readings if available
-    curr = result.get("meter_reading_current")
-    prev = result.get("meter_reading_previous")
-    units_c = result.get("units_consumed")
-    amt = result.get("amount")
-    amt_after = result.get("amount_after_due_date")
-    if curr is not None and prev is not None:
-        try:
-            diff = abs(float(curr) - float(prev))
-            if diff > 0 and (val in (amt, amt_after) or val == 0 or (units_c and float(units_c) == diff)):
-                logger.info(f"Vision extraction reconciled val from {val} to meter difference {diff}")
-                val = diff
-        except (ValueError, TypeError):
-            pass
-    elif units_c is not None and (val in (amt, amt_after) or val == 0):
-        try:
-            uc_flt = float(units_c)
-            if uc_flt > 0:
-                val = uc_flt
-        except (ValueError, TypeError):
-            pass
-
-    confidence = 0.90
-    try:
-        confidence = float(result.get("confidence", 0.90))
-    except Exception:
-        pass
-
-    field = ExtractedField(
-        metric=metric_code,
-        value=val,
-        unit=unit_str,
-        confidence=confidence,
-        page=1,
-        metadata=meta
-    )
-    logger.info(f"E1 vision successfully extracted: {field.value} {field.unit} (metric={field.metric}, meta={meta})")
-    return True, None, [field]
+    logger.info(f"E1 vision successfully extracted {len(parsed_fields)} field(s): primary={parsed_fields[0].value} {parsed_fields[0].unit}")
+    return True, None, parsed_fields
 
 
 
@@ -1181,10 +1588,11 @@ def run_extraction_pipeline(request: E1ExtractRequest, db_session=None) -> E1Ext
     if user_hint and user_hint not in VALID_DOC_TYPES:
         _hint_keyword_map = [
             (["diesel", "fuel", "petrol", "lpg", "cng", "gas oil", "hsd", "ms ", "coal", "furnace oil", "kerosene", "atf", "aviation"], "fuel_receipt"),
-            (["electric", "kwh", "mwh", "power bill", "energy bill", "discom", "electricity"], "electricity_bill"),
+            (["electric", "kwh", "mwh", "power bill", "energy bill", "discom", "electricity", "renewable", "solar", "ppa"], "electricity_bill"),
             (["water", "jal", "metro water", "water board", "kwl", "kilolitre"], "water_manifest"),
             (["gas", "png", "natural gas", "scm", "lpg"], "gas_bill"),
             (["waste", "hazardous", "spcb", "cpcb", "disposal", "manifest", "scrap"], "waste_manifest"),
+            (["nox", "sox", "particulate", "stack", "air emission", "ambient air", "monitoring", "lab report"], "air_monitoring"),
             (["safety", "incident", "lti", "near miss", "accident", "injury", "fatality"], "safety_log"),
         ]
         for keywords, mapped_type in _hint_keyword_map:
@@ -1312,6 +1720,9 @@ def run_extraction_pipeline(request: E1ExtractRequest, db_session=None) -> E1Ext
 
     # ── Step 4: REAL AI EXTRACTION (Vision LLM & Text LLM Cascade) ──
     extracted_fields: List[ExtractedField] = []
+    t_metric = getattr(request, "target_metric", None)
+    t_name = getattr(request, "metric_name", None)
+    t_unit = getattr(request, "target_unit", None)
 
     # Priority A: For image bills or scanned files, run Vision LLM cascade first
     if file_bytes and (is_image or not document_text):
@@ -1322,6 +1733,9 @@ def run_extraction_pipeline(request: E1ExtractRequest, db_session=None) -> E1Ext
             mime_type=effective_mime,
             doc_type=doc_type,
             run_relevance_check=run_rel_check,
+            target_metric=t_metric,
+            metric_name=t_name,
+            target_unit=t_unit,
         )
         if not vis_relevant:
             return E1ExtractResponse(
@@ -1338,14 +1752,25 @@ def run_extraction_pipeline(request: E1ExtractRequest, db_session=None) -> E1Ext
 
     # Priority B: For documents with text, call AI LLM structured extraction
     if not extracted_fields and document_text:
-        logger.info(f"E1 calling AI LLM text extraction for '{doc_type}'")
-        llm_fields = _extract_with_llm(document_text, doc_type, request.evidence_id)
+        logger.info(f"E1 calling AI LLM text extraction for '{doc_type}' (target={t_metric or t_name})")
+        llm_fields = _extract_with_llm(
+            document_text,
+            doc_type,
+            request.evidence_id,
+            target_metric=t_metric,
+            metric_name=t_name,
+            target_unit=t_unit,
+        )
         if llm_fields:
             extracted_fields = llm_fields
             logger.info(f"E1 AI LLM text successfully extracted {len(extracted_fields)} field(s) for '{doc_type}'")
 
     # Priority C: Deterministic regex parsing (for offline/local failover or metadata enrichment)
-    regex_fields = _extract_deterministic(document_text, doc_type) if document_text else []
+    regex_fields = (
+        _extract_deterministic(document_text, doc_type, target_metric=t_metric, metric_name=t_name)
+        if document_text
+        else []
+    )
     if not extracted_fields and regex_fields:
         logger.info(f"E1 deterministic regex fallback extracted {len(regex_fields)} field(s) for '{doc_type}'")
         extracted_fields = regex_fields

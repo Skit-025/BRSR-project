@@ -22,7 +22,6 @@ def validate_evidence_presence(
             metric.calc_formula_code
             or metric.entry_level == "calculated"
             or (metric.code.startswith("ENV-GHG") and "FUEL" not in metric.code)
-            or "INTENSITY" in metric.code
         )
     )
     if is_calculated:

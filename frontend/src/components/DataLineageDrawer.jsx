@@ -3,7 +3,7 @@ import {
   X, CheckCircle2, Shield, FileText, ArrowDown, ExternalLink, 
   Hash, Building2, Calculator, Clock, UserCheck, RefreshCw, AlertCircle, Download
 } from 'lucide-react';
-import { api, API_BASE } from '../api/client';
+import { api, p6FormsApi } from '../api/client';
 
 export default function DataLineageDrawer({ isOpen, onClose, metricData, metricCode, periodId, entityId }) {
   const [liveLineage, setLiveLineage] = useState(null);
@@ -33,6 +33,34 @@ export default function DataLineageDrawer({ isOpen, onClose, metricData, metricC
 
     const fetchLiveLineage = async () => {
       try {
+        if (['energy', 'ghg', 'scope3', 'water', 'waste'].includes(activeMetricCode)) {
+          const res = await p6FormsApi.getLineage(activeMetricCode, activePeriodId);
+          const contribs = res.data?.contributions || [];
+          const totalVal = contribs.reduce((s, c) => s + Number(c.value || 0), 0);
+          const unit = contribs[0]?.unit || '';
+          const mapped = {
+            metric_code: activeMetricCode.toUpperCase(),
+            metric_name: `${activeMetricCode.toUpperCase()} Roll-up`,
+            consolidated_value: totalVal,
+            unit,
+            tree: {
+              node_type: 'GROUP',
+              node_name: res.data?.node_id || 'Roll-up',
+              reported_value: totalVal,
+              unit,
+              method: 'SUM',
+              site_datapoints: contribs.map((c) => ({
+                project_name: c.node_name,
+                project_code: c.node_id,
+                raw_value: c.value,
+                unit: c.unit,
+                status: c.status,
+              })),
+            },
+          };
+          if (isMounted) setLiveLineage(mapped);
+          return;
+        }
         let url = `/lineage/${encodeURIComponent(activeMetricCode)}/${encodeURIComponent(activePeriodId)}`;
         if (activeEntityId) url += `?entity_id=${encodeURIComponent(activeEntityId)}`;
         const res = await api.get(url);

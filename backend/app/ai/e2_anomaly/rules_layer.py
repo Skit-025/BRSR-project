@@ -31,12 +31,12 @@ def run_rules_layer(value: float, history: List[float], metric_code: str, extra_
         import numpy as np
         hist_median = float(np.median(history))
         if hist_median > 0:
-            ratio = value / hist_median
-            if ratio > 500:
+            multiple = value / hist_median
+            if multiple > 500:
                 score = max(score, 0.95)
                 reasons.append(AnomalyReason(
                     feature="unit_slip_1000x",
-                    message=f"Value ({value}) is ~{int(ratio)}x the trailing median ({hist_median:.1f}). Likely unit error (e.g. litres vs kL, kWh vs MWh).",
+                    message=f"Value ({value}) is ~{int(multiple)}x the trailing median ({hist_median:.1f}). Likely unit error (e.g. litres vs kL, kWh vs MWh).",
                     contribution=0.9
                 ))
 

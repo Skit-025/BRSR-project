@@ -301,6 +301,7 @@ def are_units_equivalent(u1: Optional[str], u2: Optional[str]) -> bool:
         {"kl", "kilolitre", "kilolitres", "kiloliter", "kiloliters", "m3", "cum", "cubicmeter", "cubicmeters"},
         {"mt", "t", "tonne", "tonnes", "ton", "tons", "metrictonne", "metrictonnes"},
         {"kg", "kilogram", "kilograms"},
+        {"mg/m3", "mg/nm3", "mg/m³", "mg/nm³"},
         {"inr", "rs", "rupees", "inr."},
     ]
     for group in SYNONYM_GROUPS:
@@ -312,14 +313,18 @@ def are_units_equivalent(u1: Optional[str], u2: Optional[str]) -> bool:
 def get_esg_field_category(code: str, name: str) -> str:
     """Intelligently classifies what ESG field the OCR is being performed for."""
     combined = (str(code or "") + " " + str(name or "")).lower()
-    if any(k in combined for k in ["energy-001", "electr", "power", "grid", "discom", "kwh", "mwh"]):
+    if any(k in combined for k in ["energy-001", "electr", "power", "grid", "discom", "kwh", "mwh", "solar", "ppa", "captive", "renewable"]):
         return "electricity"
-    if any(k in combined for k in ["energy-002", "energy-003", "fuel", "diesel", "petrol", "hsd", "coal", "gasoline", "lpg"]):
+    if any(k in combined for k in ["energy-002", "energy-003", "fuel", "diesel", "petrol", "hsd", "ldo", "coal", "gasoline", "lpg", "biomass"]):
         return "fuel"
-    if any(k in combined for k in ["water", "jal", "sewerage", "h2o", "kl", "m3"]):
+    if any(k in combined for k in ["water", "jal", "sewerage", "h2o", "kl", "m3", "borewell", "groundwater", "surface", "effluent", "stp", "etp"]):
         return "water"
-    if any(k in combined for k in ["waste", "scrap", "spcb", "manifest", "disposal"]):
+    if any(k in combined for k in ["waste", "scrap", "spcb", "manifest", "disposal", "plastic", "e-waste", "biomedical", "battery", "recycl", "incinerat", "landfill"]):
         return "waste"
+    if any(k in combined for k in ["air", "nox", "sox", "particulate", "voc", "hap", "pop", "mg/m3", "stack"]):
+        return "air"
+    if any(k in combined for k in ["refrigerant", "fugitive", "sf6", "r-22", "r-134a", "r-410a"]):
+        return "fugitive"
     if any(k in combined for k in ["safe", "injury", "lti", "incident", "man-hour"]):
         return "safety"
     if any(k in combined for k in ["gas", "png", "natural gas", "scm"]):
@@ -433,18 +438,22 @@ def extract_from_existing_evidence(
             "fuel": "fuel_receipt",
             "water": "water_manifest",
             "waste": "waste_manifest",
+            "air": "air_monitoring",
             "safety": "safety_log",
             "gas": "gas_bill",
         }
         effective_hint = CATEGORY_TO_HINT.get(required_category, effective_hint)
 
-    # 1. Use the original E1 engine
+    # 1. Use the original E1 engine with explicit target field context
     req = E1ExtractRequest(
         evidence_id=evidence.id,
         file_bytes=file_bytes,
         filename=evidence.original_name,
         mime_type=evidence.mime_type,
-        doc_type_hint=effective_hint
+        doc_type_hint=effective_hint,
+        target_metric=active_target_metric or None,
+        metric_name=active_metric_name or None,
+        target_unit=req_unit or None,
     )
     e1_res = e1_engine.extract_from_file(req, db_session=db)
     if not e1_res.is_relevant:
@@ -464,11 +473,19 @@ def extract_from_existing_evidence(
                 matched_field = f
                 break
 
+        # Match by field_name / metadata similarity if multiple fields were returned
+        if not matched_field and active_metric_name:
+            name_tokens = {w for w in active_metric_name.lower().split() if len(w) >= 3}
+            for f in candidate_fields:
+                fn = str((f.metadata or {}).get("field_name") or "").lower()
+                if fn and name_tokens and any(tok in fn for tok in name_tokens):
+                    matched_field = f
+                    break
+
         # If not exact match, match by ESG category compatibility
         if not matched_field and required_category != "other":
             for f in candidate_fields:
-                f_cat = get_esg_field_category(f.metric, f.unit)
-                # Check if field or document aligns with the required category
+                f_cat = get_esg_field_category(f.metric, str((f.metadata or {}).get("field_name") or f.unit))
                 if f_cat == required_category or (e1_res.doc_type and required_category in e1_res.doc_type):
                     matched_field = f
                     break

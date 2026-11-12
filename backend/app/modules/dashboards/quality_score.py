@@ -1,7 +1,7 @@
 """
 app/modules/dashboards/quality_score.py
 Automated ESG Data Quality Score calculator (0 to 100).
-Evaluates Evidence Attachment, Actual vs Estimated ratio, Error rate, and Completeness.
+Evaluates Evidence Attachment, Actual vs Estimated proportion, Error rate, and Completeness.
 """
 from typing import Dict, Any, List
 from sqlalchemy.orm import Session
@@ -61,7 +61,7 @@ def compute_esg_quality_score(
     )
     evidence_cov = min(100.0, (linked_count / total_pts) * 100.0)
 
-    # 2. Actual values ratio
+    # 2. Actual values share
     actual_count = sum(1 for p in points if p.status == ValueStatus.ACTUAL.value)
     actual_pct = (actual_count / total_pts) * 100.0
 
