@@ -18,8 +18,10 @@ from app.data.p6_registry import (
     P6_REGISTRY,
     REGISTRY_BY_ID,
     ROLE_FORM_TITLES,
+    ROLE_NODE_TYPES,
     SECTION_ORDER,
     get_fields_for_role,
+    normalize_p6_role,
 )
 from app.data import esg_store
 
@@ -40,28 +42,52 @@ class P6ReviewRequest(BaseModel):
 
 def _role_str(user: User) -> str:
     r = user.role
-    return r.value if hasattr(r, "value") else str(r)
+    raw = r.value if hasattr(r, "value") else str(r)
+    return normalize_p6_role(raw)
 
 
 def _resolve_caller_node(db: Session, user: User) -> Dict[str, Any]:
     role = _role_str(user)
     raw_ref = getattr(user, "assigned_project_id", None) or getattr(user, "org_node_id", None)
+    all_nodes = esg_store.get_nodes()
+    allowed_types = ROLE_NODE_TYPES.get(role, [])
+
     if raw_ref:
-        # Try direct match in esgData.json
-        node = esg_store.resolve_node(str(raw_ref), fallback_role=None)
-        if node and (str(node["id"]) == str(raw_ref) or node["name"].lower() == str(raw_ref).lower()):
+        # Try direct strict match in esgData.json
+        node = esg_store.resolve_node(str(raw_ref), fallback_role=None, strict=True)
+        if node:
             return node
         # Try resolving DB OrgNode UUID -> code/name -> esgData.json node
         db_node = db.query(OrgNode).filter(OrgNode.id == str(raw_ref)).first()
         if db_node:
-            by_code = esg_store.resolve_node(db_node.code, fallback_role=None)
-            if by_code and str(by_code["id"]).lower() == str(db_node.code).lower():
+            by_code = esg_store.resolve_node(db_node.code, fallback_role=None, strict=True)
+            if by_code:
                 return by_code
-            by_name = esg_store.resolve_node(db_node.name, fallback_role=None)
+            by_name = esg_store.resolve_node(db_node.name, fallback_role=None, strict=True)
             if by_name:
                 return by_name
-    # Fallback by role level
-    return esg_store.resolve_node(None, fallback_role=role) or {"id": "MEIL-GROUP", "name": "Group", "type": "group", "parentId": None}
+            # Try substring match among nodes compatible with the caller's role tier
+            db_name_low = (db_node.name or "").strip().lower()
+            if db_name_low:
+                for n in all_nodes:
+                    n_type_low = (n.get("type") or "").lower()
+                    if allowed_types and n_type_low not in allowed_types:
+                        continue
+                    n_name_low = (n.get("name") or "").lower()
+                    if db_name_low in n_name_low or n_name_low in db_name_low:
+                        return n
+
+    # Fallback by role level — never allow a scoped role to fall back to Group root
+    if allowed_types:
+        for n in all_nodes:
+            if n.get("type", "").lower() in allowed_types:
+                return n
+    if role in ("system_admin", "group_admin", "group_supervisor"):
+        return esg_store.resolve_node(None, fallback_role=role) or {"id": "MEIL-GROUP", "name": "Group", "type": "group", "parentId": None}
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="No organizational node assigned for your role scope.",
+    )
 
 
 def _assert_downward_access(caller_node: Dict[str, Any], target_node_id: str) -> None:
@@ -282,6 +308,29 @@ def submit_form(
     return {"status": "submitted", "node_id": caller_node["id"], "role": role, "entries": saved}
 
 
+_REVIEWABLE_TARGET_ROLES: Dict[str, set] = {
+    "project_admin": {"project_supervisor"},
+    "bu_admin": {"bu_supervisor", "bu_esg_manager", "project_supervisor", "project_admin"},
+    "subsidiary_admin": {
+        "subsidiary_supervisor", "subsidiary_esg_manager",
+        "bu_supervisor", "bu_esg_manager", "bu_admin",
+        "project_supervisor", "project_admin",
+    },
+    "group_admin": {
+        "group_supervisor", "group_esg_manager",
+        "subsidiary_supervisor", "subsidiary_esg_manager", "subsidiary_admin",
+        "bu_supervisor", "bu_esg_manager", "bu_admin",
+        "project_supervisor", "project_admin",
+    },
+    "system_admin": {
+        "group_supervisor", "group_esg_manager", "group_admin",
+        "subsidiary_supervisor", "subsidiary_esg_manager", "subsidiary_admin",
+        "bu_supervisor", "bu_esg_manager", "bu_admin",
+        "project_supervisor", "project_admin",
+    },
+}
+
+
 @router.post("/review")
 def review_submission(
     body: P6ReviewRequest,
@@ -289,10 +338,18 @@ def review_submission(
     db: Session = Depends(get_db),
 ):
     role = _role_str(current_user)
-    if role not in ("project_admin", "bu_admin", "subsidiary_admin", "group_admin", "system_admin"):
+    if role not in _REVIEWABLE_TARGET_ROLES:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Reviewer role required.")
+    if body.target_role not in _REVIEWABLE_TARGET_ROLES[role]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Role '{role}' is not authorized to review submissions for '{body.target_role}'.",
+        )
     caller_node = _resolve_caller_node(db, current_user)
     _assert_downward_access(caller_node, body.node_id)
+    # Prevent same-node self-approval (e.g. bu_admin reviewing bu_admin, or bu_admin reviewing own node's project_admin)
+    if body.node_id == caller_node["id"] and body.target_role == role and role != "system_admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Cannot review your own role's submission.")
     if body.decision not in ("accepted", "rejected"):
         raise HTTPException(status_code=422, detail="Decision must be 'accepted' or 'rejected'.")
     if body.decision == "rejected" and not (body.reason or "").strip():
@@ -301,18 +358,41 @@ def review_submission(
     return {"node_id": body.node_id, "target_role": body.target_role, **st}
 
 
+_ALLOWED_VISIBLE_TYPES_BY_ROLE: Dict[str, set] = {
+    "system_admin": {"group", "root", "subsidiary", "company", "bu", "business_unit", "project", "site", "plant", "manufacturing"},
+    "group_admin": {"group", "root", "subsidiary", "company", "bu", "business_unit", "project", "site", "plant", "manufacturing"},
+    "group_supervisor": {"group", "root", "subsidiary", "company", "bu", "business_unit", "project", "site", "plant", "manufacturing"},
+    "group_esg_manager": {"group", "root", "subsidiary", "company", "bu", "business_unit", "project", "site", "plant", "manufacturing"},
+    "subsidiary_admin": {"subsidiary", "company", "bu", "business_unit", "project", "site", "plant", "manufacturing"},
+    "subsidiary_supervisor": {"subsidiary", "company", "bu", "business_unit", "project", "site", "plant", "manufacturing"},
+    "subsidiary_esg_manager": {"subsidiary", "company", "bu", "business_unit", "project", "site", "plant", "manufacturing"},
+    "bu_admin": {"bu", "business_unit", "project", "site", "plant", "manufacturing"},
+    "bu_supervisor": {"bu", "business_unit", "project", "site", "plant", "manufacturing"},
+    "bu_esg_manager": {"bu", "business_unit", "project", "site", "plant", "manufacturing"},
+    "project_admin": {"project", "site", "plant", "manufacturing"},
+    "project_supervisor": {"project", "site", "plant", "manufacturing"},
+}
+
+
 @router.get("/dashboard")
 def get_p6_dashboard(
     node_id: Optional[str] = Query(None),
     current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db),
 ):
+    role = _role_str(current_user)
     caller_node = _resolve_caller_node(db, current_user)
     target_id = node_id or caller_node["id"]
     _assert_downward_access(caller_node, target_id)
     nodes = esg_store.get_nodes()
     desc_set = set(esg_store.get_descendant_ids(caller_node["id"], include_self=True))
-    scoped_nodes = [n for n in nodes if n["id"] in desc_set]
+    allowed_types = _ALLOWED_VISIBLE_TYPES_BY_ROLE.get(role, set())
+    db_code_map = {n.code: str(n.id) for n in db.query(OrgNode.code, OrgNode.id).all() if n.code}
+    scoped_nodes = [
+        {**n, "db_id": db_code_map.get(n["id"], n["id"])}
+        for n in nodes
+        if n["id"] in desc_set and (not allowed_types or n.get("type", "").lower() in allowed_types)
+    ]
     summary = esg_store.get_dashboard_data(target_id)
     summary["accessible_nodes"] = scoped_nodes
     return summary

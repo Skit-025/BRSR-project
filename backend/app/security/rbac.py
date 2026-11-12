@@ -107,7 +107,7 @@ ROLE_PERMISSIONS: dict[Role, Set[Permission]] = {
     # ── System Admin: full access (all permissions) ───────────────────────────
     Role.SYSTEM_ADMIN: set(Permission),
 
-    # ── Group Admin: verification, governance, approvals, period lock (user appointment removed)
+    # ── Group Admin: verification, governance, approvals, period lock, BRSR report compilation & generation
     Role.GROUP_ADMIN: {
         Permission.AI_E1_USE, Permission.AI_E2_USE, Permission.AI_E3_USE,
         Permission.AI_E4_USE, Permission.AI_E5_USE, Permission.AI_E6_USE,
@@ -120,7 +120,7 @@ ROLE_PERMISSIONS: dict[Role, Set[Permission]] = {
         Permission.BU_DISCLOSURE_READ,
         Permission.SUBSIDIARY_DISCLOSURE_READ,
         Permission.GROUP_DISCLOSURE_READ,
-        Permission.REPORT_READ, Permission.REPORT_LINEAGE,
+        Permission.REPORT_COMPILE, Permission.REPORT_READ, Permission.REPORT_LINEAGE,
         Permission.PERIOD_LOCK, Permission.AUDIT_READ, Permission.ASSURANCE_WRITE,
     },
 
@@ -132,7 +132,7 @@ ROLE_PERMISSIONS: dict[Role, Set[Permission]] = {
         Permission.ORG_READ,
         Permission.METRIC_READ, Permission.FORM_MASTER,
         Permission.SUBMISSION_READ,
-        Permission.EVIDENCE_READ,
+        Permission.EVIDENCE_UPLOAD, Permission.EVIDENCE_READ, Permission.SPREADSHEET_UPLOAD,
         Permission.CONSOLIDATION_RUN, Permission.CONSOLIDATION_READ,
         Permission.CALC_RUN,
         Permission.BU_DISCLOSURE_READ,
@@ -152,7 +152,7 @@ ROLE_PERMISSIONS: dict[Role, Set[Permission]] = {
         Permission.ORG_READ,
         Permission.METRIC_READ, Permission.FORM_MASTER,
         Permission.SUBMISSION_READ,
-        Permission.EVIDENCE_READ,
+        Permission.EVIDENCE_UPLOAD, Permission.EVIDENCE_READ, Permission.SPREADSHEET_UPLOAD,
         Permission.CONSOLIDATION_RUN, Permission.CONSOLIDATION_READ,
         Permission.CALC_RUN,
         Permission.BU_DISCLOSURE_READ,
@@ -176,7 +176,6 @@ ROLE_PERMISSIONS: dict[Role, Set[Permission]] = {
         Permission.CONSOLIDATION_READ,
         Permission.BU_DISCLOSURE_READ,
         Permission.SUBSIDIARY_DISCLOSURE_READ,
-        Permission.REPORT_READ, Permission.REPORT_LINEAGE,
         Permission.AUDIT_READ,
         Permission.USERS_MANAGE_SCOPED,
     },
@@ -188,13 +187,12 @@ ROLE_PERMISSIONS: dict[Role, Set[Permission]] = {
         Permission.AI_E7_USE,
         Permission.ORG_READ,
         Permission.METRIC_READ,
-        Permission.SUBMISSION_READ,
-        Permission.EVIDENCE_READ,
+        Permission.SUBMISSION_CREATE, Permission.SUBMISSION_READ, Permission.SUBMISSION_SUBMIT,
+        Permission.EVIDENCE_UPLOAD, Permission.EVIDENCE_READ, Permission.SPREADSHEET_UPLOAD,
         Permission.CONSOLIDATION_RUN, Permission.CONSOLIDATION_READ,
         Permission.CALC_RUN,
         Permission.BU_DISCLOSURE_READ,
         Permission.SUBSIDIARY_DISCLOSURE_WRITE, Permission.SUBSIDIARY_DISCLOSURE_READ,
-        Permission.REPORT_READ, Permission.REPORT_LINEAGE,
         Permission.AUDIT_READ,
     },
 
@@ -205,13 +203,12 @@ ROLE_PERMISSIONS: dict[Role, Set[Permission]] = {
         Permission.AI_E7_USE,
         Permission.ORG_READ,
         Permission.METRIC_READ,
-        Permission.SUBMISSION_READ,
-        Permission.EVIDENCE_READ,
+        Permission.SUBMISSION_CREATE, Permission.SUBMISSION_READ, Permission.SUBMISSION_SUBMIT,
+        Permission.EVIDENCE_UPLOAD, Permission.EVIDENCE_READ, Permission.SPREADSHEET_UPLOAD,
         Permission.CONSOLIDATION_RUN, Permission.CONSOLIDATION_READ,
         Permission.CALC_RUN,
         Permission.BU_DISCLOSURE_READ,
         Permission.SUBSIDIARY_DISCLOSURE_WRITE, Permission.SUBSIDIARY_DISCLOSURE_READ,
-        Permission.REPORT_READ, Permission.REPORT_LINEAGE,
         Permission.AUDIT_READ,
     },
 
@@ -226,16 +223,15 @@ ROLE_PERMISSIONS: dict[Role, Set[Permission]] = {
         Permission.EVIDENCE_READ,
         Permission.CONSOLIDATION_READ,
         Permission.BU_DISCLOSURE_READ,
-        Permission.REPORT_READ, Permission.REPORT_LINEAGE,
         Permission.AUDIT_READ,
         Permission.USERS_MANAGE_SCOPED,
     },
 
-    # ── BU ESG Manager: BU operational, BU disclosures, consolidation, calc
+    # ── BU ESG Manager: BU operational, BU disclosures, consolidation, calc, project creation
     Role.BU_ESG_MANAGER: {
         Permission.AI_E1_USE, Permission.AI_E2_USE, Permission.AI_E3_USE,
         Permission.AI_E6_USE, Permission.AI_E7_USE,
-        Permission.ORG_READ,
+        Permission.ORG_READ, Permission.ORG_WRITE,
         Permission.METRIC_READ,
         Permission.FORM_SUBMIT,
         Permission.SUBMISSION_CREATE, Permission.SUBMISSION_READ, Permission.SUBMISSION_SUBMIT,
@@ -243,7 +239,6 @@ ROLE_PERMISSIONS: dict[Role, Set[Permission]] = {
         Permission.CONSOLIDATION_READ, Permission.CONSOLIDATION_RUN,
         Permission.CALC_RUN,
         Permission.BU_DISCLOSURE_WRITE, Permission.BU_DISCLOSURE_READ,
-        Permission.REPORT_READ, Permission.REPORT_LINEAGE,
         Permission.AUDIT_READ,
     },
 
@@ -251,7 +246,7 @@ ROLE_PERMISSIONS: dict[Role, Set[Permission]] = {
     Role.BU_SUPERVISOR: {
         Permission.AI_E1_USE, Permission.AI_E2_USE, Permission.AI_E3_USE,
         Permission.AI_E6_USE, Permission.AI_E7_USE,
-        Permission.ORG_READ,
+        Permission.ORG_READ, Permission.ORG_WRITE,
         Permission.METRIC_READ,
         Permission.FORM_SUBMIT,
         Permission.SUBMISSION_CREATE, Permission.SUBMISSION_READ, Permission.SUBMISSION_SUBMIT,
@@ -259,7 +254,6 @@ ROLE_PERMISSIONS: dict[Role, Set[Permission]] = {
         Permission.CONSOLIDATION_READ, Permission.CONSOLIDATION_RUN,
         Permission.CALC_RUN,
         Permission.BU_DISCLOSURE_WRITE, Permission.BU_DISCLOSURE_READ,
-        Permission.REPORT_READ, Permission.REPORT_LINEAGE,
         Permission.AUDIT_READ,
     },
 
@@ -272,7 +266,6 @@ ROLE_PERMISSIONS: dict[Role, Set[Permission]] = {
         Permission.FORM_REVIEW,
         Permission.SUBMISSION_READ, Permission.SUBMISSION_REVIEW, Permission.SUBMISSION_APPROVE,
         Permission.EVIDENCE_READ,
-        Permission.REPORT_READ, Permission.REPORT_LINEAGE,
         Permission.AUDIT_READ,
         Permission.USERS_MANAGE_SCOPED,
     },
@@ -286,7 +279,6 @@ ROLE_PERMISSIONS: dict[Role, Set[Permission]] = {
         Permission.SUBMISSION_CREATE, Permission.SUBMISSION_READ, Permission.SUBMISSION_SUBMIT,
         Permission.EVIDENCE_UPLOAD, Permission.EVIDENCE_READ,
         Permission.SPREADSHEET_UPLOAD,
-        Permission.REPORT_READ,
     },
 }
 

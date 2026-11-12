@@ -101,10 +101,13 @@ export default function Sidebar({ isOpen = false, onClose }) {
       project_supervisor: 'Site Operations Data',
       project_admin: 'Site Compliance',
       bu_supervisor: 'BU Value Chain',
+      bu_esg_manager: 'BU Value Chain',
       bu_admin: 'BU Environmental Mgmt',
       subsidiary_supervisor: 'Subsidiary Initiatives',
+      subsidiary_esg_manager: 'Subsidiary Initiatives',
       subsidiary_admin: 'Subsidiary Compliance',
       group_supervisor: 'Group Policy & Targets',
+      group_esg_manager: 'Group Policy & Targets',
       group_admin: 'Group Disclosures',
     }[user?.role];
 
@@ -139,8 +142,8 @@ export default function Sidebar({ isOpen = false, onClose }) {
           { to: '/data-quality', label: 'Data Quality & Desk', icon: AlertTriangle },
         ].filter(Boolean)
       },
-      // Phase 11: Project Admin sees their project BRSR summary via dashboard; BRSR Disclosures link is hidden for project_admin
-      hasPermission('report:read') && !isProjectAdmin && {
+      // BRSR Disclosures & Reporting: Exclusively for Group Admin, Group ESG Manager, and Group Supervisor
+      (hasPermission('report:compile') || ['group_admin', 'group_esg_manager', 'group_supervisor', 'system_admin'].includes(user?.role)) && {
         section: 'REPORTING',
         items: [
           { to: '/reporting', label: 'BRSR Disclosures', icon: FileSpreadsheet },

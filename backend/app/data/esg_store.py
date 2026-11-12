@@ -41,7 +41,7 @@ def get_nodes() -> List[Dict[str, Any]]:
     return load_data().get("nodes", [])
 
 
-def resolve_node(node_ref: Optional[str], fallback_role: Optional[str] = None) -> Optional[Dict[str, Any]]:
+def resolve_node(node_ref: Optional[str], fallback_role: Optional[str] = None, strict: bool = False) -> Optional[Dict[str, Any]]:
     nodes = get_nodes()
     if not nodes:
         return None
@@ -50,16 +50,18 @@ def resolve_node(node_ref: Optional[str], fallback_role: Optional[str] = None) -
         for n in nodes:
             if str(n["id"]) == ref_str or str(n["id"]).lower() == ref_str.lower():
                 return n
-        # Match by name substring if UUID from DB org_nodes was passed
+        # Match by exact name if UUID from DB org_nodes was passed
         for n in nodes:
             if n["name"].lower() == ref_str.lower():
                 return n
+        if strict:
+            return None
     if fallback_role:
         allowed_types = ROLE_NODE_TYPES.get(fallback_role, [])
         for n in nodes:
             if n["type"].lower() in allowed_types:
                 return n
-    return nodes[0]
+    return None if strict else nodes[0]
 
 
 def get_descendant_ids(node_id: str, include_self: bool = True) -> List[str]:
@@ -362,6 +364,7 @@ def get_dashboard_data(node_id: Optional[str] = None) -> Dict[str, Any]:
     target_id = node_id or (nodes[0]["id"] if nodes else "MEIL-GROUP")
     rolled = rollup_node(target_id, only_accepted=True)
     t = rolled["totals"]
+    f = rolled["fields"]
     fy = rolled["fy"]
 
     # Coverage count (6th card)
@@ -499,6 +502,35 @@ def get_dashboard_data(node_id: Optional[str] = None) -> Dict[str, Any]:
                     {"name": "Disposed", "current": wa_cur["disposed_total"] or 0, "previous": wa_prev["disposed_total"] or 0, "color": "#F97316"},
                     {"name": "Other", "current": _waste_other(wa_cur), "previous": _waste_other(wa_prev), "color": "#94A3B8"},
                 ],
+            },
+        },
+        "breakdown": {
+            "energy": {
+                "grid_electricity": f.get("ei1_nonren_elec", {}).get("current") or 0.0,
+                "captive_solar_green": (f.get("ei1_ren_elec", {}).get("current") or 0.0) + (f.get("ei1_ren_other", {}).get("current") or 0.0),
+                "fuel_diesel_gas": (f.get("ei1_nonren_fuel", {}).get("current") or 0.0) + (f.get("ei1_ren_fuel", {}).get("current") or 0.0),
+                "previous_grand_total": e_prev.get("grand_total"),
+            },
+            "ghg": {
+                "scope1_current": g_cur.get("scope1") or 0.0,
+                "scope1_prev": g_prev.get("scope1") or 0.0,
+                "scope2_current": g_cur.get("scope2") or 0.0,
+                "scope2_prev": g_prev.get("scope2") or 0.0,
+                "scope3_current": g_cur.get("scope3") or 0.0,
+            },
+            "water": {
+                "surface": f.get("ei3_surface", {}).get("current") or 0.0,
+                "groundwater": f.get("ei3_groundwater", {}).get("current") or 0.0,
+                "third_party": (f.get("ei3_third_party", {}).get("current") or 0.0) + (f.get("ei3_others", {}).get("current") or 0.0),
+                "consumption": w_cur.get("consumption") or 0.0,
+                "discharge": w_cur.get("discharge_total") or 0.0,
+            },
+            "waste": {
+                "recycled": (f.get("ei8_recycled", {}).get("current") or 0.0) + (f.get("ei8_reused", {}).get("current") or 0.0),
+                "landfill_disposal": (f.get("ei8_landfilling", {}).get("current") or 0.0) + (f.get("ei8_incineration", {}).get("current") or 0.0) + (f.get("ei8_other_disposal", {}).get("current") or 0.0),
+                "hazardous": (f.get("ei8_other_haz", {}).get("current") or 0.0) + (f.get("ei8_battery", {}).get("current") or 0.0) + (f.get("ei8_ewaste", {}).get("current") or 0.0) + (f.get("ei8_biomedical", {}).get("current") or 0.0),
+                "total_generated": wa_cur.get("generated_total") or 0.0,
+                "recovery_pct": round(((wa_cur.get("recovered_total") or 0.0) / (wa_cur.get("generated_total") or 1.0)) * 100, 1) if (wa_cur.get("generated_total") or 0) > 0 else 0.0,
             },
         },
     }

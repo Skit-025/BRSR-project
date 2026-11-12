@@ -29,9 +29,15 @@ router = APIRouter(prefix="/org", tags=["Organization Hierarchy & Applicability"
 # --- ORG NODES ---
 
 @router.get("/tree", response_model=List[OrgNodeTreeRead])
-def get_organization_tree(db: Session = Depends(get_db)):
-    """Returns the full organization hierarchy as a nested tree structure."""
-    nodes = db.query(OrgNode).filter(OrgNode.is_deleted == False).order_by(OrgNode.path).all()
+def get_organization_tree(
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+):
+    """Returns the organization hierarchy filtered top-down to the caller's authorized scope."""
+    from app.security.scope import filter_projects_query_for_user
+    query = db.query(OrgNode).filter(OrgNode.is_deleted == False).order_by(OrgNode.path)
+    query = filter_projects_query_for_user(db, query, current_user)
+    nodes = query.all()
     return build_tree_hierarchy(nodes)
 
 @router.get("/nodes", response_model=List[OrgNodeRead])
@@ -39,18 +45,11 @@ def list_nodes(
     parent_id: Optional[str] = None,
     node_type: Optional[str] = None,
     boundary: Optional[bool] = None,
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
+    current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db)
 ):
-    """Lists organization nodes with scope filtering for authenticated users."""
-    from app.security.jwt import decode_access_token
+    """Lists organization nodes with top-down scope filtering for authenticated users."""
     from app.security.scope import filter_projects_query_for_user
-
-    current_user = None
-    if credentials and credentials.credentials:
-        payload = decode_access_token(credentials.credentials)
-        if payload and payload.get("sub"):
-            current_user = db.query(User).filter(User.id == payload["sub"], User.is_deleted == False).first()
 
     query = db.query(OrgNode).filter(OrgNode.is_deleted == False)
     if parent_id:
@@ -60,8 +59,7 @@ def list_nodes(
     if boundary is not None:
         query = query.filter(OrgNode.boundary == boundary)
 
-    if current_user:
-        query = filter_projects_query_for_user(db, query, current_user)
+    query = filter_projects_query_for_user(db, query, current_user)
 
     nodes = query.all()
 

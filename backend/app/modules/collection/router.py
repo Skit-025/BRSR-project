@@ -21,15 +21,25 @@ from app.modules.collection.service import (
     process_spreadsheet_upload
 )
 from app.security.rate_limit import upload_rate_limit
+from app.security.rbac import Permission, has_permission
+from app.security.sod import assert_can_submit
 
 router = APIRouter(prefix="/collection", tags=["Monthly Data Collection & Sync"])
+
+
+def _require_perm(perm: Permission, msg: str):
+    def _dep(current_user: User = Depends(get_current_active_user)) -> User:
+        if not has_permission(current_user.role, perm):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=msg)
+        return current_user
+    return _dep
 
 
 @router.get("/pack/{entity_id}/{period_id}", response_model=SubmissionRead)
 def get_submission_pack(
     entity_id: str,
     period_id: str,
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(_require_perm(Permission.SUBMISSION_READ, "Permission 'submission:read' required.")),
     db: Session = Depends(get_db)
 ):
     """Retrieves the monthly submission pack and all recorded data points for an entity and period."""
@@ -43,7 +53,7 @@ def get_submission_pack(
 @router.post("/save", response_model=SubmissionRead)
 def save_pack(
     save_req: SubmissionSaveRequest,
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(_require_perm(Permission.SUBMISSION_CREATE, "Only maker/operational roles can save submission packs.")),
     db: Session = Depends(get_db)
 ):
     """
@@ -65,10 +75,11 @@ def save_pack(
 @router.post("/submit/{submission_id}", response_model=SubmitPackResponse)
 def submit_pack(
     submission_id: str,
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(_require_perm(Permission.SUBMISSION_SUBMIT, "Only maker/operational roles can submit packs.")),
     db: Session = Depends(get_db)
 ):
     """Freezes submission pack and moves it to SUBMITTED state for reviewer queue."""
+    assert_can_submit(current_user.role)
     from app.security.scope import assert_user_authorized_for_project
     sub = db.query(Submission).filter(Submission.id == submission_id).first()
     if sub:
@@ -99,7 +110,7 @@ async def upload_spreadsheet(
     entity_id: str,
     period_id: str,
     file: UploadFile = File(...),
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(_require_perm(Permission.SPREADSHEET_UPLOAD, "Permission 'spreadsheet:upload' required.")),
     db: Session = Depends(get_db)
 ):
     """

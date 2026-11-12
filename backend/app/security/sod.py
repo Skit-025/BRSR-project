@@ -99,7 +99,7 @@ def assert_can_run_consolidation(role: str) -> None:
 
 
 def assert_can_compile_report(role: str) -> None:
-    """Group ESG Manager, Group Admin, and System Admin may compile BRSR reports."""
+    """Only Group Admin, Group ESG Manager (Group Supervisor), and System Admin may compile and generate BRSR reports."""
     allowed = {
         Role.GROUP_ESG_MANAGER.value,
         Role.GROUP_SUPERVISOR.value,
@@ -109,5 +109,5 @@ def assert_can_compile_report(role: str) -> None:
     if role not in allowed:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"Role '{role}' is not permitted to compile reports.",
+            detail=f"Role '{role}' is not permitted to generate or compile BRSR reports. BRSR disclosures are reserved exclusively for Group Admin and Group ESG Manager.",
         )

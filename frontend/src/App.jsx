@@ -244,7 +244,16 @@ export default function App() {
                 } />
 
                 {/* Role-Specific Principle 6 ESG Form */}
-                <Route path="/esg-form" element={<RoleESGForm />} />
+                <Route path="/esg-form" element={
+                  <PermissionGuard roles={[
+                    'project_supervisor', 'project_admin',
+                    'bu_supervisor', 'bu_esg_manager', 'bu_admin',
+                    'subsidiary_supervisor', 'subsidiary_esg_manager', 'subsidiary_admin',
+                    'group_supervisor', 'group_esg_manager', 'group_admin',
+                  ]}>
+                    <RoleESGForm />
+                  </PermissionGuard>
+                } />
                 <Route path="/collection" element={
                   <PermissionGuard perms={['form:submit', 'submission:create']}>
                     <RoleESGForm />
@@ -265,9 +274,9 @@ export default function App() {
                   </PermissionGuard>
                 } />
 
-                {/* Reporting — all with report:read */}
+                {/* Reporting — Exclusively Group Admin and Group ESG Manager / Group Supervisor */}
                 <Route path="/reporting" element={
-                  <PermissionGuard perms={['report:read']}>
+                  <PermissionGuard roles={['group_admin', 'group_esg_manager', 'group_supervisor', 'system_admin']}>
                     <Reporting />
                   </PermissionGuard>
                 } />
@@ -297,7 +306,11 @@ export default function App() {
                 } />
 
                 {/* Project Summary — Project users read-model (spec §19, §50) */}
-                <Route path="/project-summary" element={<ProjectSummary />} />
+                <Route path="/project-summary" element={
+                  <PermissionGuard perms={['org:read', 'submission:read']}>
+                    <ProjectSummary />
+                  </PermissionGuard>
+                } />
 
                 {/* Projects — project list + detail + wizard */}
                 <Route path="/projects" element={
@@ -306,7 +319,7 @@ export default function App() {
                   </PermissionGuard>
                 } />
                 <Route path="/projects/new" element={
-                  <PermissionGuard roles={['bu_admin']} perms={['org:write']}>
+                  <PermissionGuard roles={['bu_admin', 'bu_esg_manager', 'bu_supervisor', 'system_admin']} perms={['org:write']}>
                     <ProjectWizard />
                   </PermissionGuard>
                 } />
@@ -325,12 +338,12 @@ export default function App() {
 
                 {/* Audit Log & Trash */}
                 <Route path="/audit" element={
-                  <PermissionGuard perms={['user:manage', 'org:read']}>
+                  <PermissionGuard perms={['audit:read']}>
                     <AuditLog />
                   </PermissionGuard>
                 } />
                 <Route path="/trash" element={
-                  <PermissionGuard>
+                  <PermissionGuard perms={['audit:read', 'user:manage']}>
                     <Trash />
                   </PermissionGuard>
                 } />

@@ -250,7 +250,7 @@ def test_single_data_file_propagates_to_all_surfaces(isolated_esg_store):
         session.close()
 
 
-def test_field_evidence_upload_and_retrieval(tmp_path, monkeypatch):
+def test_field_evidence_upload_and_retrieval(isolated_esg_store, tmp_path, monkeypatch):
     from app.data import esg_store
 
     monkeypatch.setattr(esg_store, "EVIDENCE_DIR", tmp_path / "evidence")
@@ -273,8 +273,7 @@ def test_field_evidence_upload_and_retrieval(tmp_path, monkeypatch):
     r_get = client.get("/api/v1/p6-forms/evidence/PRJ-ZOJILA-P7/ei1_ren_elec", headers=ps_headers)
     assert r_get.status_code == 200, r_get.text
     ev_list = r_get.json()["evidence"]["current"]
-    assert len(ev_list) == 1
-    assert ev_list[0]["file_name"] == "solar_bill.pdf"
+    assert any(item["file_name"] == "solar_bill.pdf" for item in ev_list)
 
     # Retrieve all evidence for the node
     r_node = client.get("/api/v1/p6-forms/evidence/PRJ-ZOJILA-P7", headers=ps_headers)

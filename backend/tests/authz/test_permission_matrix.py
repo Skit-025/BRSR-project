@@ -66,6 +66,7 @@ def test_bu_supervisor_permissions():
     assert Permission.BU_DISCLOSURE_READ in perms
     assert Permission.CONSOLIDATION_RUN in perms
     assert Permission.CALC_RUN in perms
+    assert Permission.ORG_WRITE in perms
 
     # Forbidden: Cannot review or approve submissions, cannot lock period
     assert Permission.SUBMISSION_REVIEW not in perms
@@ -157,13 +158,13 @@ def test_group_admin_permissions():
     assert Permission.BU_DISCLOSURE_READ in perms
     assert Permission.PERIOD_LOCK in perms
     assert Permission.ORG_WRITE in perms
+    assert Permission.REPORT_COMPILE in perms
 
     # Forbidden: User creation & appointment (reserved for Group ESG Manager), routine data entry
     assert Permission.USER_MANAGE not in perms
     assert Permission.USERS_MANAGE_SCOPED not in perms
     assert Permission.USER_CREATE not in perms
     assert Permission.GROUP_DISCLOSURE_WRITE not in perms
-    assert Permission.REPORT_COMPILE not in perms
 
 
 def test_system_admin_full_access():

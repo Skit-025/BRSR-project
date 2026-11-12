@@ -114,9 +114,9 @@ export default function ProjectWizard() {
   const [aiAnalyzing, setAiAnalyzing] = useState(false);
   const [aiDone, setAiDone] = useState(false);
 
-  // Derive assigned scope for bu_admin or subsidiary_admin
+  // Derive assigned scope for bu_admin, bu_esg_manager or subsidiary_admin
   const assignedBuNode = useMemo(() => {
-    if (user?.role === 'bu_admin' && user?.org_node_id) {
+    if (['bu_admin', 'bu_esg_manager', 'bu_supervisor'].includes(user?.role) && user?.org_node_id) {
       return nodes.find(n => n.id === user.org_node_id || n.code === user.org_node_id) || null;
     }
     return null;

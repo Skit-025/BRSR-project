@@ -12,10 +12,13 @@ ROLE_FORM_TITLES: Dict[str, str] = {
     "project_supervisor": "Site Operations Data",
     "project_admin": "Site Compliance",
     "bu_supervisor": "BU Value Chain",
+    "bu_esg_manager": "BU Value Chain",
     "bu_admin": "BU Environmental Management",
     "subsidiary_supervisor": "Subsidiary Initiatives",
+    "subsidiary_esg_manager": "Subsidiary Initiatives",
     "subsidiary_admin": "Subsidiary Compliance",
     "group_supervisor": "Group Policy & Targets",
+    "group_esg_manager": "Group Policy & Targets",
     "group_admin": "Group Disclosures & Assurance",
 }
 
@@ -23,12 +26,26 @@ ROLE_NODE_TYPES: Dict[str, List[str]] = {
     "project_supervisor": ["project", "site", "plant", "manufacturing"],
     "project_admin": ["project", "site", "plant", "manufacturing"],
     "bu_supervisor": ["bu", "business_unit"],
+    "bu_esg_manager": ["bu", "business_unit"],
     "bu_admin": ["bu", "business_unit"],
     "subsidiary_supervisor": ["subsidiary", "company"],
+    "subsidiary_esg_manager": ["subsidiary", "company"],
     "subsidiary_admin": ["subsidiary", "company"],
     "group_supervisor": ["group", "root"],
+    "group_esg_manager": ["group", "root"],
     "group_admin": ["group", "root"],
 }
+
+_P6_ROLE_ALIASES: Dict[str, str] = {
+    "bu_esg_manager": "bu_supervisor",
+    "subsidiary_esg_manager": "subsidiary_supervisor",
+    "group_esg_manager": "group_supervisor",
+}
+
+
+def normalize_p6_role(role: str) -> str:
+    """Normalize *_esg_manager roles to their canonical P6 registry ownerRole."""
+    return _P6_ROLE_ALIASES.get(role, role)
 
 # Section metadata in template order
 SECTION_ORDER: List[Dict[str, str]] = [
@@ -357,11 +374,12 @@ REGISTRY_BY_ID: Dict[str, Dict[str, Any]] = {f["id"]: f for f in P6_REGISTRY}
 
 
 def get_fields_for_role(role: str, node_type: Optional[str] = None) -> List[Dict[str, Any]]:
-    """Return ONLY fields whose ownerRole == role (and optionally matching node_type)."""
+    """Return ONLY fields whose ownerRole == normalized role (and optionally matching node_type)."""
+    norm_role = normalize_p6_role(role)
     out: List[Dict[str, Any]] = []
     nt = (node_type or "").lower()
     for f in P6_REGISTRY:
-        if f["ownerRole"] != role:
+        if f["ownerRole"] != norm_role:
             continue
         if nt and f.get("nodeTypes") and nt not in f["nodeTypes"]:
             # If node is a generic 'project', skip plant-only EI-5 unless node_type is plant/manufacturing

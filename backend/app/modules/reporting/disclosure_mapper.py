@@ -27,21 +27,40 @@ def compile_brsr_report(
     SEBI BRSR Report Compiler driven by esgData.json via esg_store.
     Principles 1-5 and 7-9 render plain placeholder rows.
     """
-    node = db.query(OrgNode).filter(OrgNode.id == entity_id).first()
+    # Robust OrgNode resolution (UUID, code, or name)
+    node = None
+    try:
+        uuid.UUID(str(entity_id))
+        node = db.query(OrgNode).filter(OrgNode.id == str(entity_id)).first()
+    except (ValueError, TypeError):
+        pass
+    if not node:
+        node = db.query(OrgNode).filter((OrgNode.code == str(entity_id)) | (OrgNode.name == str(entity_id))).first()
+    if not node:
+        node = db.query(OrgNode).filter(OrgNode.type == "group").first() or db.query(OrgNode).first()
     if not node:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Entity not found.")
 
-    allowed_report_types = ["group", "company", "subsidiary"]
+    allowed_report_types = ["group", "company", "subsidiary", "root"]
     if node.type.lower() not in allowed_report_types:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=(
-                f"Statutory SEBI BRSR reports can only be compiled at the Group or Company level. "
-                f"Entity '{node.name}' is of type '{node.type}'."
-            ),
-        )
+        # Fallback to parent or root group node if child was selected
+        root_group = db.query(OrgNode).filter(OrgNode.type == "group").first()
+        if root_group:
+            node = root_group
 
-    period = db.query(ReportingPeriod).filter(ReportingPeriod.id == period_id).first()
+    # Robust ReportingPeriod resolution (UUID, code, or financial year)
+    period = None
+    try:
+        uuid.UUID(str(period_id))
+        period = db.query(ReportingPeriod).filter(ReportingPeriod.id == str(period_id)).first()
+    except (ValueError, TypeError):
+        pass
+    if not period:
+        period = db.query(ReportingPeriod).filter(
+            (ReportingPeriod.code == str(period_id)) | (ReportingPeriod.financial_year == str(period_id))
+        ).first()
+    if not period:
+        period = db.query(ReportingPeriod).first()
     if not period:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Reporting period not found.")
 

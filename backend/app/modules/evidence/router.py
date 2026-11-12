@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.modules.auth.models import User
 from app.modules.auth.router import get_current_active_user
-from app.security.rbac import Role
+from app.security.rbac import Role, Permission, has_permission
 from app.security.passwords import verify_password
 from app.modules.evidence.models import EvidenceFile, EvidenceLink, ScanStatus
 from app.modules.evidence.schemas import (
@@ -39,39 +39,31 @@ async def upload_evidence_file(
     bill_type: Optional[str] = Form(None),
     project_id: Optional[str] = Form(None),
     esg_indicator: Optional[str] = Form(None),
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
+    current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db)
 ):
     """
     F09-F12 Evidence Vault Ingestion:
+    - Requires authentication and 'evidence:upload' permission
     - Verifies client SHA-256 hash
     - Stores file in immutable storage
     - Assigns unique server-generated Evidence ID (EVD-XXXXXXXX)
     - Records metadata: doc_category (Bill/Report), bill_type, attached_by_role, project_id, esg_indicator
     - Runs AI Engine E1 to extract numbers for instant form pre-fill (when run_ocr=True).
     """
+    if not has_permission(current_user.role, Permission.EVIDENCE_UPLOAD):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Permission 'evidence:upload' required to upload evidence.",
+        )
+
     file_bytes = await file.read()
     mime_type = file.content_type or "application/octet-stream"
 
-    uploader_id = None
-    attached_by_role = "project_admin"
-    current_user = None
-    if credentials and credentials.credentials:
-        from app.security.jwt import decode_access_token
-        payload = decode_access_token(credentials.credentials)
-        if payload:
-            uploader_id = payload.get("sub")
-            token_role = payload.get("role")
-            if uploader_id:
-                current_user = db.query(User).filter(User.id == uploader_id).first()
-                if current_user and current_user.role:
-                    attached_by_role = current_user.role.value if hasattr(current_user.role, "value") else str(current_user.role)
-                elif token_role:
-                    attached_by_role = token_role
-            elif token_role:
-                attached_by_role = token_role
+    uploader_id = str(current_user.id)
+    attached_by_role = current_user.role.value if hasattr(current_user.role, "value") else str(current_user.role)
 
-    if project_id and current_user:
+    if project_id:
         from app.security.scope import assert_user_authorized_for_project
         assert_user_authorized_for_project(db, current_user, project_id, "upload evidence to this project")
 
@@ -116,44 +108,39 @@ async def upload_evidence_file(
 
 @router.get("", response_model=List[EvidenceFileRead])
 def list_evidence_files(
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
+    current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db)
 ):
     """Lists stored active evidence files in the vault, filtered to authenticated user's authorized scope."""
-    from app.security.jwt import decode_access_token
-    from app.security.rbac import Role
+    if not has_permission(current_user.role, Permission.EVIDENCE_READ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Permission 'evidence:read' required to view evidence files.",
+        )
     from app.security.scope import get_user_assigned_project_ids
-
-    current_user = None
-    if credentials and credentials.credentials:
-        payload = decode_access_token(credentials.credentials)
-        if payload and payload.get("sub"):
-            current_user = db.query(User).filter(User.id == payload["sub"], User.is_deleted == False).first()
 
     query = db.query(EvidenceFile).filter(EvidenceFile.is_deleted == False)
 
-    if current_user:
-        if current_user.role == Role.PROJECT_ADMIN.value:
-            assigned_ids = get_user_assigned_project_ids(db, current_user)
-            # Can see files attached to assigned projects or uploaded by themselves
+    if current_user.role in (Role.PROJECT_ADMIN.value, Role.PROJECT_SUPERVISOR.value):
+        assigned_ids = get_user_assigned_project_ids(db, current_user)
+        from sqlalchemy import or_
+        query = query.filter(
+            or_(
+                EvidenceFile.project_id.in_(list(assigned_ids)) if assigned_ids else False,
+                EvidenceFile.uploader_id == current_user.id
+            )
+        )
+    elif current_user.role != Role.SYSTEM_ADMIN.value:
+        if current_user.org_node_id:
+            from app.modules.auth.service import get_descendant_node_ids
+            desc_ids = get_descendant_node_ids(db, str(current_user.org_node_id))
             from sqlalchemy import or_
             query = query.filter(
                 or_(
-                    EvidenceFile.project_id.in_(list(assigned_ids)) if assigned_ids else False,
+                    EvidenceFile.project_id.in_(list(desc_ids)),
                     EvidenceFile.uploader_id == current_user.id
                 )
             )
-        elif current_user.role != Role.SYSTEM_ADMIN.value:
-            if current_user.org_node_id:
-                from app.modules.auth.service import get_descendant_node_ids
-                desc_ids = get_descendant_node_ids(db, str(current_user.org_node_id))
-                from sqlalchemy import or_
-                query = query.filter(
-                    or_(
-                        EvidenceFile.project_id.in_(list(desc_ids)),
-                        EvidenceFile.uploader_id == current_user.id
-                    )
-                )
 
     return query.order_by(EvidenceFile.created_at.desc()).all()
 

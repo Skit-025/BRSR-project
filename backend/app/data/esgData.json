@@ -171,254 +171,204 @@
     "PRJ-ZOJILA-P7": {
       "project_supervisor": {
         "ei1_ren_elec": {
-          "current": 4200,
-          "previous": 3600,
-          "_sample": true
+          "current": 4200.0,
+          "previous": 3600.0
         },
         "ei1_ren_fuel": {
-          "current": 850,
-          "previous": 700,
-          "_sample": true
+          "current": 850.0,
+          "previous": 700.0
         },
         "ei1_ren_other": {
-          "current": 150,
-          "previous": 120,
-          "_sample": true
+          "current": 150.0,
+          "previous": 120.0
         },
         "ei1_nonren_elec": {
-          "current": 18500,
-          "previous": 19200,
-          "_sample": true
+          "current": 18500.0,
+          "previous": 19200.0
         },
         "ei1_nonren_fuel": {
-          "current": 24000,
-          "previous": 25500,
-          "_sample": true
+          "current": 24000.0,
+          "previous": 25500.0
         },
         "ei1_nonren_other": {
-          "current": 600,
-          "previous": 650,
-          "_sample": true
+          "current": 600.0,
+          "previous": 650.0
         },
         "ei3_surface": {
-          "current": 32000,
-          "previous": 34000,
-          "_sample": true
+          "current": 32000.0,
+          "previous": 34000.0
         },
         "ei3_groundwater": {
-          "current": 8500,
-          "previous": 9100,
-          "_sample": true
+          "current": 8500.0,
+          "previous": 9100.0
         },
         "ei3_third_party": {
-          "current": 4200,
-          "previous": 4000,
-          "_sample": true
+          "current": 4200.0,
+          "previous": 4000.0
         },
         "ei3_seawater": {
-          "current": 0,
-          "previous": 0,
-          "_sample": true
+          "current": 0.0,
+          "previous": 0.0
         },
         "ei3_others": {
-          "current": 1100,
-          "previous": 950,
-          "_sample": true
+          "current": 1100.0,
+          "previous": 950.0
         },
         "ei3_water_consumption": {
-          "current": 38400,
-          "previous": 40200,
-          "_sample": true
+          "current": 38400.0,
+          "previous": 40200.0
         },
         "li2_surface_no": {
-          "current": 0,
-          "previous": 0,
-          "_sample": true
+          "current": 0.0,
+          "previous": 0.0
         },
         "li2_surface_primary": {
-          "current": 1200,
-          "previous": 1400,
-          "_sample": true
+          "current": 1200.0,
+          "previous": 1400.0
         },
         "li2_surface_secondary": {
-          "current": 2800,
-          "previous": 2600,
-          "_sample": true
+          "current": 2800.0,
+          "previous": 2600.0
         },
         "li2_surface_tertiary": {
-          "current": 1900,
-          "previous": 1700,
-          "_sample": true
+          "current": 1900.0,
+          "previous": 1700.0
         },
         "li2_ground_no": {
-          "current": 0,
-          "previous": 0,
-          "_sample": true
+          "current": 0.0,
+          "previous": 0.0
         },
         "li2_ground_primary": {
-          "current": 0,
-          "previous": 0,
-          "_sample": true
+          "current": 0.0,
+          "previous": 0.0
         },
         "li2_ground_secondary": {
-          "current": 400,
-          "previous": 450,
-          "_sample": true
+          "current": 400.0,
+          "previous": 450.0
         },
         "li2_ground_tertiary": {
-          "current": 300,
-          "previous": 250,
-          "_sample": true
+          "current": 300.0,
+          "previous": 250.0
         },
         "li2_sea_no": {
-          "current": 0,
-          "previous": 0,
-          "_sample": true
+          "current": 0.0,
+          "previous": 0.0
         },
         "li2_sea_primary": {
-          "current": 0,
-          "previous": 0,
-          "_sample": true
+          "current": 0.0,
+          "previous": 0.0
         },
         "li2_sea_secondary": {
-          "current": 0,
-          "previous": 0,
-          "_sample": true
+          "current": 0.0,
+          "previous": 0.0
         },
         "li2_sea_tertiary": {
-          "current": 0,
-          "previous": 0,
-          "_sample": true
+          "current": 0.0,
+          "previous": 0.0
         },
         "li2_third_no": {
-          "current": 0,
-          "previous": 0,
-          "_sample": true
+          "current": 0.0,
+          "previous": 0.0
         },
         "li2_third_primary": {
-          "current": 200,
-          "previous": 220,
-          "_sample": true
+          "current": 200.0,
+          "previous": 220.0
         },
         "li2_third_secondary": {
-          "current": 450,
-          "previous": 480,
-          "_sample": true
+          "current": 450.0,
+          "previous": 480.0
         },
         "li2_third_tertiary": {
-          "current": 150,
-          "previous": 140,
-          "_sample": true
+          "current": 150.0,
+          "previous": 140.0
         },
         "li2_other_no": {
-          "current": 0,
-          "previous": 0,
-          "_sample": true
+          "current": 0.0,
+          "previous": 0.0
         },
         "li2_other_primary": {
-          "current": 0,
-          "previous": 0,
-          "_sample": true
+          "current": 0.0,
+          "previous": 0.0
         },
         "li2_other_secondary": {
-          "current": 0,
-          "previous": 0,
-          "_sample": true
+          "current": 0.0,
+          "previous": 0.0
         },
         "li2_other_tertiary": {
-          "current": 0,
-          "previous": 0,
-          "_sample": true
+          "current": 0.0,
+          "previous": 0.0
         },
         "li3_water_stressed": {
           "current": "No",
-          "previous": "No",
-          "_sample": true
+          "previous": "No"
         },
         "li3_area_name": {
           "current": "Sindh Nallah Basin (Non-Stressed)",
-          "previous": "Sindh Nallah Basin (Non-Stressed)",
-          "_sample": true
+          "previous": "Sindh Nallah Basin (Non-Stressed)"
         },
         "ei6_scope1": {
           "current": 1820.5,
-          "previous": 1940.0,
-          "_sample": true
+          "previous": 1940.0
         },
         "ei6_scope2": {
           "current": 3910.2,
-          "previous": 4120.8,
-          "_sample": true
+          "previous": 4120.8
         },
         "ei8_plastic": {
           "current": 14.2,
-          "previous": 15.8,
-          "_sample": true
+          "previous": 15.8
         },
         "ei8_ewaste": {
           "current": 1.8,
-          "previous": 1.4,
-          "_sample": true
+          "previous": 1.4
         },
         "ei8_biomedical": {
           "current": 0.4,
-          "previous": 0.5,
-          "_sample": true
+          "previous": 0.5
         },
         "ei8_cd": {
           "current": 480.0,
-          "previous": 510.0,
-          "_sample": true
+          "previous": 510.0
         },
         "ei8_battery": {
           "current": 2.1,
-          "previous": 1.9,
-          "_sample": true
+          "previous": 1.9
         },
         "ei8_radioactive": {
-          "current": 0,
-          "previous": 0,
-          "_sample": true
+          "current": 0.0,
+          "previous": 0.0
         },
         "ei8_other_haz": {
           "current": 9.5,
-          "previous": 10.2,
-          "_sample": true
+          "previous": 10.2
         },
         "ei8_other_nonhaz": {
           "current": 86.0,
-          "previous": 91.5,
-          "_sample": true
+          "previous": 91.5
         },
         "ei8_recycled": {
           "current": 412.0,
-          "previous": 390.0,
-          "_sample": true
+          "previous": 390.0
         },
         "ei8_reused": {
           "current": 95.0,
-          "previous": 88.0,
-          "_sample": true
+          "previous": 88.0
         },
         "ei8_other_recovery": {
           "current": 18.0,
-          "previous": 15.0,
-          "_sample": true
+          "previous": 15.0
         },
         "ei8_incineration": {
           "current": 4.5,
-          "previous": 5.1,
-          "_sample": true
+          "previous": 5.1
         },
         "ei8_landfilling": {
           "current": 54.5,
-          "previous": 122.2,
-          "_sample": true
+          "previous": 122.2
         },
         "ei8_other_disposal": {
           "current": 10.0,
-          "previous": 11.0,
-          "_sample": true
+          "previous": 11.0
         }
       },
       "project_admin": {

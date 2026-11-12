@@ -420,10 +420,14 @@ export const reportingApi = {
     return api.get('/reports', { params });
   },
   compileReport: (data) => api.post('/reports/compile', data),
+  exportHtml: (entityId, periodId) =>
+    api.get(`/reports/export/html/${encodeURIComponent(entityId)}/${encodeURIComponent(periodId)}`),
+  exportPdf: (entityId, periodId) =>
+    api.get(`/reports/export/pdf/${encodeURIComponent(entityId)}/${encodeURIComponent(periodId)}`, { responseType: 'blob' }),
   getExportHtmlUrl: (entityId, periodId) =>
     `${API_BASE}/reports/export/html/${encodeURIComponent(entityId)}/${encodeURIComponent(periodId)}`,
-  getExportPdfUrl: (reportId) =>
-    `${API_BASE}/reports/export/pdf/${encodeURIComponent(reportId)}`,
+  getExportPdfUrl: (entityId, periodId) =>
+    `${API_BASE}/reports/export/pdf/${encodeURIComponent(entityId)}/${encodeURIComponent(periodId)}`,
 };
 
 // ─────────────────────────────────────────────────────────────────

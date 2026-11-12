@@ -71,6 +71,41 @@ def get_executive_summary(
     return service.get_summary(period_id=period_id, entity_id=entity_id)
 
 
+_GROUP_WIDE_ROLES = {
+    Role.SYSTEM_ADMIN.value,
+    Role.GROUP_ADMIN.value,
+    Role.GROUP_SUPERVISOR.value,
+    Role.GROUP_ESG_MANAGER.value,
+}
+
+
+def _resolve_and_assert_dashboard_scope(db: Session, current_user: User, entity_id: Optional[str]) -> Optional[str]:
+    """Enforce top-down scope on dashboard endpoints: non-group roles default to own node and cannot view Group/ancestors."""
+    if current_user.role in _GROUP_WIDE_ROLES:
+        return entity_id
+    target_id = entity_id
+    if not target_id:
+        from app.security.scope import get_user_effective_scope_node_ids
+        eff_ids = get_user_effective_scope_node_ids(db, current_user)
+        for eid in eff_ids:
+            try:
+                uuid.UUID(str(eid))
+                target_id = str(eid)
+                break
+            except (ValueError, AttributeError, TypeError):
+                pass
+        if not target_id and current_user.org_node_id:
+            target_id = str(current_user.org_node_id)
+    if target_id:
+        assert_user_authorized_for_project(db, current_user, str(target_id), "view dashboard for this entity")
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="No organizational node assigned to your account.",
+        )
+    return target_id
+
+
 @router.get("/command-center", response_model=CommandCenterResponse)
 def get_command_center(
     period_id: Optional[str] = Query(None),
@@ -79,13 +114,13 @@ def get_command_center(
     db: Session = Depends(get_db),
 ):
     """
-    Returns the complete dynamic Executive ESG Command Center payload for Group Supervisor & Group Admin.
-    Reflects live database hierarchy, submissions, approval queues, heatmaps, and role-tailored actions.
+    Returns the complete dynamic Executive ESG Command Center payload scoped top-down to caller's tier.
     """
+    scoped_entity_id = _resolve_and_assert_dashboard_scope(db, current_user, entity_id)
     service = DashboardService(db)
     return service.get_command_center(
         period_id=period_id,
-        entity_id=entity_id,
+        entity_id=scoped_entity_id,
         current_user=current_user,
     )
 
@@ -98,13 +133,13 @@ def get_group_overview(
     db: Session = Depends(get_db),
 ):
     """
-    Returns authentic, 100% database-driven Group Overview with true hierarchy,
-    calculated reporting metrics, real submission statuses, and actionable approval/exception items.
+    Returns authentic, 100% database-driven Overview scoped top-down to caller's tier.
     """
+    scoped_entity_id = _resolve_and_assert_dashboard_scope(db, current_user, entity_id)
     service = DashboardService(db)
     return service.get_group_overview(
         period_id=period_id,
-        entity_id=entity_id,
+        entity_id=scoped_entity_id,
         current_user=current_user,
     )
 
@@ -117,14 +152,13 @@ def get_group_overview_design(
     db: Session = Depends(get_db),
 ):
     """
-    Returns the visual layout-tailored Group Overview matching the executive reference design.
-    Zero hardcoded values: all entity names, counts, completion percentages, emissions,
-    and approval queues are dynamically computed from live PostgreSQL records.
+    Returns the visual layout-tailored Overview scoped top-down to caller's tier.
     """
+    scoped_entity_id = _resolve_and_assert_dashboard_scope(db, current_user, entity_id)
     service = DashboardService(db)
     return service.get_group_overview_design(
         period_id=period_id,
-        entity_id=entity_id,
+        entity_id=scoped_entity_id,
         current_user=current_user,
     )
 

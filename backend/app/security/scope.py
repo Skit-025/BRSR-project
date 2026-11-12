@@ -218,7 +218,7 @@ def assert_can_create_project(db: Session, user: User, parent_id: Optional[str])
     |---------------------------------------------------------|----------------|----------------------------|
     | system_admin                                            | Yes            | Any location on platform   |
     | bu_admin                                                | Yes            | Their assigned BU only     |
-    | bu_supervisor                                           | NO             | Verification Admin only    |
+    | bu_esg_manager / bu_supervisor                          | Yes            | Their assigned BU only     |
     | group_admin / group_supervisor                          | NO             | Forbidden — must use BU    |
     | subsidiary_admin / subsidiary_supervisor                | NO             | Forbidden — must use BU    |
     | project_admin / project_supervisor                      | NO             | Forbidden entirely         |
@@ -232,19 +232,13 @@ def assert_can_create_project(db: Session, user: User, parent_id: Optional[str])
     if user.role in (Role.GROUP_ADMIN.value, Role.GROUP_ESG_MANAGER.value, Role.GROUP_SUPERVISOR.value):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Group tier users cannot create projects directly. Projects must be created by a BU Admin under the appropriate Business Unit."
+            detail="Group tier users cannot create projects directly. Projects must be created by a BU Admin or BU ESG Manager under the appropriate Business Unit."
         )
 
     if user.role in (Role.SUBSIDIARY_ADMIN.value, Role.SUBSIDIARY_ESG_MANAGER.value, Role.SUBSIDIARY_SUPERVISOR.value):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Subsidiary tier users cannot create projects directly. Projects must be created by a BU Admin under the appropriate Business Unit."
-        )
-
-    if user.role in (Role.BU_ESG_MANAGER.value, Role.BU_SUPERVISOR.value):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="BU ESG Managers cannot create projects directly. Projects must be created by a BU Admin."
+            detail="Subsidiary tier users cannot create projects directly. Projects must be created by a BU Admin or BU ESG Manager under the appropriate Business Unit."
         )
 
     if user.role == Role.SYSTEM_ADMIN.value:
@@ -258,10 +252,10 @@ def assert_can_create_project(db: Session, user: User, parent_id: Optional[str])
             return parent
         return None
 
-    if user.role != Role.BU_ADMIN.value:
+    if user.role not in (Role.BU_ADMIN.value, Role.BU_ESG_MANAGER.value, Role.BU_SUPERVISOR.value):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only Business Unit Admins are permitted to create projects."
+            detail="Only Business Unit Admins and BU ESG Managers are permitted to create projects."
         )
 
     if not parent_id:
@@ -281,12 +275,12 @@ def assert_can_create_project(db: Session, user: User, parent_id: Optional[str])
     if not effective_scope:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Missing organizational scope for your BU Admin role."
+            detail="Missing organizational scope for your Business Unit role."
         )
 
     from app.modules.auth.service import is_node_descendant
 
-    if user.role == Role.BU_ADMIN.value:
+    if user.role in (Role.BU_ADMIN.value, Role.BU_ESG_MANAGER.value, Role.BU_SUPERVISOR.value):
         # Parent must be their assigned Business Unit (or a direct descendant under it)
         is_own_bu = (str(parent_node.id) in effective_scope) or (parent_node.code in effective_scope)
         if not is_own_bu:
@@ -305,7 +299,7 @@ def assert_can_create_project(db: Session, user: User, parent_id: Optional[str])
         if not is_own_bu:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="BU Admins may only create projects within their assigned Business Unit."
+                detail="BU Admins and BU ESG Managers may only create projects within their assigned Business Unit."
             )
 
     return parent_node
