@@ -13,41 +13,81 @@ const PLATFORM_ROLES = [
     role: 'Group Admin',
     name: 'Aditya Sharma',
     email: 'group.admin@aarohan.in',
-    desc: 'Full enterprise visibility across all subsidiaries, corporate consolidation & SEBI reporting.',
+    desc: 'Enterprise group ESG verification, audit sign-off & financial period lock.',
     icon: Building2,
     badgeColor: '#7C3AED',
     route: '/dashboard',
-    highlight: 'Executive View'
+    highlight: 'Group Verification'
+  },
+  {
+    role: 'Group ESG Manager',
+    name: 'Kavita Sen',
+    email: 'group.supervisor@aarohan.in',
+    desc: 'Enterprise group ESG operations, consolidation, disclosures compilation, and user creation & appointment governance.',
+    icon: Building2,
+    badgeColor: '#A855F7',
+    route: '/dashboard',
+    highlight: 'Group ESG Operations & Users'
   },
   {
     role: 'Subsidiary Admin',
     name: 'Meera Nair',
     email: 'sub.admin@aarohan.in',
-    desc: 'Oversight for Megha Road and Transport Ltd (Transportation, highways, and tunneling business units).',
+    desc: 'Oversight for Megha Road and Transport Ltd, verify contributing BU records & lineage.',
     icon: Building2,
     badgeColor: '#2563EB',
     route: '/dashboard',
-    highlight: 'Subsidiary View'
+    highlight: 'Sub. Verification'
+  },
+  {
+    role: 'Subsidiary ESG Manager',
+    name: 'Pooja Hegde',
+    email: 'subsidiary.supervisor@aarohan.in',
+    desc: 'Consolidate approved BU submissions, add subsidiary metrics & submit report.',
+    icon: Building2,
+    badgeColor: '#6366F1',
+    route: '/dashboard',
+    highlight: 'Sub. ESG Operations'
   },
   {
     role: 'BU Admin',
     name: 'Rajesh V.',
     email: 'bu.admin@aarohan.in',
-    desc: 'Transportation & Tunneling review queue, Segregation of Duties approval & change requests.',
+    desc: 'Transportation & Tunneling verification, Segregation of Duties inspection & approval.',
     icon: GitMerge,
     badgeColor: '#0284C7',
     route: '/dashboard',
-    highlight: 'BU View'
+    highlight: 'BU Verification'
+  },
+  {
+    role: 'BU ESG Manager',
+    name: 'Vikram Rao',
+    email: 'bu.supervisor@aarohan.in',
+    desc: 'Aggregate available approved project data, enter BU disclosures & submit report.',
+    icon: GitMerge,
+    badgeColor: '#38BDF8',
+    route: '/dashboard',
+    highlight: 'BU ESG Operations'
   },
   {
     role: 'Project Admin',
-    name: 'Ravi Kumar',
-    email: 'project.user@aarohan.in',
-    desc: 'Tunnel Project P7 (Zojila Tunnel) raw operational fact entry, heavy machinery logs & statutory voucher submission.',
+    name: 'Sunil Verma',
+    email: 'project.admin@aarohan.in',
+    desc: 'Verify submitted project field metrics, audit vouchers & approve project report.',
     icon: HardHat,
     badgeColor: '#059669',
     route: '/dashboard',
-    highlight: 'Project Overview'
+    highlight: 'Project Verification'
+  },
+  {
+    role: 'Project Supervisor',
+    name: 'Ravi Kumar',
+    email: 'project.supervisor@aarohan.in',
+    desc: 'Tunnel Project P7 (Zojila Tunnel) raw operational fact entry & evidence upload.',
+    icon: HardHat,
+    badgeColor: '#10B981',
+    route: '/dashboard',
+    highlight: 'Project Operations'
   }
 ];
 

@@ -26,6 +26,24 @@ class OrgService:
             raise ValueError(f"Organization node with code '{node_in.code}' already exists.")
 
         node_type_val = node_in.type.value if hasattr(node_in.type, "value") else str(node_in.type)
+        if node_type_val in ("project", "site"):
+            if node_in.name:
+                node_in.name = node_in.name.strip().upper()
+            target_name = (node_in.name or "").strip().upper()
+            target_loc = (node_in.location_state or "").strip().lower()
+
+            existing_projects = self.db.query(OrgNode).filter(
+                OrgNode.type.in_(["project", "site"]),
+                OrgNode.is_deleted == False
+            ).all()
+            for ep in existing_projects:
+                ep_name = (ep.name or "").strip().upper()
+                ep_loc = (ep.location_state or "").strip().lower()
+                if ep_name == target_name and ep_loc == target_loc:
+                    raise ValueError(
+                        f"A duplicate project '{target_name}' already exists in location '{ep.location_state or 'India'}'. Duplicate projects with identical name and location are not permitted."
+                    )
+
         if node_type_val == "group":
             import os
             is_test_env = "PYTEST_CURRENT_TEST" in os.environ

@@ -47,7 +47,7 @@ def test_org_hierarchy_and_applicability():
     # 1. Create Group Root Node
     group_payload = {
         "code": group_code,
-        "name": "Megha Engineering & Infrastructures Ltd",
+        "name": f"Megha Engineering & Infrastructures Ltd {suffix}",
         "type": "group",
         "ownership_pct": 100.0,
         "control_type": "operational_control",
@@ -63,7 +63,7 @@ def test_org_hierarchy_and_applicability():
     # 2. Create Subsidiary Node under Group
     sub_payload = {
         "code": sub_code,
-        "name": "MEIL Hydrocarbons & Energy Ltd",
+        "name": f"MEIL Hydrocarbons & Energy Ltd {suffix}",
         "type": "subsidiary",
         "parent_id": group_node["id"],
         "ownership_pct": 100.0,
@@ -79,7 +79,7 @@ def test_org_hierarchy_and_applicability():
     # 3. Create Water-Stressed Project Site under Subsidiary
     site_payload = {
         "code": site_code,
-        "name": "Dhamra LNG Terminal Project",
+        "name": f"Dhamra LNG Terminal Project {suffix}",
         "type": "project",
         "parent_id": sub_node["id"],
         "ownership_pct": 100.0,
@@ -87,6 +87,7 @@ def test_org_hierarchy_and_applicability():
         "boundary": True,
         "project_type": "hydrocarbon",
         "location_state": "Odisha",
+        "location_country": "India",
         "is_water_stressed": True
     }
     res_site = client.post("/api/v1/org/nodes", json=site_payload)

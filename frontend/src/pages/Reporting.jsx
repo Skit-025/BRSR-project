@@ -278,7 +278,7 @@ function CorporateReporting() {
 
   const handleExportHtml = () => {
     if (!entityId || !periodId) { setNotice({ type: 'error', text: 'Select entity and period first.' }); return; }
-    const token = localStorage.getItem('brsr_token');
+    const token = sessionStorage.getItem('brsr_token') || localStorage.getItem('brsr_token');
     const url = reportingApi.getExportHtmlUrl(entityId, periodId);
     fetch(url, { headers: { Authorization: `Bearer ${token}` } })
       .then(r => r.blob())
@@ -293,7 +293,7 @@ function CorporateReporting() {
 
   const handleExportPdf = async () => {
     if (!entityId || !periodId) { setNotice({ type: 'error', text: 'Select entity and period first.' }); return; }
-    const token = localStorage.getItem('brsr_token');
+    const token = sessionStorage.getItem('brsr_token') || localStorage.getItem('brsr_token');
     const url = reportingApi.getExportPdfUrl(entityId, periodId);
     try {
       const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });

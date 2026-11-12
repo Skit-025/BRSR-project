@@ -13,12 +13,27 @@ from app.db.base import Base, UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMix
 
 
 class UserRole(str, enum.Enum):
-    # ── Final Five Runtime Roles ──────────────────────────────────────────────
-    SYSTEM_ADMIN     = "system_admin"      # Full platform: user mgmt, config, all access
-    GROUP_ADMIN      = "group_admin"       # Group-wide ESG, consolidation, reporting, user mgmt
-    SUBSIDIARY_ADMIN = "subsidiary_admin"  # Subsidiary ESG, BU oversight, subsidiary disclosures
-    BU_ADMIN         = "bu_admin"          # BU ESG + review/approve project submissions
-    PROJECT_ADMIN    = "project_admin"     # Data entry, evidence upload, submit
+    # ── Platform Administrator ────────────────────────────────────────────────
+    SYSTEM_ADMIN          = "system_admin"          # Full platform: user mgmt, config, all access
+
+    # ── Group Tier ────────────────────────────────────────────────────────────
+    GROUP_ADMIN           = "group_admin"           # Verification, approval, governance, period lock (user appointment removed)
+    GROUP_ESG_MANAGER     = "group_esg_manager"     # Group operational, consolidation, disclosures, compilation, user creation & appointment
+    GROUP_SUPERVISOR      = "group_supervisor"      # Backward-compatible alias for Group ESG Manager
+
+    # ── Subsidiary Tier ───────────────────────────────────────────────────────
+    SUBSIDIARY_ADMIN      = "subsidiary_admin"      # Verification, approval, BU oversight, scoped governance
+    SUBSIDIARY_ESG_MANAGER = "subsidiary_esg_manager" # Subsidiary operational, disclosures, consolidation
+    SUBSIDIARY_SUPERVISOR = "subsidiary_supervisor" # Backward-compatible alias for Subsidiary ESG Manager
+
+    # ── Business Unit Tier ────────────────────────────────────────────────────
+    BU_ADMIN              = "bu_admin"              # Verification, approval, project creation, scoped governance
+    BU_ESG_MANAGER        = "bu_esg_manager"        # BU operational, BU disclosures, consolidation
+    BU_SUPERVISOR         = "bu_supervisor"         # Backward-compatible alias for BU ESG Manager
+
+    # ── Project Tier ──────────────────────────────────────────────────────────
+    PROJECT_ADMIN         = "project_admin"         # Verification, approval of project submissions, scoped governance
+    PROJECT_SUPERVISOR    = "project_supervisor"    # Data entry (Maker), evidence upload, project submission (stays Supervisor)
 
 
 class User(Base, UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin):

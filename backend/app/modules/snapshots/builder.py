@@ -46,20 +46,31 @@ def build_snapshot_payload(
             "unit": cv.unit,
             "method": cv.method,
             "share_pct": cv.share_pct,
+            "status": getattr(cv, "status", "CALCULATED"),
+            "status_reason": getattr(cv, "status_reason", None),
             "child_contributions": cv.child_contributions,
         })
 
     payload = {
+        "metadata": {
+            "snapshot_spec_version": "2.0",
+            "statutory_standard": "SEBI BRSR Core / GHG Protocol",
+            "factor_catalog_version": "2023-24-v1.0",
+        },
         "entity": {
             "id": node.id,
             "code": node.code,
             "name": node.name,
             "path": node.path,
+            "ownership_pct": float(node.ownership_pct) if node.ownership_pct is not None else 100.0,
+            "control_type": str(node.control_type) if node.control_type else "operational_control",
+            "boundary": bool(node.boundary) if node.boundary is not None else True,
         },
         "period": {
             "id": period.id,
             "code": period.code,
             "financial_year": period.financial_year,
+            "status": period.status,
         },
         "metrics": metrics_payload,
     }

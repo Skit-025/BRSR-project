@@ -13,12 +13,15 @@ def calculate_scope1_stationary_combustion(
     fuel_type: str,
     quantity: Decimal,
     input_unit: str,
+    db: Any = None,
+    org_node_id: str = None,
 ) -> Dict[str, Any]:
     """
     Computes Scope 1 emissions in tCO2e for fuel combustion.
     Automatically standardizes input quantity to canonical factor fuel unit.
+    Checks database reference tables when db session is supplied.
     """
-    factor_meta = get_fuel_factor(fuel_type)
+    factor_meta = get_fuel_factor(fuel_type, db=db, org_node_id=org_node_id)
     expected_unit = factor_meta["unit"]
     factor_val = factor_meta["factor"]
 
@@ -55,6 +58,8 @@ def calculate_scope1_mobile_combustion(
     quantity: Decimal,
     input_unit: str,
     vehicle_category: str = "construction_equipment",
+    db: Any = None,
+    org_node_id: str = None,
 ) -> Dict[str, Any]:
     """
     Computes Scope 1 emissions (ENV-GHG-001B) in tCO2e for mobile sources:
@@ -64,7 +69,7 @@ def calculate_scope1_mobile_combustion(
     Accepts same fuel types as stationary combustion (HSD/diesel is most common).
     `vehicle_category` is stored for audit lineage only (not used in calculation).
     """
-    factor_meta = get_fuel_factor(fuel_type)
+    factor_meta = get_fuel_factor(fuel_type, db=db, org_node_id=org_node_id)
     expected_unit = factor_meta["unit"]
     factor_val = factor_meta["factor"]
 

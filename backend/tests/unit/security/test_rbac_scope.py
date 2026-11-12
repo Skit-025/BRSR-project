@@ -25,15 +25,20 @@ def db():
 
 
 def test_five_runtime_roles_enum():
-    expected_roles = {
+    """Verify that Role enum contains the canonical platform roles and backward-compatible aliases."""
+    canonical_roles = {
         "system_admin",
         "group_admin",
+        "group_esg_manager",
         "subsidiary_admin",
+        "subsidiary_esg_manager",
         "bu_admin",
+        "bu_esg_manager",
         "project_admin",
+        "project_supervisor",
     }
     actual_roles = {r.value for r in Role}
-    assert actual_roles == expected_roles, f"Expected 5 roles, got {actual_roles}"
+    assert canonical_roles.issubset(actual_roles), f"Missing canonical roles: {canonical_roles - actual_roles}"
 
 
 def test_project_admin_cannot_create_project(db):
@@ -188,3 +193,30 @@ def test_filter_projects_query_for_user(db):
     sys_user = User(id=str(uuid.uuid4()), email="sys@test.com", hashed_password="test_hash_password", full_name="System Admin", role=Role.SYSTEM_ADMIN.value, is_active=True)
     sys_q = filter_projects_query_for_user(db, q, sys_user)
     assert len(sys_q.all()) == 2
+
+
+@pytest.mark.parametrize("disallowed_role", [
+    Role.PROJECT_SUPERVISOR.value,
+    Role.PROJECT_ADMIN.value,
+    Role.BU_ESG_MANAGER.value,
+    Role.BU_SUPERVISOR.value,
+    Role.SUBSIDIARY_ADMIN.value,
+    Role.SUBSIDIARY_ESG_MANAGER.value,
+    Role.SUBSIDIARY_SUPERVISOR.value,
+    Role.GROUP_ADMIN.value,
+    Role.GROUP_ESG_MANAGER.value,
+    Role.GROUP_SUPERVISOR.value,
+    "unknown_role",
+])
+def test_non_bu_admin_cannot_create_project(db, disallowed_role):
+    user = User(
+        id=str(uuid.uuid4()),
+        email=f"{disallowed_role}@test.com",
+        hashed_password="test_hash_password",
+        role=disallowed_role,
+        full_name="Disallowed User",
+        is_active=True,
+    )
+    with pytest.raises(HTTPException) as exc_info:
+        assert_can_create_project(db, user, parent_id=str(uuid.uuid4()))
+    assert exc_info.value.status_code == 403

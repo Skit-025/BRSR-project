@@ -108,13 +108,14 @@ def detect_anomalies(
     try:
         rows = db.execute(
             text("""
-                SELECT m.code, m.label, de.value_numeric, de.unit
-                FROM data_entries de
-                JOIN metrics m ON m.id = de.metric_id
-                WHERE de.period_id = :period_id
-                  AND de.entity_id = :entity_id
-                  AND de.status = 'APPROVED'
-                  AND de.value_numeric IS NOT NULL
+                SELECT m.code, m.label, dp.value_numeric, dp.unit
+                FROM data_points dp
+                JOIN submissions s ON s.id = dp.submission_id
+                JOIN metrics m ON m.code = dp.metric_code
+                WHERE s.period_id = :period_id
+                  AND s.entity_id = :entity_id
+                  AND s.status IN ('PROJECT_APPROVED', 'BU_APPROVED', 'SUBSIDIARY_APPROVED', 'CONSOLIDATED', 'LOCKED', 'SUBMITTED')
+                  AND dp.value_numeric IS NOT NULL
             """),
             {"period_id": period_id, "entity_id": entity_id},
         ).fetchall()
@@ -178,11 +179,12 @@ def generate_narrative(
     try:
         rows = db.execute(
             text("""
-                SELECT m.code, m.label, de.value_numeric, de.value_text, de.unit
-                FROM data_entries de
-                JOIN metrics m ON m.id = de.metric_id
-                WHERE de.period_id = :period_id
-                  AND de.status IN ('APPROVED', 'CONSOLIDATED')
+                SELECT m.code, m.label, dp.value_numeric, dp.value_text, dp.unit
+                FROM data_points dp
+                JOIN submissions s ON s.id = dp.submission_id
+                JOIN metrics m ON m.code = dp.metric_code
+                WHERE s.period_id = :period_id
+                  AND s.status IN ('PROJECT_APPROVED', 'BU_APPROVED', 'SUBSIDIARY_APPROVED', 'CONSOLIDATED', 'LOCKED')
                   AND m.pillar ILIKE :section
                 ORDER BY m.code
                 LIMIT 50
@@ -249,11 +251,13 @@ def analyze_policy_gaps(
                 SELECT m.code, m.label, m.pillar, m.is_mandatory
                 FROM metrics m
                 WHERE m.is_mandatory = TRUE
-                  AND m.id NOT IN (
-                    SELECT metric_id FROM data_entries
-                    WHERE period_id = :period_id
-                      AND entity_id = :entity_id
-                      AND status IN ('APPROVED', 'CONSOLIDATED')
+                  AND m.code NOT IN (
+                    SELECT dp.metric_code
+                    FROM data_points dp
+                    JOIN submissions s ON s.id = dp.submission_id
+                    WHERE s.period_id = :period_id
+                      AND s.entity_id = :entity_id
+                      AND s.status IN ('PROJECT_APPROVED', 'BU_APPROVED', 'SUBSIDIARY_APPROVED', 'CONSOLIDATED', 'LOCKED')
                   )
                 ORDER BY m.pillar, m.code
             """),

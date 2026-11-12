@@ -39,11 +39,17 @@ def review_submission_pack(
     - Verifies validation error gates
     - Advances status or returns pack with mandatory review comments.
     """
-    allowed_reviewers = [Role.BU_ADMIN.value, Role.SUBSIDIARY_ADMIN.value, Role.GROUP_ADMIN.value, Role.SYSTEM_ADMIN.value]
+    allowed_reviewers = [
+        Role.PROJECT_ADMIN.value,
+        Role.BU_ADMIN.value,
+        Role.SUBSIDIARY_ADMIN.value,
+        Role.GROUP_ADMIN.value,
+        Role.SYSTEM_ADMIN.value,
+    ]
     if current_user.role not in allowed_reviewers:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Project Admins are not permitted to review or approve submissions."
+            detail="Supervisors are not permitted to review or approve submissions. Approvals must be performed by Admins."
         )
 
     from app.modules.collection.models import Submission
@@ -54,13 +60,13 @@ def review_submission_pack(
     from app.security.scope import assert_user_authorized_for_project
     assert_user_authorized_for_project(db, current_user, str(sub.entity_id), "review submissions for this project")
 
-    # Enforce Segregation of Duties against both authenticated caller and specified reviewer
+    # Enforce Segregation of Duties against both authenticated caller and specified reviewer (HTTP 409)
     if sub.maker_id and (
         str(sub.maker_id).lower() == str(current_user.id).lower()
         or (action.reviewer_id and str(sub.maker_id).lower() == str(action.reviewer_id).lower())
     ):
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
+            status_code=status.HTTP_409_CONFLICT,
             detail="Segregation of Duties Violation: You cannot review or approve your own submission pack."
         )
 

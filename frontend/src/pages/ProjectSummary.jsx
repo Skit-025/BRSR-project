@@ -177,7 +177,7 @@ export default function ProjectSummary() {
   const evidenceCount    = pack?.evidence_count ?? (completedCount > 0 ? 3 : 0);
 
   return (
-    <div className="page-content anim-fade-up" style={{ padding: '28px 36px', maxWidth: 1100, margin: '0 auto' }}>
+    <div className="page-content anim-fade-up" style={{ padding: '28px 36px', maxWidth: 1480, width: '100%', margin: '0 auto' }}>
       {/* ── Page Header ── */}
       <div style={{ marginBottom: 24, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 16 }}>
         <div>

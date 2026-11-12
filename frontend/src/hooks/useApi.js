@@ -25,7 +25,7 @@ import * as MockApi from '../mock/useMockApi';
 
 /** Returns true when the app is running in demo/mock mode */
 function isMock() {
-  return localStorage.getItem('brsr_mock_mode') === 'true';
+  return sessionStorage.getItem('brsr_mock_mode') === 'true';
 }
 
 
@@ -49,6 +49,30 @@ export const useDashboardSummary = (periodId, entityId, opts) => {
   });
 };
 
+export const useGroupOverview = (periodId, entityId, opts) => {
+  return useQuery({
+    queryKey: ['group-overview', periodId, entityId],
+    queryFn: () => dashboardsApi.getGroupOverview(periodId, entityId).then(r => r.data),
+    ...opts,
+  });
+};
+
+export const useGroupOverviewDesign = (periodId, entityId, opts) => {
+  return useQuery({
+    queryKey: ['group-overview-design', periodId, entityId],
+    queryFn: () => dashboardsApi.getOverviewDesign(periodId, entityId).then(r => r.data),
+    ...opts,
+  });
+};
+
+export const useCommandCenter = (periodId, entityId, opts) => {
+  return useQuery({
+    queryKey: ['command-center', periodId, entityId],
+    queryFn: () => dashboardsApi.getCommandCenter(periodId, entityId).then(r => r.data),
+    ...opts,
+  });
+};
+
 // ── Org Hierarchy & Periods ──
 export const useOrgNodes = (opts) => {
   if (isMock()) return MockApi.useMockOrgNodes();
@@ -59,11 +83,25 @@ export const useOrgNodes = (opts) => {
   });
 };
 
-export const useOrgPeriods = (opts) => {
+export const useOrgPeriods = (params, opts) => {
   if (isMock()) return MockApi.useMockOrgPeriods();
+  // Support legacy call signature: useOrgPeriods(opts) where opts is an object with non-array keys
+  let _params = params, _opts = opts;
+  if (params && typeof params === 'object' && !Array.isArray(params) && ('enabled' in params || 'staleTime' in params || 'refetchOnWindowFocus' in params)) {
+    _params = undefined;
+    _opts = params;
+  }
   return useQuery({
-    queryKey: ['org-periods'],
-    queryFn: () => orgApi.getPeriods().then(r => r.data),
+    queryKey: ['org-periods', _params],
+    queryFn: () => orgApi.getPeriods(_params).then(r => r.data),
+    ..._opts,
+  });
+};
+
+export const useOrgFY = (opts) => {
+  return useQuery({
+    queryKey: ['org-periods-fy'],
+    queryFn: () => orgApi.getFY().then(r => r.data),
     ...opts,
   });
 };
@@ -221,7 +259,10 @@ export const useCreatePeriod = () => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (d) => orgApi.createPeriod(d),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['org-periods'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['org-periods'] });
+      qc.invalidateQueries({ queryKey: ['org-periods-fy'] });
+    },
   });
 };
 
@@ -231,6 +272,28 @@ export const useUpdatePeriod = () => {
   return useMutation({
     mutationFn: ({ id, data }) => orgApi.updatePeriod(id, data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['org-periods'] }),
+  });
+};
+
+export const useDeletePeriod = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id) => orgApi.deletePeriod(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['org-periods'] });
+      qc.invalidateQueries({ queryKey: ['org-periods-fy'] });
+    },
+  });
+};
+
+export const useDeleteFY = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (financialYear) => orgApi.deleteFY(financialYear),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['org-periods'] });
+      qc.invalidateQueries({ queryKey: ['org-periods-fy'] });
+    },
   });
 };
 

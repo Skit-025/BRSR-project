@@ -384,21 +384,126 @@ SCOPE3_SPEND_FACTORS: Dict[str, Dict[str, Any]] = {
 }
 
 
-def get_grid_factor(state: str = None) -> Decimal:
+def get_grid_factor(state: Optional[str] = None, db: Optional[Any] = None) -> Decimal:
     """
     Returns grid emission factor in tCO2e/MWh.
-    Uses state-specific CEA factor if available; falls back to national weighted average.
+    Deterministic selection precedence:
+      1. State-specific factor from database if available (GRID-CEA-{STATE}).
+      2. State-specific statutory CEA factor from registry (STATE_GRID_FACTORS).
+      3. National weighted average from database (GRID-CEA).
+      4. Statutory fallback national weighted average (0.716 tCO2e/MWh).
     """
-    if state:
-        state_code = state.strip().upper()[:2]
-        if state_code in STATE_GRID_FACTORS:
-            return STATE_GRID_FACTORS[state_code]
+    state_code = state.strip().upper()[:2] if state else None
+
+    # Step 1: Check state-specific factor in PostgreSQL database
+    if state_code and db is not None:
+        try:
+            from app.modules.calc.models import EmissionFactor
+            db_state_grid = db.query(EmissionFactor).filter(
+                EmissionFactor.code == f"GRID-CEA-{state_code}",
+                EmissionFactor.is_active == True,
+                EmissionFactor.is_deleted == False
+            ).first()
+            if db_state_grid and db_state_grid.co2e_factor:
+                return Decimal(str(db_state_grid.co2e_factor))
+        except Exception:
+            pass
+
+    # Step 2: Check state-specific statutory registry
+    if state_code and state_code in STATE_GRID_FACTORS:
+        return STATE_GRID_FACTORS[state_code]
+
+    # Step 3: Check national grid average from PostgreSQL database
+    if db is not None:
+        try:
+            from app.modules.calc.models import EmissionFactor
+            db_grid = db.query(EmissionFactor).filter(
+                EmissionFactor.code == "GRID-CEA",
+                EmissionFactor.is_active == True,
+                EmissionFactor.is_deleted == False
+            ).first()
+            if db_grid and db_grid.co2e_factor:
+                return Decimal(str(db_grid.co2e_factor))
+        except Exception:
+            pass
+
+    # Step 4: Statutory fallback national baseline
     return GRID_EMISSION_FACTOR_CEA_WEIGHTED_AVG
 
 
-def get_fuel_factor(fuel_type: str) -> Dict[str, Any]:
-    """Returns emission factor and unit metadata for fuel combustion (all Indian grades)."""
+def get_fuel_factor(fuel_type: str, db: Optional[Any] = None, org_node_id: Optional[str] = None) -> Dict[str, Any]:
+    """
+    Returns emission factor and unit metadata for fuel combustion (all Indian grades).
+    Checks database reference tables first when db session is supplied.
+    Ensures factor values are strictly in tCO2e per fuel unit.
+    """
     key = fuel_type.strip().lower().replace(" ", "_").replace("-", "_")
+
+    if db is not None:
+        try:
+            from app.modules.calc.models import CustomEmissionFactor, EmissionFactor
+            if org_node_id:
+                cust = db.query(CustomEmissionFactor).filter(
+                    CustomEmissionFactor.org_node_id == org_node_id,
+                    CustomEmissionFactor.fuel_or_source.ilike(key),
+                    CustomEmissionFactor.is_deleted == False
+                ).first()
+                if cust and cust.value:
+                    val = Decimal(str(cust.value))
+                    # Safeguard: if unit is kgCO2e, convert to tCO2e
+                    if "kg" in (cust.unit or "").lower():
+                        val = val / Decimal("1000")
+                    return {
+                        "unit": cust.unit,
+                        "factor": val,
+                        "net_calorific_value_gj_per_unit": Decimal("0.03576") if "diesel" in key else Decimal("0"),
+                        "source": f"Facility Custom: {cust.source_reference or cust.factor_name}",
+                        "indian_grade": cust.factor_name,
+                        "is_custom": True,
+                    }
+
+            # Map fuel type alias to canonical DB code pattern
+            code_alias = {
+                "diesel": "DIESEL-HSD",
+                "hsd": "DIESEL-HSD",
+                "ldo": "DIESEL-LDO",
+                "petrol": "PETROL",
+                "gasoline": "PETROL",
+                "cng": "GAS-CNG",
+                "png": "GAS-PNG",
+                "lpg": "GAS-LPG",
+                "coal": "COAL-BIT",
+                "anthracite": "COAL-ANT",
+                "lignite": "COAL-LIG",
+            }.get(key, key)
+
+            db_factor = db.query(EmissionFactor).filter(
+                (EmissionFactor.code == code_alias) |
+                (EmissionFactor.subtype.ilike(f"%{fuel_type}%")),
+                EmissionFactor.is_active == True,
+                EmissionFactor.is_deleted == False
+            ).order_by(EmissionFactor.code).first()
+
+            if db_factor and db_factor.co2e_factor:
+                raw_val = Decimal(str(db_factor.co2e_factor))
+                # Stoichiometric sanity check: 1 L or 1 kg of hydrocarbon fuel can never exceed ~3.7 kg CO2
+                # If database stores kgCO2e (value > 0.1 for volume/mass), normalize to tCO2e
+                if raw_val > Decimal("0.1"):
+                    raw_val = raw_val / Decimal("1000.0")
+
+                ncv = Decimal("0.03576") if "diesel" in key or "hsd" in key else (
+                    Decimal("0.03276") if "petrol" in key else Decimal("0")
+                )
+                return {
+                    "unit": db_factor.unit,
+                    "factor": raw_val,
+                    "net_calorific_value_gj_per_unit": ncv,
+                    "source": f"DB Verified ({db_factor.effective_year}): {db_factor.source}",
+                    "indian_grade": db_factor.subtype,
+                }
+        except Exception:
+            pass
+
     if key not in FUEL_EMISSION_FACTORS:
         raise ValueError(
             f"Unknown fuel type '{fuel_type}'. "

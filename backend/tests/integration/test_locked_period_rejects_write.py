@@ -16,7 +16,7 @@ def test_locked_period_rejects_modifications():
     # 1. Create Site and Period
     site_res = client.post("/api/v1/org/nodes", json={
         "code": f"SITE-LOCK-{suffix}",
-        "name": "Hydrocarbon Terminal 3",
+        "name": f"Hydrocarbon Terminal {suffix}",
         "type": "project",
         "ownership_pct": 100.0,
         "control_type": "operational_control",
@@ -35,6 +35,8 @@ def test_locked_period_rejects_modifications():
         "status": "OPEN"
     })
     period = period_res.json()
+    if isinstance(period, list):
+        period = period[0]
 
     # 2. Enter and save normal draft data while OPEN
     open_save = client.post("/api/v1/collection/save", json={

@@ -20,11 +20,13 @@ class PrincipleIndicatorDisclosure(BaseModel):
     indicator_name: str
     principle: int
     brsr_core: bool
-    disclosed_value: float
+    disclosed_value: Optional[float] = None
     unit: str
     aggregation_method: str
     assurance_ready: bool
     evidence_verified: bool
+    status: str = "CALCULATED"
+    status_reason: Optional[str] = None
 
 class BRSRFullReportResponse(BaseModel):
     report_id: str
@@ -43,3 +45,5 @@ class BRSRFullReportResponse(BaseModel):
     total_scope_3_tco2e: float = 0.0
     total_ghg_emissions_tco2e: float = 0.0
     ghg_intensity_turnover: Optional[float] = None
+    reporting_coverage: Optional[Dict[str, Any]] = None
+    is_partially_reported: bool = False

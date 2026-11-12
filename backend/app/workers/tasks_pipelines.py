@@ -32,18 +32,23 @@ def run_aggregation(
     triggered_by: str = "celery",
     dry_run: bool = False,
 ) -> Dict[str, Any]:
-    """Background task: run the 9-stage boundary aggregation pipeline."""
+    """Background task: run the authoritative boundary aggregation pipeline."""
     db = _get_db()
     try:
-        from app.pipelines.aggregation.pipeline import run_aggregation_pipeline
-        result = run_aggregation_pipeline(
+        from app.modules.consolidation.service import run_consolidation_engine
+        res = run_consolidation_engine(
             db=db,
-            period_id=period_id,
-            root_entity_id=root_entity_id,
-            triggered_by=triggered_by,
-            dry_run=dry_run,
+            period_id=str(period_id),
+            root_node_id=str(root_entity_id) if root_entity_id else None,
         )
-        return result
+        return {
+            "status": "COMPLETED",
+            "period_id": period_id,
+            "root_entity_id": root_entity_id,
+            "entities_processed": res.consolidated_nodes_count,
+            "metrics_processed": res.consolidated_metrics_count,
+            "timestamp": res.timestamp,
+        }
     except Exception as exc:
         logger.exception("run_aggregation task failed: %s", exc)
         raise self.retry(exc=exc)
@@ -67,7 +72,7 @@ def run_incremental_aggregation(
     db = _get_db()
     try:
         from app.pipelines.aggregation.incremental import run_incremental_aggregation as _run
-        return _run(db=db, period_id=period_id, root_entity_id=root_entity_id)
+        return _run(db=db, period_id=str(period_id), root_entity_id=str(root_entity_id))
     except Exception as exc:
         logger.exception("run_incremental_aggregation task failed: %s", exc)
         raise self.retry(exc=exc)

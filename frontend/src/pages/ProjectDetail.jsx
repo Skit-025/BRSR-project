@@ -410,7 +410,7 @@ export default function ProjectDetail() {
     return {
       id: dbNode.id,
       code: dbNode.code,
-      name: dbNode.name,
+      name: (dbNode.name || '').toUpperCase(),
       period: 'FY 2025–26',
       status: derivedStatus,
       coverage,
@@ -424,7 +424,8 @@ export default function ProjectDetail() {
       activities,
       template,
       lastUpdated: isSeededZojila ? hero.lastUpdated : (dataPoints.length > 0 ? 'Today · Active' : 'Not submitted yet'),
-      submittedBy: isSeededZojila ? hero.submittedBy : (user?.name ? `${user.name} (${user.role?.replace('_', ' ')})` : 'Project Site Engineer'),
+      submittedBy: isSeededZojila ? 'Ravi Kumar' : (user?.name || 'Project Site Engineer'),
+      submittedByDesignation: isSeededZojila ? 'Site Engineer – Zojila Tunnel P7' : (user?.role ? user.role.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : 'Project Admin'),
       esgSections,
       evidence: evidenceList,
       metrics,
@@ -1009,16 +1010,32 @@ function OverviewTab({ project, navigate }) {
         <div className="card">
           <div className="card-header"><span className="card-title">Details</span></div>
           <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {[
-              { label: 'Last updated', value: project.lastUpdated },
-              { label: 'Submitted by', value: project.submittedBy },
-              { label: 'Period', value: project.period },
-            ].map(d => (
-              <div key={d.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{d.label}</span>
-                <span style={{ fontSize: 12, color: 'var(--text-primary)', fontWeight: 500 }}>{d.value}</span>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Last updated</span>
+              <span style={{ fontSize: 12, color: 'var(--text-primary)', fontWeight: 500 }}>{project.lastUpdated}</span>
+            </div>
+            {/* Submitted by: name + designation */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 2, paddingBottom: 6, borderBottom: '1px solid var(--border)' }}>
+              <span style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>Submitted by</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div style={{
+                  width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
+                  background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 11, fontWeight: 700, color: '#fff'
+                }}>
+                  {(project.submittedBy || 'U').charAt(0).toUpperCase()}
+                </div>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{project.submittedBy || '—'}</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>{project.submittedByDesignation || ''}</div>
+                </div>
               </div>
-            ))}
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Period</span>
+              <span style={{ fontSize: 12, color: 'var(--text-primary)', fontWeight: 500 }}>{project.period}</span>
+            </div>
           </div>
         </div>
       </div>

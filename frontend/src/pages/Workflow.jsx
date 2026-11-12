@@ -18,19 +18,31 @@ import { useAuth } from '../context/AuthContext';
 import PageHelpButton from '../components/PageHelpButton';
 
 const STATUS_STYLES = {
-  DRAFT:               { label: 'Draft',           color: '#475569', bg: '#f1f5f9' },
-  SUBMITTED:           { label: 'Submitted',       color: '#b45309', bg: '#fef3c7' },
-  UNDER_BU_REVIEW:     { label: 'BU Review',       color: '#0369a1', bg: '#e0f2fe' },
-  BU_APPROVED:         { label: 'BU Approved',     color: '#15803d', bg: '#dcfce7' },
-  SUBSIDIARY_APPROVED: { label: 'Sub. Approved',   color: '#1e293b', bg: '#e2e8f0' },
-  CONSOLIDATED:        { label: 'Consolidated',    color: '#4338ca', bg: '#e0e7ff' },
-  RETURNED:            { label: 'Returned',        color: '#b91c1c', bg: '#fee2e2' },
+  DRAFT:                   { label: 'Draft',               color: '#475569', bg: '#f1f5f9' },
+  SUBMITTED:               { label: 'Submitted (Project)', color: '#b45309', bg: '#fef3c7' },
+  PROJECT_APPROVED:        { label: 'Project Approved',    color: '#059669', bg: '#d1fae5' },
+  UNDER_BU_REVIEW:         { label: 'BU Review',           color: '#0369a1', bg: '#e0f2fe' },
+  BU_APPROVED:             { label: 'BU Approved',         color: '#15803d', bg: '#dcfce7' },
+  UNDER_SUBSIDIARY_REVIEW: { label: 'Sub Review',          color: '#6366f1', bg: '#ede9fe' },
+  SUBSIDIARY_APPROVED:     { label: 'Sub. Approved',       color: '#4338ca', bg: '#e0e7ff' },
+  UNDER_GROUP_REVIEW:      { label: 'Group Review',        color: '#7c3aed', bg: '#f3e8ff' },
+  CONSOLIDATED:            { label: 'Consolidated',        color: '#6d28d9', bg: '#ede9fe' },
+  LOCKED:                  { label: 'Locked / Published',  color: '#0f172a', bg: '#e2e8f0' },
+  RETURNED:                { label: 'Returned',            color: '#b91c1c', bg: '#fee2e2' },
 };
 
 const STATUS_COLORS = {
-  DRAFT: '#64748b', SUBMITTED: '#f59e0b', UNDER_BU_REVIEW: '#0284c7',
-  BU_APPROVED: '#10b981', SUBSIDIARY_APPROVED: '#1e293b',
-  CONSOLIDATED: '#6366f1', RETURNED: '#ef4444',
+  DRAFT: '#64748b',
+  SUBMITTED: '#f59e0b',
+  PROJECT_APPROVED: '#10b981',
+  UNDER_BU_REVIEW: '#0284c7',
+  BU_APPROVED: '#10b981',
+  UNDER_SUBSIDIARY_REVIEW: '#6366f1',
+  SUBSIDIARY_APPROVED: '#4338ca',
+  UNDER_GROUP_REVIEW: '#7c3aed',
+  CONSOLIDATED: '#6d28d9',
+  LOCKED: '#0f172a',
+  RETURNED: '#ef4444',
 };
 
 // Custom tooltip for pie chart
@@ -66,12 +78,13 @@ function CustomBarTooltip({ active, payload, label }) {
 
 // Approval pipeline stages
 const PIPELINE_STAGES = [
-  { key: 'DRAFT',               label: 'Draft',        icon: '📝' },
-  { key: 'SUBMITTED',           label: 'Submitted',    icon: '📤' },
-  { key: 'UNDER_BU_REVIEW',     label: 'BU Review',    icon: '🔍' },
-  { key: 'BU_APPROVED',         label: 'BU Approved',  icon: '✅' },
-  { key: 'SUBSIDIARY_APPROVED', label: 'Sub Approved', icon: '🏢' },
-  { key: 'CONSOLIDATED',        label: 'Consolidated', icon: '📊' },
+  { key: 'DRAFT',                   label: 'Draft',             icon: '📝' },
+  { key: 'SUBMITTED',               label: 'Submitted',         icon: '📤' },
+  { key: 'PROJECT_APPROVED',        label: 'Project Approved',  icon: '✅' },
+  { key: 'BU_APPROVED',             label: 'BU Approved',       icon: '🏗️' },
+  { key: 'SUBSIDIARY_APPROVED',     label: 'Sub Approved',      icon: '🏢' },
+  { key: 'CONSOLIDATED',            label: 'Consolidated',      icon: '📊' },
+  { key: 'LOCKED',                  label: 'Locked',            icon: '🔒' },
 ];
 
 export default function Workflow() {

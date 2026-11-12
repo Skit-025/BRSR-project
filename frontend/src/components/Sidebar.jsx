@@ -8,12 +8,12 @@ import {
   AlertTriangle, ClipboardList,
   FileSpreadsheet, ClipboardCheck,
   Settings, Command,
-  HardHat, Factory, Truck, RefreshCw, Leaf, Trash2
+  HardHat, Factory, Truck, RefreshCw, Leaf, Trash2, CalendarRange
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useOrgPeriods, useOrgNodes, useWorkflowQueue } from '../hooks/useApi';
 
-export default function Sidebar() {
+export default function Sidebar({ isOpen = false, onClose }) {
   const navigate = useNavigate();
   const { user, logout, role, hasPermission } = useAuth();
   const { data: nodes = [] } = useOrgNodes();
@@ -23,8 +23,8 @@ export default function Sidebar() {
   const entityOptions = useMemo(() => {
     if (!nodes || nodes.length === 0) return [];
 
-    // Project Admin: ONLY their assigned project node!
-    if (user?.role === 'project_admin') {
+    // Project Level: ONLY their assigned project node!
+    if (['project_admin', 'project_supervisor'].includes(user?.role)) {
       const assignedId = user.assigned_project_id || user.org_node_id;
       const assignedNode = nodes.find(n => String(n.id) === String(assignedId) || n.code === assignedId);
       if (assignedNode) {
@@ -33,15 +33,15 @@ export default function Sidebar() {
       return [];
     }
 
-    // BU Admin: their BU + projects under their BU
-    if (user?.role === 'bu_admin' && user?.org_node_id) {
+    // BU Level: their BU + projects under their BU
+    if (['bu_admin', 'bu_supervisor', 'bu_esg_manager'].includes(user?.role) && user?.org_node_id) {
       const buId = String(user.org_node_id);
       return nodes.filter(n => String(n.id) === buId || String(n.parent_id) === buId)
                   .map(n => ({ id: n.id, label: n.name, type: n.type }));
     }
 
-    // Subsidiary Admin: their Subsidiary + BUs + projects under it
-    if (user?.role === 'subsidiary_admin' && user?.org_node_id) {
+    // Subsidiary Level: their Subsidiary + BUs + projects under it
+    if (['subsidiary_admin', 'subsidiary_supervisor', 'subsidiary_esg_manager'].includes(user?.role) && user?.org_node_id) {
       const subId = String(user.org_node_id);
       const subBUs = new Set(nodes.filter(n => String(n.parent_id) === subId).map(n => String(n.id)));
       return nodes.filter(n => String(n.id) === subId || subBUs.has(String(n.id)) || subBUs.has(String(n.parent_id)))
@@ -75,13 +75,33 @@ export default function Sidebar() {
   // Role-filtered navigation
   const navGroups = useMemo(() => {
     const isProjectAdmin = user?.role === 'project_admin';
+    const overviewLabel = (() => {
+      switch (user?.role) {
+        case 'subsidiary_admin':
+        case 'subsidiary_supervisor':
+        case 'subsidiary_esg_manager':
+          return 'Subsidiary Overview';
+        case 'bu_admin':
+        case 'bu_supervisor':
+        case 'bu_esg_manager':
+          return 'BU Overview';
+        case 'project_admin':
+        case 'project_supervisor':
+          return 'Project Overview';
+        case 'group_admin':
+        case 'group_supervisor':
+        case 'group_esg_manager':
+        case 'system_admin':
+        default:
+          return 'Group Overview';
+      }
+    })();
+
     const groups = [
       {
         section: 'OVERVIEW',
         items: [
-          isProjectAdmin
-            ? { to: '/dashboard', label: 'Project Overview', icon: LayoutDashboard, perm: null }
-            : { to: '/dashboard', label: 'Group Overview', icon: LayoutDashboard, perm: null }
+          { to: '/dashboard', label: overviewLabel, icon: LayoutDashboard, perm: null }
         ]
       },
       {
@@ -90,7 +110,7 @@ export default function Sidebar() {
           hasPermission('org:read') && !['bu_admin', 'project_admin'].includes(user?.role) && { to: '/org', label: 'Org Hierarchy', icon: Layers },
           hasPermission('subsidiary_disclosure:read') && { to: '/disclosure/subsidiary', label: 'Subsidiaries', icon: Building2 },
           hasPermission('bu_disclosure:read') && { to: '/disclosure/bu', label: 'Business Units', icon: Factory },
-          { to: '/projects', label: 'Projects', icon: HardHat },
+          !['subsidiary_admin', 'group_admin'].includes(user?.role) && { to: '/projects', label: 'Projects', icon: HardHat },
         ].filter(Boolean)
       },
       {
@@ -126,10 +146,11 @@ export default function Sidebar() {
           { to: '/aarohan', label: 'Ask AAROHAN AI', icon: Command },
         ]
       },
-      (hasPermission('user:manage') || hasPermission('users:manage_scoped') || ['system_admin', 'group_admin', 'subsidiary_admin', 'bu_admin'].includes(user?.role) || hasPermission('consolidation:read') || hasPermission('evidence:read')) && {
+      (hasPermission('user:manage') || hasPermission('users:manage_scoped') || ['system_admin', 'group_esg_manager', 'group_supervisor', 'subsidiary_admin', 'bu_admin'].includes(user?.role) || hasPermission('consolidation:read') || hasPermission('evidence:read')) && {
         section: 'ADMINISTRATION',
         items: [
-          ['system_admin', 'group_admin', 'subsidiary_admin', 'bu_admin'].includes(user?.role) && { to: '/admin/users', label: 'User Governance', icon: Settings },
+          ['system_admin', 'group_esg_manager', 'group_supervisor', 'subsidiary_admin', 'bu_admin'].includes(user?.role) && { to: '/admin/users', label: 'User Governance', icon: Settings },
+          (hasPermission('period:lock') || ['system_admin', 'group_admin', 'subsidiary_admin'].includes(user?.role)) && { to: '/periods', label: 'FY & Periods', icon: CalendarRange },
           hasPermission('consolidation:read') && { to: '/admin/jobs', label: 'Pipeline Tasks', icon: RefreshCw },
           { to: '/trash', label: 'Trash Can', icon: Trash2 },
         ].filter(Boolean)
@@ -143,19 +164,42 @@ export default function Sidebar() {
     : (user?.email?.[0] || 'U').toUpperCase();
 
   return (
-    <aside style={{
-      width: 240,
-      flexShrink: 0,
-      background: '#FFFFFF',
-      borderRight: '1px solid #EAEAEA',
-      display: 'flex',
-      flexDirection: 'column',
-      height: '100vh',
-      userSelect: 'none',
-      fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-      position: 'relative',
-      zIndex: 20,
-    }}>
+    <>
+      {/* ── Backdrop overlay ── */}
+      {isOpen && (
+        <div
+          onClick={onClose}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.35)',
+            zIndex: 998,
+            animation: 'fadeInBackdrop 0.18s ease',
+          }}
+        />
+      )}
+
+      <aside
+        style={{
+          width: 240,
+          flexShrink: 0,
+          background: '#FFFFFF',
+          borderRight: '1px solid #EAEAEA',
+          display: 'flex',
+          flexDirection: 'column',
+          height: '100vh',
+          userSelect: 'none',
+          fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          zIndex: 999,
+          transform: isOpen ? 'translateX(0)' : 'translateX(-100%)',
+          transition: 'transform 0.28s cubic-bezier(0.4, 0, 0.2, 1)',
+          boxShadow: isOpen ? '4px 0 32px rgba(0,0,0,0.16)' : 'none',
+          overflowY: 'auto',
+          overflowX: 'hidden',
+        }}>
 
       {/* ── Brand Logo Bar ── */}
       <div style={{
@@ -495,5 +539,6 @@ export default function Sidebar() {
         </div>
       </div>
     </aside>
+    </>
   );
 }

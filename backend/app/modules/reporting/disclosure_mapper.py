@@ -68,9 +68,13 @@ def compile_brsr_report(
     scope2_flat = cons_map["ENV-GHG-002"].value if "ENV-GHG-002" in cons_map else 0.0
     total_scope_2 = float(scope2_sum if scope2_sum > 0 else scope2_flat)
 
+    # Scope 3 (DEF-CALC-003): Precedence to sub-codes if present; fallback to flat summary code
     scope3_codes = ["ENV-GHG-003A", "ENV-GHG-003B", "ENV-GHG-003C", "ENV-GHG-003D", "ENV-GHG-003E", "ENV-GHG-003F"]
     scope3_sum = sum(cons_map[c].value for c in scope3_codes if c in cons_map and cons_map[c].value)
-    total_scope_3 = float(scope3_sum)
+    scope3_flat = cons_map["ENV-GHG-003"].value if "ENV-GHG-003" in cons_map else (
+        cons_map["ENV-SCOPE3"].value if "ENV-SCOPE3" in cons_map else 0.0
+    )
+    total_scope_3 = float(scope3_sum if scope3_sum > 0 else scope3_flat)
 
     total_ghg = round(total_scope_1 + total_scope_2 + total_scope_3, 4)
 
@@ -82,9 +86,15 @@ def compile_brsr_report(
             continue
 
         c_val = cons_map.get(code)
-        disclosed_num = c_val.value if c_val else 0.0
+        disclosed_num = c_val.value if c_val else None
         unit = c_val.unit if c_val else m.base_unit
         method = c_val.method if c_val else m.aggregation_type
+        calc_status = getattr(c_val, "status", "CALCULATED") if c_val else "NOT_REPORTED"
+        calc_reason = getattr(c_val, "status_reason", None) if c_val else "Metric not consolidated for this reporting entity"
+
+        # Explicitly distinguish undefined/missing ratios from legitimate zero disclosures
+        if c_val and c_val.status in ("UNDEFINED_ZERO_DENOMINATOR", "MISSING_DENOMINATOR", "INVALID_NEGATIVE_DENOMINATOR", "INSUFFICIENT_DATA"):
+            disclosed_num = None
 
         # Check evidence verification
         has_evidence = bool(c_val and c_val.child_contributions)
@@ -99,7 +109,9 @@ def compile_brsr_report(
                 unit=unit,
                 aggregation_method=method,
                 assurance_ready=m.brsr_core,
-                evidence_verified=has_evidence
+                evidence_verified=has_evidence,
+                status=calc_status,
+                status_reason=calc_reason,
             )
         )
 
@@ -110,14 +122,23 @@ def compile_brsr_report(
         OrgNode.type.in_(["project", "site"])
     ).count()
 
-    # Headcount from SOC-EMP-001 if available
+    # Headcount from SOC-EMP-001 (or org node attributes if configured, otherwise 0)
     emp_val = cons_map.get("SOC-EMP-001")
-    total_emp = int(emp_val.value) if emp_val else 12500
+    if emp_val and emp_val.value is not None:
+        total_emp = int(emp_val.value)
+    elif node.attributes and "headcount" in node.attributes:
+        total_emp = int(node.attributes["headcount"])
+    else:
+        total_emp = 0
 
-    if node.type == "group" or node.is_root:
+    # Corporate legal entity name
+    node_attrs = node.attributes or {}
+    if "corporate_name" in node_attrs:
+        corporate_name = node_attrs["corporate_name"]
+    elif "meil" in (node.name or "").lower():
         corporate_name = "Megha Engineering & Infrastructures Ltd (MEIL)"
     else:
-        corporate_name = node.name
+        corporate_name = node.name or "Aarohan Consolidated Enterprise"
 
     section_a = SectionAData(
         corporate_name=corporate_name,
@@ -128,7 +149,14 @@ def compile_brsr_report(
 
     section_b = SectionBData()
 
-    # 4. Generate snapshot seal
+    # 4. Calculate reporting coverage
+    from app.modules.consolidation.service import get_reporting_coverage
+    try:
+        cov_info = get_reporting_coverage(db, entity_id, period_id)
+    except Exception:
+        cov_info = None
+
+    # 5. Generate snapshot seal
     report_dict = {
         "entity": node.code,
         "period": period.code,
@@ -138,10 +166,11 @@ def compile_brsr_report(
         "total_scope_2_tco2e": total_scope_2,
         "total_scope_3_tco2e": total_scope_3,
         "total_ghg_emissions_tco2e": total_ghg,
+        "reporting_coverage": cov_info,
     }
-    snapshot_hash = hashlib.sha256(json.dumps(report_dict, sort_keys=True).encode("utf-8")).hexdigest()
+    snapshot_hash = hashlib.sha256(json.dumps(report_dict, sort_keys=True, default=str).encode("utf-8")).hexdigest()
 
-    # 5. Persist Report record
+    # 6. Persist Report record
     report_id = str(uuid.uuid4())
     report_rec = Report(
         id=report_id,
@@ -171,4 +200,6 @@ def compile_brsr_report(
         total_scope_2_tco2e=total_scope_2,
         total_scope_3_tco2e=total_scope_3,
         total_ghg_emissions_tco2e=total_ghg,
+        reporting_coverage=cov_info,
+        is_partially_reported=cov_info.get("is_partially_reported", False) if cov_info else False,
     )

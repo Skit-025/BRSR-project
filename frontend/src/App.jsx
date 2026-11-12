@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 // ─── Global Error Boundary ───────────────────────────────────────────────────
@@ -78,6 +78,7 @@ import Assurance      from './pages/Assurance';
 import BackgroundJobs from './pages/BackgroundJobs';
 import AarohanAI      from './pages/AarohanAI';
 import Trash          from './pages/Trash';
+import PeriodManagement from './pages/PeriodManagement';
 
 // ── Disclosure pages (Type 3 forms — spec §46) ────────────────────────────────
 // BU Disclosures: targets, initiatives, BU-specific data (spec §23)
@@ -149,10 +150,11 @@ function AccessDenied() {
   );
 }
 
-// ─── Guards a route by one or more permissions (any match = allowed) ─────────
-function PermissionGuard({ perms = [], children }) {
+// ─── Guards a route by roles and/or permissions (any perm match = allowed) ──
+function PermissionGuard({ perms = [], roles = [], children }) {
   const { hasPermission, user } = useAuth();
   if (!user) return <Navigate to="/landing" replace />;
+  if (roles.length > 0 && !roles.includes(user.role)) return <AccessDenied />;
   if (perms.length === 0) return children;
   const allowed = perms.some((p) => hasPermission(p));
   if (!allowed) return <AccessDenied />;
@@ -162,6 +164,7 @@ function PermissionGuard({ perms = [], children }) {
 // ─── Main app shell ──────────────────────────────────────────────────────────
 function ProtectedLayout() {
   const { user, token, loading } = useAuth();
+  const [sidebarOpen, setSidebarOpen] = React.useState(false);
 
   if (loading) {
     return (
@@ -173,28 +176,15 @@ function ProtectedLayout() {
   }
 
   if (!token || !user) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/landing" replace />;
   }
 
   return (
     <div className="app-shell">
-      <Sidebar />
+      <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
       <div className="main-area">
-        <Header />
-        <div
-          className="main-content-scroll"
-          id="main-content-scroll"
-          style={{
-            flex: 1,
-            minHeight: 0,
-            minWidth: 0,
-            overflowY: 'auto',
-            overflowX: 'hidden',
-            display: 'flex',
-            flexDirection: 'column',
-            position: 'relative',
-          }}
-        >
+        <Header onToggleSidebar={() => setSidebarOpen(p => !p)} isSidebarOpen={sidebarOpen} />
+        <div className="main-content-scroll" id="main-content-scroll">
           <Outlet />
         </div>
       </div>
@@ -202,22 +192,18 @@ function ProtectedLayout() {
   );
 }
 
-function RootRoute() {
-  const { user, token, loading } = useAuth();
+// ─── Proactive Hash Cleaner ──────────────────────────────────────────────────
+// Strips hash fragments (e.g. #metrics) from all URLs across the entire application
+function HashCleaner() {
+  const location = useLocation();
 
-  if (loading) {
-    return (
-      <div className="loading-screen">
-        <div className="spinner" />
-      </div>
-    );
-  }
+  React.useEffect(() => {
+    if (window.location.hash) {
+      window.history.replaceState(null, '', window.location.pathname + window.location.search);
+    }
+  }, [location]);
 
-  if (!token || !user) {
-    return <Landing />;
-  }
-
-  return <Navigate to="/dashboard" replace />;
+  return null;
 }
 
 export default function App() {
@@ -226,9 +212,10 @@ export default function App() {
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
           <BrowserRouter>
+            <HashCleaner />
             <Routes>
-              {/* Public Routes */}
-              <Route path="/" element={<RootRoute />} />
+              {/* Public Routes - Root always directs to Landing page per requirement */}
+              <Route path="/" element={<Navigate to="/landing" replace />} />
               <Route path="/landing" element={<Landing />} />
               <Route path="/login" element={<Login />} />
 
@@ -244,7 +231,7 @@ export default function App() {
                   </PermissionGuard>
                 } />
 
-                {/* Configuration — org:hierarchy_view (System, Group, Subsidiary Admins only; BU & Project use Projects console) */}
+                {/* Configuration — org:hierarchy_view (System, Group, Subsidiary Admins) */}
                 <Route path="/org" element={
                   <PermissionGuard perms={['org:hierarchy_view']}>
                     <OrgHierarchy />
@@ -324,7 +311,7 @@ export default function App() {
                   </PermissionGuard>
                 } />
                 <Route path="/projects/new" element={
-                  <PermissionGuard perms={['org:read']}>
+                  <PermissionGuard roles={['bu_admin']} perms={['org:write']}>
                     <ProjectWizard />
                   </PermissionGuard>
                 } />
@@ -350,6 +337,11 @@ export default function App() {
                 <Route path="/trash" element={
                   <PermissionGuard>
                     <Trash />
+                  </PermissionGuard>
+                } />
+                <Route path="/periods" element={
+                  <PermissionGuard perms={['period:lock']}>
+                    <PeriodManagement />
                   </PermissionGuard>
                 } />
 
@@ -384,7 +376,7 @@ export default function App() {
               </Route>
 
               {/* Catch-all redirect */}
-              <Route path="*" element={<Navigate to="/" replace />} />
+              <Route path="*" element={<Navigate to="/landing" replace />} />
             </Routes>
           </BrowserRouter>
         </AuthProvider>

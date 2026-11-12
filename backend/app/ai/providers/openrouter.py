@@ -1,63 +1,14 @@
 import json
 import base64
-import re
 import logging
 from typing import Dict, Any, Optional, List
 import httpx
+from app.ai.circuit_breaker import is_network_error
 from app.ai.providers.base import BaseAIProvider
+from app.ai.providers.json_util import parse_json_robust as _parse_json_robust
 from app.config.settings import settings
 
 logger = logging.getLogger(__name__)
-
-
-def _parse_json_robust(content: str) -> Dict[str, Any]:
-    """
-    Parses JSON from LLM responses even if wrapped in markdown blocks
-    (```json ... ```) or preceded/followed by reasoning commentary.
-    """
-    text = (content or "").strip()
-    if not text:
-        raise ValueError("Empty LLM response")
-
-    # 1. Strip markdown fences
-    if "```json" in text:
-        parts = text.split("```json")
-        if len(parts) > 1:
-            candidate = parts[1].split("```")[0].strip()
-            try:
-                return json.loads(candidate, strict=False)
-            except Exception:
-                pass
-    elif "```" in text:
-        parts = text.split("```")
-        if len(parts) > 1:
-            candidate = parts[1].split("```")[0].strip()
-            try:
-                return json.loads(candidate, strict=False)
-            except Exception:
-                pass
-
-    # 2. Try direct load
-    try:
-        return json.loads(text, strict=False)
-    except Exception:
-        pass
-
-    # 3. Extract outermost { ... }
-    m = re.search(r"(\{.*\})", text, re.DOTALL)
-    if m:
-        cleaned = m.group(1)
-        try:
-            return json.loads(cleaned, strict=False)
-        except Exception:
-            # Fix unquoted arithmetic expressions like "key": 0.082 * 20.0
-            try:
-                fixed = re.sub(r':\s*([0-9.]+)\s*\*\s*([0-9.]+)', lambda match: f': {round(float(match.group(1)) * float(match.group(2)), 6)}', cleaned)
-                return json.loads(fixed, strict=False)
-            except Exception:
-                pass
-
-    raise ValueError(f"Could not parse valid JSON from LLM response: {text[:200]}")
 
 
 class OpenRouterProvider(BaseAIProvider):
@@ -69,6 +20,7 @@ class OpenRouterProvider(BaseAIProvider):
 
     def __init__(self, api_key: Optional[str] = None):
         self.api_key = api_key or settings.OPENROUTER_API_KEY
+        self.last_model_used: Optional[str] = None
 
     def is_available(self) -> bool:
         return bool(self.api_key and self.api_key.strip() and not self.api_key.startswith("mock_"))
@@ -98,13 +50,14 @@ class OpenRouterProvider(BaseAIProvider):
         )
         messages.append({"role": "user", "content": user_message})
 
-        # NOTE: Gemini is PRIMARY. OpenRouter text models are only reached if Gemini fails.
+        # NOTE: Hugging Face is PRIMARY; OpenRouter is a failover. Paid/budgeted
+        # models are preferred over ":free" ones because free-tier endpoints
+        # rate-limit aggressively (429/502/503).
         models_to_try = [
-            settings.OPENROUTER_MODEL_TEXT,                         # from .env
-            "nvidia/nemotron-3.5-lightning:free",                   # active free-tier text model
-            "google/gemma-4-26b-a4b-it:free",                       # active free-tier instruction model
-            "google/gemma-4-31b-it:free",                           # active free-tier instruction model
-            "liquid/lfm-2.5-2.6b:free",                             # active free-tier lightweight model
+            settings.OPENROUTER_MODEL_TEXT,                    # from .env
+            "meta-llama/llama-3.3-70b-instruct",
+            "mistralai/mistral-small-3.2-24b-instruct",
+            "meta-llama/llama-3.1-8b-instruct",
         ]
         models_to_try = list(dict.fromkeys([m for m in models_to_try if m]))
 
@@ -122,10 +75,15 @@ class OpenRouterProvider(BaseAIProvider):
                     resp.raise_for_status()
                     data = resp.json()
                     content = data["choices"][0]["message"]["content"]
-                    return _parse_json_robust(content)
+                    parsed = _parse_json_robust(content)
+                    self.last_model_used = model
+                    return parsed
             except Exception as e:
                 logger.warning(f"OpenRouter text model '{model}' failed: {e}. Trying fallback...")
                 last_error = e
+                if is_network_error(e):
+                    logger.warning(f"OpenRouter network/DNS failure detected on '{model}'. Skipping remaining models for shared host.")
+                    raise e
 
         raise RuntimeError(f"All OpenRouter text models failed. Last error: {last_error}")
 
@@ -157,13 +115,13 @@ class OpenRouterProvider(BaseAIProvider):
             }
         ]
 
-        # OpenRouter vision model cascade — ordered by reliability on free tier
-        # NOTE: Gemini handles vision as PRIMARY. OpenRouter is only reached if Gemini fails.
+        # OpenRouter vision model cascade — verified live multimodal models.
+        # NOTE: Hugging Face handles vision as PRIMARY; OpenRouter is a failover.
         models_to_try = [
-            settings.OPENROUTER_MODEL_VISION,                      # from .env
-            "nvidia/nemotron-3.5-super-vl:free",                   # active free-tier vision model
-            "google/gemma-4-26b-a4b-it:free",                       # active free-tier multimodal
-            "google/gemma-4-31b-it:free",                           # active free-tier multimodal
+            settings.OPENROUTER_MODEL_VISION,                   # from .env
+            "google/gemma-3-27b-it",
+            "inclusionai/ling-3.0-flash-vl",
+            "qwen/qwen2.5-vl-72b-instruct",
         ]
         models_to_try = list(dict.fromkeys([m for m in models_to_try if m]))
 
@@ -183,11 +141,15 @@ class OpenRouterProvider(BaseAIProvider):
                     data = resp.json()
                     content = data["choices"][0]["message"]["content"]
                     parsed = _parse_json_robust(content)
+                    self.last_model_used = model
                     logger.info(f"OpenRouter vision model '{model}' succeeded: extracted {list(parsed.keys())}")
                     return parsed
             except Exception as e:
                 logger.warning(f"OpenRouter vision model '{model}' failed: {e}. Trying fallback...")
                 last_error = e
+                if is_network_error(e):
+                    logger.warning(f"OpenRouter network/DNS failure detected on '{model}'. Skipping remaining models for shared host.")
+                    raise e
 
         raise RuntimeError(f"All OpenRouter vision models failed. Last error: {last_error}")
 
@@ -200,14 +162,37 @@ class OpenRouterProvider(BaseAIProvider):
             messages.append({"role": "system", "content": system_prompt})
         messages.append({"role": "user", "content": prompt})
 
-        payload = {
-            "model": settings.OPENROUTER_MODEL_TEXT,
-            "messages": messages,
-            "temperature": 0.2
-        }
+        last_error = None
+        for model in [
+            settings.OPENROUTER_MODEL_TEXT,
+            "meta-llama/llama-3.1-8b-instruct",
+            "mistralai/mistral-nemo",
+        ]:
+            if not model:
+                continue
+            payload = {
+                "model": model,
+                "messages": messages,
+                "temperature": 0.2,
+                "max_tokens": 4096,
+            }
+            try:
+                with httpx.Client(timeout=90.0) as client:
+                    resp = client.post(
+                        f"{self.BASE_URL}/chat/completions", headers=self._headers(), json=payload
+                    )
+                    resp.raise_for_status()
+                    data = resp.json()
+                    content = data["choices"][0]["message"].get("content")
+                    if content:
+                        self.last_model_used = model
+                        return content
+                    last_error = "empty content"
+            except Exception as e:
+                logger.warning(f"OpenRouter text model '{model}' failed: {e}. Trying fallback...")
+                last_error = e
+                if is_network_error(e):
+                    logger.warning(f"OpenRouter network/DNS failure detected on '{model}'. Skipping remaining models for shared host.")
+                    raise e
 
-        with httpx.Client(timeout=90.0) as client:
-            resp = client.post(f"{self.BASE_URL}/chat/completions", headers=self._headers(), json=payload)
-            resp.raise_for_status()
-            data = resp.json()
-            return data["choices"][0]["message"]["content"]
+        raise RuntimeError(f"All OpenRouter text models failed. Last error: {last_error}")

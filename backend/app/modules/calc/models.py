@@ -91,11 +91,50 @@ class EmissionFactor(Base, UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin)
     """
     __tablename__ = "emission_factors"
 
-    code = Column(String(50), unique=True, index=True, nullable=False)     # e.g. "DIESEL-HSD"
+    code = Column(String(50), index=True, nullable=False)                  # e.g. "DIESEL-HSD"
     category = Column(String(50), nullable=False, index=True)             # "Coal", "Diesel", "Gas", "Electricity", "Travel"
     subtype = Column(String(100), nullable=False)                          # "High Speed Diesel", "Anthracite"
-    unit = Column(String(50), nullable=False)                              # "L", "kg", "kWh", "passenger-km"
+    unit = Column(String(50), nullable=False)                              # "L", "kg", "MWh", "passenger-km"
+    activity_unit = Column(String(50), nullable=True)                     # Canonical denominator unit e.g. "L", "kg", "MWh", "p-km"
+    emission_unit = Column(String(50), default="tCO2e", nullable=True)    # Canonical numerator unit e.g. "tCO2e", "kgCO2e"
     co2e_factor = Column(Numeric(precision=20, scale=8), nullable=False)  # value per unit
-    source = Column(String(255), nullable=False)                           # "BEE / MoPNG 2023"
+    source = Column(String(255), nullable=False)                           # e.g. "BEE / MoPNG 2023"
+    source_authority = Column(String(100), nullable=True)                 # e.g. "CEA", "MoPNG", "IPCC", "BEE", "ICAO"
+    source_document = Column(String(255), nullable=True)                  # Official publication / gazette / standard reference
+    methodology = Column(String(150), nullable=True)                      # e.g. "IPCC 2006 Tier 1 / Stoichiometric NCV"
+    geographic_scope = Column(String(100), default="IN-National", nullable=True) # "IN-National", "IN-KA", "IN-TN", etc.
+    gwp_basis = Column(String(50), default="IPCC AR5 GWP100", nullable=True)
+    approval_status = Column(String(50), default="APPROVED", nullable=True)
     effective_year = Column(String(20), default="2023-24", nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
+    version = Column(String(20), default="1.0", nullable=False)           # Semantic factor version e.g. "1.0", "2.0"
+    effective_from = Column(Date, nullable=True)
+    effective_to = Column(Date, nullable=True)
+    superseded_by = Column(String(50), nullable=True)
+    change_reason = Column(Text, nullable=True)
+
+
+class FactorChangeAuditLog(Base):
+    """
+    Audit record tracking changes to statutory emission factors.
+    Guarantees full provenance and historical reproducibility.
+    """
+    __tablename__ = "factor_change_audit_logs"
+
+    id = Column(
+        PG_UUID(as_uuid=False),
+        primary_key=True,
+        server_default=text("gen_random_uuid()"),
+        default=lambda: str(uuid.uuid4()),
+        index=True,
+    )
+    factor_code = Column(String(50), nullable=False, index=True)
+    factor_version = Column(String(20), nullable=False)
+    old_value = Column(Numeric(precision=20, scale=8), nullable=True)
+    new_value = Column(Numeric(precision=20, scale=8), nullable=False)
+    unit = Column(String(50), nullable=False)
+    source = Column(String(255), nullable=False)
+    effective_year = Column(String(20), nullable=False)
+    reason_for_change = Column(Text, nullable=False)
+    changed_by = Column(String(100), default="SYSTEM_AUDITOR", nullable=False)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)

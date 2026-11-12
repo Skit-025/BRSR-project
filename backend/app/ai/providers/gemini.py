@@ -2,6 +2,7 @@ import json
 import base64
 import logging
 from typing import Dict, Any, Optional
+from app.ai.circuit_breaker import is_network_error
 from app.ai.providers.base import BaseAIProvider
 from app.config.settings import settings
 
@@ -9,12 +10,23 @@ logger = logging.getLogger(__name__)
 
 class GeminiProvider(BaseAIProvider):
     """
-    Google Gemini Provider using the new google-genai SDK.
-    Supports native high-resolution vision parsing, long context, and forced JSON output.
+    Google Gemini Provider using the google-genai SDK.
+    Configured with verified active models (gemini-3-flash-preview, gemini-flash-lite-latest, etc.)
+    avoiding deprecated and discontinued endpoints.
     """
+
+    # Active operational fallback models verified live
+    FALLBACK_MODELS = (
+        "gemini-3-flash-preview",
+        "gemini-flash-lite-latest",
+        "gemini-3.1-flash-lite-preview",
+        "gemini-flash-latest"
+    )
+
     def __init__(self, api_key: Optional[str] = None):
         self.api_key = api_key or settings.GEMINI_API_KEY
         self._client = None
+        self.last_model_used: Optional[str] = None
         if self.api_key and not self.api_key.startswith("mock_"):
             try:
                 from google import genai
@@ -32,12 +44,35 @@ class GeminiProvider(BaseAIProvider):
     def is_available(self) -> bool:
         return bool(self._client and self.api_key and not self.api_key.startswith("mock_"))
 
+    def _models_to_try(self, configured: str) -> list:
+        models = [configured, *self.FALLBACK_MODELS]
+        return list(dict.fromkeys([m for m in models if m]))
+
+    def _generate_with_fallback(self, configured: str, build_contents, build_config):
+        """Runs generate_content across the model cascade, tolerating transient 503/retired models."""
+        last_error = None
+        for model in self._models_to_try(configured):
+            try:
+                response = self._client.models.generate_content(
+                    model=model,
+                    contents=build_contents(model),
+                    config=build_config(),
+                )
+                self.last_model_used = model
+                return response
+            except Exception as e:
+                last_error = e
+                logger.warning(f"Gemini model '{model}' failed: {e}. Trying next Gemini model.")
+                if is_network_error(e):
+                    logger.warning(f"Gemini network/DNS failure detected on '{model}'. Skipping remaining models for shared host.")
+                    raise e
+        raise RuntimeError(f"All Gemini models failed. Last error: {last_error}")
+
     def _clean_json_text(self, text: Optional[str]) -> str:
         if not text:
             raise ValueError("Empty or blocked response received from Gemini.")
         cleaned = text.strip()
         if cleaned.startswith("```"):
-            # Strip markdown code block markers
             lines = cleaned.split("\n", 1)
             cleaned = lines[1] if len(lines) > 1 else ""
             if "```" in cleaned:
@@ -52,14 +87,14 @@ class GeminiProvider(BaseAIProvider):
             f"You MUST return strictly valid JSON matching this schema:\n{json.dumps(schema_dict)}\n\n"
             f"Prompt:\n{prompt}"
         )
-        response = self._client.models.generate_content(
-            model=settings.AI_MODEL_TEXT,
-            contents=full_prompt,
-            config=self._types.GenerateContentConfig(
+        response = self._generate_with_fallback(
+            settings.AI_MODEL_TEXT,
+            build_contents=lambda model: full_prompt,
+            build_config=lambda: self._types.GenerateContentConfig(
                 response_mime_type="application/json",
                 system_instruction=system_prompt if system_prompt else None,
                 automatic_function_calling=self._types.AutomaticFunctionCallingConfig(disable=True)
-            )
+            ),
         )
         raw_text = getattr(response, "text", None)
         cleaned = self._clean_json_text(raw_text)
@@ -76,13 +111,13 @@ class GeminiProvider(BaseAIProvider):
             f"Extract strictly matching this schema:\n{json.dumps(schema_dict)}\n\n{prompt}"
         )
 
-        response = self._client.models.generate_content(
-            model=settings.AI_MODEL_VISION,
-            contents=parts,
-            config=self._types.GenerateContentConfig(
+        response = self._generate_with_fallback(
+            settings.AI_MODEL_VISION,
+            build_contents=lambda model: parts,
+            build_config=lambda: self._types.GenerateContentConfig(
                 response_mime_type="application/json",
                 automatic_function_calling=self._types.AutomaticFunctionCallingConfig(disable=True)
-            )
+            ),
         )
         raw_text = getattr(response, "text", None)
         cleaned = self._clean_json_text(raw_text)
@@ -92,21 +127,20 @@ class GeminiProvider(BaseAIProvider):
         if not self.is_available():
             raise RuntimeError("Gemini API key is not configured or client failed to initialize.")
 
-        config = None
         if system_prompt:
-            config = self._types.GenerateContentConfig(
+            config_factory = lambda: self._types.GenerateContentConfig(
                 system_instruction=system_prompt,
                 automatic_function_calling=self._types.AutomaticFunctionCallingConfig(disable=True)
             )
         else:
-            config = self._types.GenerateContentConfig(
+            config_factory = lambda: self._types.GenerateContentConfig(
                 automatic_function_calling=self._types.AutomaticFunctionCallingConfig(disable=True)
             )
 
-        response = self._client.models.generate_content(
-            model=settings.AI_MODEL_TEXT,
-            contents=prompt,
-            config=config
+        response = self._generate_with_fallback(
+            settings.AI_MODEL_TEXT,
+            build_contents=lambda model: prompt,
+            build_config=config_factory,
         )
         raw_text = getattr(response, "text", None)
         if raw_text is None:

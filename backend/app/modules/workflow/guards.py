@@ -7,10 +7,11 @@ def enforce_segregation_of_duties(submission: Submission, reviewer_id: str):
     """
     F16 Segregation of Duties (SoD) Rule:
     The reviewer CANNOT be the same user who created or submitted the data pack.
+    Returns HTTP 409 Conflict on identity collision.
     """
     if submission.maker_id and str(submission.maker_id).lower() == str(reviewer_id).lower():
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
+            status_code=status.HTTP_409_CONFLICT,
             detail="Segregation of Duties Violation: You cannot review or approve your own submission pack."
         )
 
