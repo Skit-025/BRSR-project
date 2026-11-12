@@ -133,11 +133,13 @@ def create_node(
         if node_in.name:
             node_in.name = node_in.name.strip().upper()
         parent_node = assert_can_create_project(db, current_user, node_in.parent_id)
+        if parent_node:
+            # Always bind project strictly under the resolved assigned BU
+            node_in.parent_id = str(parent_node.id)
 
         # 2. BU-Type Compatibility Check: project_type must align with parent BU classification
-        if parent_node and node_in.parent_id:
-            # Fetch the actual parent BU node (assert_can_create_project may return None for system_admin w/ no parent)
-            resolved_parent = parent_node or find_org_node_safe(db, node_in.parent_id)
+        if parent_node:
+            resolved_parent = parent_node
             if resolved_parent and resolved_parent.type in ("business_unit", "bu"):
                 bu_type = (resolved_parent.project_type or "").lower()
                 req_type = (node_in.project_type.value if hasattr(node_in.project_type, "value") else str(node_in.project_type)).lower() if node_in.project_type else "corporate"

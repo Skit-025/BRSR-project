@@ -214,95 +214,55 @@ def assert_user_authorized_for_project(
 def assert_can_create_project(db: Session, user: User, parent_id: Optional[str]) -> OrgNode:
     """
     Enforces the Strict Project-Creation Permission Matrix:
-    | Role                                                    | Create project | Authorized scope           |
-    |---------------------------------------------------------|----------------|----------------------------|
-    | system_admin                                            | Yes            | Any location on platform   |
-    | bu_admin                                                | Yes            | Their assigned BU only     |
-    | bu_supervisor                                           | NO             | Verification Admin only    |
-    | group_admin / group_supervisor                          | NO             | Forbidden — must use BU    |
-    | subsidiary_admin / subsidiary_supervisor                | NO             | Forbidden — must use BU    |
-    | project_admin / project_supervisor                      | NO             | Forbidden entirely         |
+    Only BU-level roles (bu_admin, bu_supervisor / bu_esg_manager) may create projects,
+    and projects are automatically scoped strictly under their assigned Business Unit.
+    All other roles (system_admin, group_*, subsidiary_*, project_*) are forbidden.
     """
-    if user.role in (Role.PROJECT_ADMIN.value, Role.PROJECT_SUPERVISOR.value):
+    allowed_bu_roles = {
+        Role.BU_ADMIN.value,
+        Role.BU_ESG_MANAGER.value,
+        Role.BU_SUPERVISOR.value,
+    }
+    if user.role not in allowed_bu_roles:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Project roles are not permitted to create projects or organizational entities."
-        )
-
-    if user.role in (Role.GROUP_ADMIN.value, Role.GROUP_ESG_MANAGER.value, Role.GROUP_SUPERVISOR.value):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Group tier users cannot create projects directly. Projects must be created by a BU Admin under the appropriate Business Unit."
-        )
-
-    if user.role in (Role.SUBSIDIARY_ADMIN.value, Role.SUBSIDIARY_ESG_MANAGER.value, Role.SUBSIDIARY_SUPERVISOR.value):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Subsidiary tier users cannot create projects directly. Projects must be created by a BU Admin under the appropriate Business Unit."
-        )
-
-    if user.role in (Role.BU_ESG_MANAGER.value, Role.BU_SUPERVISOR.value):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="BU ESG Managers cannot create projects directly. Projects must be created by a BU Admin."
-        )
-
-    if user.role == Role.SYSTEM_ADMIN.value:
-        if parent_id:
-            parent = find_org_node_safe(db, parent_id)
-            if not parent:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"Parent organization unit '{parent_id}' not found."
-                )
-            return parent
-        return None
-
-    if not parent_id:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="A parent Business Unit or organizational node must be specified to create a project."
-        )
-
-    parent_node = find_org_node_safe(db, parent_id)
-    if not parent_node:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Parent organization unit '{parent_id}' not found."
+            detail="Your role is not permitted to create projects. Only Business Unit Admins and BU Supervisors may create projects."
         )
 
     effective_scope = get_user_effective_scope_node_ids(db, user)
     if not effective_scope:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Missing organizational scope for your BU Admin role."
+            detail="Missing assigned Business Unit scope for your account."
         )
 
-    from app.modules.auth.service import is_node_descendant
+    assigned_bu = None
+    for s_id in effective_scope:
+        candidate = find_org_node_safe(db, s_id)
+        if candidate and candidate.type in ("business_unit", "bu"):
+            assigned_bu = candidate
+            break
 
-    if user.role == Role.BU_ADMIN.value:
-        # Parent must be their assigned Business Unit (or a direct descendant under it)
-        is_own_bu = (str(parent_node.id) in effective_scope) or (parent_node.code in effective_scope)
-        if not is_own_bu:
-            for s_id in effective_scope:
-                try:
-                    s_uuid = str(uuid.UUID(str(s_id)))
-                    if is_node_descendant(db, s_uuid, str(parent_node.id)):
-                        is_own_bu = True
-                        break
-                except (ValueError, AttributeError, TypeError):
-                    node_by_code = find_org_node_safe(db, s_id)
-                    if node_by_code and is_node_descendant(db, str(node_by_code.id), str(parent_node.id)):
-                        is_own_bu = True
-                        break
+    if not assigned_bu:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Your account must be assigned to a Business Unit to create a project."
+        )
 
-        if not is_own_bu:
+    if parent_id:
+        requested_parent = find_org_node_safe(db, parent_id)
+        if not requested_parent:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Parent organization unit '{parent_id}' not found."
+            )
+        if str(requested_parent.id) != str(assigned_bu.id):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="BU Admins may only create projects within their assigned Business Unit."
+                detail="Projects must be created directly under your assigned Business Unit."
             )
 
-    return parent_node
+    return assigned_bu
 
 
 def filter_projects_query_for_user(db: Session, query, user: User):

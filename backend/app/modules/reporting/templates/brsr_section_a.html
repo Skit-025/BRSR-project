@@ -1,49 +1,446 @@
-<div class="section-container">
+{% set sec_a = report.section_a %}
+{% set cur_fy = sec_a.financial_year or 'Current FY' %}
+<div class="section-container" id="section-a">
     <div class="section-title">SECTION A: GENERAL DISCLOSURES</div>
+
+    <div class="sub-heading">I. &nbsp; Details of the listed entity</div>
     <table>
-        <tr>
-            <th style="width: 35%;">Field</th>
-            <th>Details</th>
-        </tr>
-        <tr>
-            <td>Corporate Identity Number (CIN)</td>
-            <td><strong>{{ report.section_a.cin }}</strong></td>
-        </tr>
-        <tr>
-            <td>Name of the Listed Entity</td>
-            <td><strong>{{ report.section_a.company_name }}</strong></td>
-        </tr>
-        <tr>
-            <td>Year of Incorporation</td>
-            <td>{{ report.section_a.year_of_incorporation }}</td>
-        </tr>
-        <tr>
-            <td>Registered Office Address</td>
-            <td>{{ report.section_a.registered_office }}</td>
-        </tr>
-        <tr>
-            <td>Corporate Address</td>
-            <td>{{ report.section_a.corporate_address }}</td>
-        </tr>
-        <tr>
-            <td>Email & Telephone</td>
-            <td>{{ report.section_a.email }} | {{ report.section_a.telephone }}</td>
-        </tr>
-        <tr>
-            <td>Website</td>
-            <td><a href="{{ report.section_a.website }}">{{ report.section_a.website }}</a></td>
-        </tr>
-        <tr>
-            <td>Financial Year Reported</td>
-            <td><strong>{{ report.section_a.financial_year }}</strong></td>
-        </tr>
-        <tr>
-            <td>Paid-up Capital (INR)</td>
-            <td>₹ {{ report.section_a.paid_up_capital_inr }}</td>
-        </tr>
-        <tr>
-            <td>Reporting Boundary</td>
-            <td>{{ report.section_a.reporting_boundary }}</td>
-        </tr>
+        <tbody>
+            <tr>
+                <td style="width: 5%; text-align: center;">1.</td>
+                <td style="width: 48%;">Corporate Identity Number (CIN) of the Listed Entity</td>
+                <td><strong>{{ sec_a.cin or '—' }}</strong></td>
+            </tr>
+            <tr>
+                <td class="td-center">2.</td>
+                <td>Name of the Listed Entity</td>
+                <td><strong>{{ sec_a.corporate_name or sec_a.company_name or '—' }}</strong></td>
+            </tr>
+            <tr>
+                <td class="td-center">3.</td>
+                <td>Year of incorporation</td>
+                <td>{{ sec_a.year_of_incorporation or '—' }}</td>
+            </tr>
+            <tr>
+                <td class="td-center">4.</td>
+                <td>Registered office address</td>
+                <td>{{ sec_a.registered_office or '—' }}</td>
+            </tr>
+            <tr>
+                <td class="td-center">5.</td>
+                <td>Corporate address</td>
+                <td>{{ sec_a.corporate_address or sec_a.registered_office or '—' }}</td>
+            </tr>
+            <tr>
+                <td class="td-center">6.</td>
+                <td>E-mail</td>
+                <td>{{ sec_a.email or '—' }}</td>
+            </tr>
+            <tr>
+                <td class="td-center">7.</td>
+                <td>Telephone</td>
+                <td>{{ sec_a.telephone or '—' }}</td>
+            </tr>
+            <tr>
+                <td class="td-center">8.</td>
+                <td>Website</td>
+                <td>{{ sec_a.website or '—' }}</td>
+            </tr>
+            <tr>
+                <td class="td-center">9.</td>
+                <td>Financial year for which reporting is being done</td>
+                <td><strong>{{ sec_a.financial_year or '—' }}</strong></td>
+            </tr>
+            <tr>
+                <td class="td-center">10.</td>
+                <td>Name of the Stock Exchange(s) where shares are listed</td>
+                <td>{{ sec_a.stock_exchanges or '—' }}</td>
+            </tr>
+            <tr>
+                <td class="td-center">11.</td>
+                <td>Paid-up Capital</td>
+                <td>{{ sec_a.paid_up_capital_inr or '—' }}</td>
+            </tr>
+            <tr>
+                <td class="td-center">12.</td>
+                <td>Name and contact details (telephone, email address) of the person who may be contacted in case of any queries on the BRSR report</td>
+                <td>{{ sec_a.contact_person or '—' }}</td>
+            </tr>
+            <tr>
+                <td class="td-center">13.</td>
+                <td>Reporting boundary - Are the disclosures under this report made on a standalone basis (i.e. only for the entity) or on a consolidated basis (i.e. for the entity and all the entities which form a part of its consolidated financial statements, taken together).</td>
+                <td>{{ sec_a.reporting_boundary or '—' }}</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <div class="sub-heading">II. &nbsp; Products/services</div>
+    <p class="question-text">14. &nbsp; Details of business activities <em>(accounting for 90% of the turnover)</em>:</p>
+    <table>
+        <thead>
+            <tr>
+                <th style="width: 8%;">S. No.</th>
+                <th style="width: 30%;">Description of Main Activity</th>
+                <th style="width: 38%;">Description of Business Activity</th>
+                <th style="width: 24%;">% of Turnover of the entity</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% if sec_a.business_activities %}
+                {% for act in sec_a.business_activities %}
+                <tr>
+                    <td class="td-center">{{ loop.index }}</td>
+                    <td>{{ act.main_activity or '' }}</td>
+                    <td>{{ act.business_activity or '' }}</td>
+                    <td class="td-right">{{ act.turnover_pct or '' }}</td>
+                </tr>
+                {% endfor %}
+            {% else %}
+                <tr><td class="td-center">&nbsp;</td><td></td><td></td><td></td></tr>
+                <tr><td class="td-center">&nbsp;</td><td></td><td></td><td></td></tr>
+            {% endif %}
+        </tbody>
+    </table>
+
+    <p class="question-text">15. &nbsp; Products/Services sold by the entity <em>(accounting for 90% of the entity’s Turnover)</em>:</p>
+    <table>
+        <thead>
+            <tr>
+                <th style="width: 8%;">S. No.</th>
+                <th style="width: 42%;">Product/Service</th>
+                <th style="width: 22%;">NIC Code</th>
+                <th style="width: 28%;">% of total Turnover contributed</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% if sec_a.products_services %}
+                {% for ps in sec_a.products_services %}
+                <tr>
+                    <td class="td-center">{{ loop.index }}</td>
+                    <td>{{ ps.name or '' }}</td>
+                    <td>{{ ps.nic_code or '' }}</td>
+                    <td class="td-right">{{ ps.turnover_pct or '' }}</td>
+                </tr>
+                {% endfor %}
+            {% else %}
+                <tr><td class="td-center">&nbsp;</td><td></td><td></td><td></td></tr>
+                <tr><td class="td-center">&nbsp;</td><td></td><td></td><td></td></tr>
+                <tr><td class="td-center">&nbsp;</td><td></td><td></td><td></td></tr>
+            {% endif %}
+        </tbody>
+    </table>
+
+    <div class="sub-heading">III. &nbsp; Operations</div>
+    <p class="question-text">16. &nbsp; Number of locations where plants and/or operations/offices of the entity are situated:</p>
+    <table>
+        <thead>
+            <tr>
+                <th style="width: 28%;">Location</th>
+                <th style="width: 24%;">Number of plants</th>
+                <th style="width: 24%;">Number of offices</th>
+                <th style="width: 24%;">Total</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><strong>National</strong></td>
+                <td class="td-center">{{ sec_a.locations.get('national_plants', sec_a.operating_plants_and_sites_count or '') }}</td>
+                <td class="td-center">{{ sec_a.locations.get('national_offices', '') }}</td>
+                <td class="td-center">{{ sec_a.locations.get('national_total', sec_a.operating_plants_and_sites_count or '') }}</td>
+            </tr>
+            <tr>
+                <td><strong>International</strong></td>
+                <td class="td-center">{{ sec_a.locations.get('intl_plants', '') }}</td>
+                <td class="td-center">{{ sec_a.locations.get('intl_offices', '') }}</td>
+                <td class="td-center">{{ sec_a.locations.get('intl_total', '') }}</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <p class="question-text">17. &nbsp; Markets served by the entity:</p>
+    <p class="question-text" style="margin-left: 16px;">a. &nbsp; Number of locations</p>
+    <table>
+        <thead>
+            <tr>
+                <th style="width: 55%;">Locations</th>
+                <th>Number</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>National (No. of States)</td>
+                <td class="td-center">{{ sec_a.markets_served.get('national_states', '') }}</td>
+            </tr>
+            <tr>
+                <td>International (No. of Countries)</td>
+                <td class="td-center">{{ sec_a.markets_served.get('intl_countries', '') }}</td>
+            </tr>
+        </tbody>
+    </table>
+    <p class="question-text" style="margin-left: 16px;">b. &nbsp; What is the contribution of exports as a percentage of the total turnover of the entity?</p>
+    <div class="answer-line">{{ sec_a.markets_served.get('exports_pct', '') }}</div>
+    <p class="question-text" style="margin-left: 16px;">c. &nbsp; A brief on types of customers</p>
+    <div class="answer-line">{{ sec_a.markets_served.get('customer_types', '') }}</div>
+
+    <div class="sub-heading">IV. &nbsp; Employees</div>
+    <p class="question-text">18. &nbsp; Details as at the end of Financial Year:</p>
+    <p class="question-text" style="margin-left: 16px;">a. &nbsp; Employees and workers (including differently abled):</p>
+    <table>
+        <thead>
+            <tr>
+                <th rowspan="2" style="width: 7%;">S. No.</th>
+                <th rowspan="2" style="width: 27%;">Particulars</th>
+                <th rowspan="2" class="th-center" style="width: 14%;">Total (A)</th>
+                <th colspan="2" class="th-center">Male</th>
+                <th colspan="2" class="th-center">Female</th>
+            </tr>
+            <tr>
+                <th class="th-center">No. (B)</th>
+                <th class="th-center">% (B / A)</th>
+                <th class="th-center">No. (C)</th>
+                <th class="th-center">% (C / A)</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr class="row-group-header"><td colspan="7">EMPLOYEES</td></tr>
+            <tr>
+                <td class="td-center">1.</td>
+                <td>Permanent (D)</td>
+                <td class="td-center">{{ sec_a.employees_breakdown.get('emp_perm_total', '') }}</td>
+                <td class="td-center">{{ sec_a.employees_breakdown.get('emp_perm_male', '') }}</td>
+                <td class="td-center">{{ sec_a.employees_breakdown.get('emp_perm_male_pct', '') }}</td>
+                <td class="td-center">{{ sec_a.employees_breakdown.get('emp_perm_female', '') }}</td>
+                <td class="td-center">{{ sec_a.employees_breakdown.get('emp_perm_female_pct', '') }}</td>
+            </tr>
+            <tr>
+                <td class="td-center">2.</td>
+                <td>Other than Permanent (E)</td>
+                <td class="td-center">{{ sec_a.employees_breakdown.get('emp_other_total', '') }}</td>
+                <td class="td-center">{{ sec_a.employees_breakdown.get('emp_other_male', '') }}</td>
+                <td class="td-center">{{ sec_a.employees_breakdown.get('emp_other_male_pct', '') }}</td>
+                <td class="td-center">{{ sec_a.employees_breakdown.get('emp_other_female', '') }}</td>
+                <td class="td-center">{{ sec_a.employees_breakdown.get('emp_other_female_pct', '') }}</td>
+            </tr>
+            <tr class="row-total">
+                <td class="td-center">3.</td>
+                <td>Total employees (D + E)</td>
+                <td class="td-center">{{ sec_a.employees_breakdown.get('emp_total', sec_a.total_employees if sec_a.total_employees else '') }}</td>
+                <td class="td-center">{{ sec_a.employees_breakdown.get('emp_total_male', '') }}</td>
+                <td class="td-center">{{ sec_a.employees_breakdown.get('emp_total_male_pct', '') }}</td>
+                <td class="td-center">{{ sec_a.employees_breakdown.get('emp_total_female', '') }}</td>
+                <td class="td-center">{{ sec_a.employees_breakdown.get('emp_total_female_pct', '') }}</td>
+            </tr>
+            <tr class="row-group-header"><td colspan="7">WORKERS</td></tr>
+            <tr>
+                <td class="td-center">4.</td>
+                <td>Permanent (F)</td>
+                <td class="td-center">{{ sec_a.employees_breakdown.get('wrk_perm_total', '') }}</td>
+                <td class="td-center">{{ sec_a.employees_breakdown.get('wrk_perm_male', '') }}</td>
+                <td class="td-center">{{ sec_a.employees_breakdown.get('wrk_perm_male_pct', '') }}</td>
+                <td class="td-center">{{ sec_a.employees_breakdown.get('wrk_perm_female', '') }}</td>
+                <td class="td-center">{{ sec_a.employees_breakdown.get('wrk_perm_female_pct', '') }}</td>
+            </tr>
+            <tr>
+                <td class="td-center">5.</td>
+                <td>Other than Permanent (G)</td>
+                <td class="td-center">{{ sec_a.employees_breakdown.get('wrk_other_total', '') }}</td>
+                <td class="td-center">{{ sec_a.employees_breakdown.get('wrk_other_male', '') }}</td>
+                <td class="td-center">{{ sec_a.employees_breakdown.get('wrk_other_male_pct', '') }}</td>
+                <td class="td-center">{{ sec_a.employees_breakdown.get('wrk_other_female', '') }}</td>
+                <td class="td-center">{{ sec_a.employees_breakdown.get('wrk_other_female_pct', '') }}</td>
+            </tr>
+            <tr class="row-total">
+                <td class="td-center">6.</td>
+                <td>Total workers (F + G)</td>
+                <td class="td-center">{{ sec_a.employees_breakdown.get('wrk_total', '') }}</td>
+                <td class="td-center">{{ sec_a.employees_breakdown.get('wrk_total_male', '') }}</td>
+                <td class="td-center">{{ sec_a.employees_breakdown.get('wrk_total_male_pct', '') }}</td>
+                <td class="td-center">{{ sec_a.employees_breakdown.get('wrk_total_female', '') }}</td>
+                <td class="td-center">{{ sec_a.employees_breakdown.get('wrk_total_female_pct', '') }}</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <p class="question-text" style="margin-left: 16px;">b. &nbsp; Differently abled Employees and workers:</p>
+    <table>
+        <thead>
+            <tr>
+                <th rowspan="2" style="width: 7%;">S. No</th>
+                <th rowspan="2" style="width: 27%;">Particulars</th>
+                <th rowspan="2" class="th-center" style="width: 14%;">Total (A)</th>
+                <th colspan="2" class="th-center">Male</th>
+                <th colspan="2" class="th-center">Female</th>
+            </tr>
+            <tr>
+                <th class="th-center">No. (B)</th>
+                <th class="th-center">% (B / A)</th>
+                <th class="th-center">No. (C)</th>
+                <th class="th-center">% (C / A)</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr class="row-group-header"><td colspan="7">DIFFERENTLY ABLED EMPLOYEES</td></tr>
+            <tr><td class="td-center">1.</td><td>Permanent (D)</td><td></td><td></td><td></td><td></td><td></td></tr>
+            <tr><td class="td-center">2.</td><td>Other than Permanent (E)</td><td></td><td></td><td></td><td></td><td></td></tr>
+            <tr class="row-total"><td class="td-center">3.</td><td>Total differently abled employees (D + E)</td><td></td><td></td><td></td><td></td><td></td></tr>
+            <tr class="row-group-header"><td colspan="7">DIFFERENTLY ABLED WORKERS</td></tr>
+            <tr><td class="td-center">4.</td><td>Permanent (F)</td><td></td><td></td><td></td><td></td><td></td></tr>
+            <tr><td class="td-center">5.</td><td>Other than permanent (G)</td><td></td><td></td><td></td><td></td><td></td></tr>
+            <tr class="row-total"><td class="td-center">6.</td><td>Total differently abled workers (F + G)</td><td></td><td></td><td></td><td></td><td></td></tr>
+        </tbody>
+    </table>
+
+    <p class="question-text">19. &nbsp; Participation/Inclusion/Representation of women</p>
+    <table>
+        <thead>
+            <tr>
+                <th rowspan="2" style="width: 35%;">Category</th>
+                <th rowspan="2" class="th-center" style="width: 15%;">Total (A)</th>
+                <th colspan="2" class="th-center">No. and percentage of Females</th>
+            </tr>
+            <tr>
+                <th class="th-center">No. (B)</th>
+                <th class="th-center">% (B / A)</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>Board of Directors</td>
+                <td class="td-center">{{ sec_a.women_representation.get('bod_total', '') }}</td>
+                <td class="td-center">{{ sec_a.women_representation.get('bod_female', '') }}</td>
+                <td class="td-center">{{ sec_a.women_representation.get('bod_female_pct', '') }}</td>
+            </tr>
+            <tr>
+                <td>Key Management Personnel</td>
+                <td class="td-center">{{ sec_a.women_representation.get('kmp_total', '') }}</td>
+                <td class="td-center">{{ sec_a.women_representation.get('kmp_female', '') }}</td>
+                <td class="td-center">{{ sec_a.women_representation.get('kmp_female_pct', '') }}</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <p class="question-text">20. &nbsp; Turnover rate for permanent employees and workers<br><em style="margin-left: 22px;">(Disclose trends for the past 3 years)</em></p>
+    <table>
+        <thead>
+            <tr>
+                <th rowspan="2" style="width: 22%;"></th>
+                <th colspan="3" class="th-center">{{ cur_fy }}<br>(Turnover rate in current FY)</th>
+                <th colspan="3" class="th-center">FY _____<br>(Turnover rate in previous FY)</th>
+                <th colspan="3" class="th-center">FY _____<br>(Turnover rate in the year prior to the previous FY)</th>
+            </tr>
+            <tr>
+                <th class="th-center">Male</th><th class="th-center">Female</th><th class="th-center">Total</th>
+                <th class="th-center">Male</th><th class="th-center">Female</th><th class="th-center">Total</th>
+                <th class="th-center">Male</th><th class="th-center">Female</th><th class="th-center">Total</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><strong>Permanent Employees</strong></td>
+                <td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td>
+            </tr>
+            <tr>
+                <td><strong>Permanent Workers</strong></td>
+                <td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td>
+            </tr>
+        </tbody>
+    </table>
+
+    <div class="sub-heading">V. &nbsp; Holding, Subsidiary and Associate Companies (including joint ventures)</div>
+    <p class="question-text">21. &nbsp; (a) Names of holding / subsidiary / associate companies / joint ventures</p>
+    <table>
+        <thead>
+            <tr>
+                <th style="width: 7%;">S. No.</th>
+                <th style="width: 33%;">Name of the holding / subsidiary / associate companies / joint ventures (A)</th>
+                <th style="width: 22%;">Indicate whether holding/ Subsidiary/ Associate/ Joint Venture</th>
+                <th style="width: 14%;">% of shares held by listed entity</th>
+                <th style="width: 24%;">Does the entity indicated at column A, participate in the Business Responsibility initiatives of the listed entity? (Yes/No)</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% if sec_a.holding_subsidiaries %}
+                {% for sub in sec_a.holding_subsidiaries %}
+                <tr>
+                    <td class="td-center">{{ loop.index }}</td>
+                    <td>{{ sub.name or '' }}</td>
+                    <td>{{ sub.relation or '' }}</td>
+                    <td class="td-center">{{ sub.ownership_pct or '' }}</td>
+                    <td class="td-center">{{ sub.participates_br or '' }}</td>
+                </tr>
+                {% endfor %}
+            {% else %}
+                <tr><td class="td-center">&nbsp;</td><td></td><td></td><td></td><td></td></tr>
+            {% endif %}
+        </tbody>
+    </table>
+
+    <div class="sub-heading">VI. &nbsp; CSR Details</div>
+    <p class="question-text">22.</p>
+    <div style="margin-left: 24px; line-height: 1.7;">
+        <div>(i) Whether CSR is applicable as per section 135 of Companies Act, 2013: (Yes/No) <strong>{{ sec_a.csr_details.get('csr_applicable', '') }}</strong></div>
+        <div>(ii) Turnover (in Rs.) <strong>{{ sec_a.turnover_inr or '' }}</strong></div>
+        <div>(iii) Net worth (in Rs.) <strong>{{ sec_a.net_worth_inr or '' }}</strong></div>
+    </div>
+
+    <div class="sub-heading">VII. &nbsp; Transparency and Disclosures Compliances</div>
+    <p class="question-text">23. &nbsp; Complaints/Grievances on any of the principles (Principles 1 to 9) under the National Guidelines on Responsible Business Conduct:</p>
+    <table class="compact-matrix">
+        <thead>
+            <tr>
+                <th rowspan="2" style="width: 18%;">Stakeholder group from whom complaint is received</th>
+                <th rowspan="2" style="width: 20%;">Grievance Redressal Mechanism in Place (Yes/No)<br><em>(If Yes, then provide web-link for grievance redress policy)</em></th>
+                <th colspan="3" class="th-center">{{ cur_fy }}<br>Current Financial Year</th>
+                <th colspan="3" class="th-center">FY _____<br>Previous Financial Year</th>
+            </tr>
+            <tr>
+                <th class="th-center">Number of complaints filed during the year</th>
+                <th class="th-center">Number of complaints pending resolution at close of the year</th>
+                <th class="th-center">Remarks</th>
+                <th class="th-center">Number of complaints filed during the year</th>
+                <th class="th-center">Number of complaints pending resolution at close of the year</th>
+                <th class="th-center">Remarks</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for grp in ['Communities', 'Investors (other than shareholders)', 'Shareholders', 'Employees and workers', 'Customers', 'Value Chain Partners', 'Other (please specify)'] %}
+            <tr>
+                <td>{{ grp }}</td>
+                <td></td><td></td><td></td><td></td><td></td><td></td><td></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <p class="question-text">24. &nbsp; Overview of the entity’s material responsible business conduct issues</p>
+    <p class="question-text">Please indicate material responsible business conduct and sustainability issues pertaining to environmental and social matters that present a risk or an opportunity to your business, rationale for identifying the same, approach to adapt or mitigate the risk along-with its financial implications, as per the following format</p>
+    <table>
+        <thead>
+            <tr>
+                <th style="width: 7%;">S. No.</th>
+                <th style="width: 18%;">Material issue identified</th>
+                <th style="width: 12%;">Indicate whether risk or opportunity (R/O)</th>
+                <th style="width: 21%;">Rationale for identifying the risk / opportunity</th>
+                <th style="width: 21%;">In case of risk, approach to adapt or mitigate</th>
+                <th style="width: 21%;">Financial implications of the risk or opportunity (Indicate positive or negative implications)</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% if sec_a.material_issues %}
+                {% for mi in sec_a.material_issues %}
+                <tr>
+                    <td class="td-center">{{ loop.index }}</td>
+                    <td>{{ mi.issue or '' }}</td>
+                    <td class="td-center">{{ mi.risk_or_opportunity or '' }}</td>
+                    <td>{{ mi.rationale or '' }}</td>
+                    <td>{{ mi.mitigation or '' }}</td>
+                    <td>{{ mi.financial_implication or '' }}</td>
+                </tr>
+                {% endfor %}
+            {% else %}
+                <tr><td class="td-center">&nbsp;</td><td></td><td></td><td></td><td></td><td></td></tr>
+                <tr><td class="td-center">&nbsp;</td><td></td><td></td><td></td><td></td><td></td></tr>
+            {% endif %}
+        </tbody>
     </table>
 </div>

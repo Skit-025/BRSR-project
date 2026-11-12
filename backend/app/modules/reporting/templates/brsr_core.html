@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>SEBI BRSR Comprehensive Disclosure Report</title>
+    <title>SEBI BRSR Annexure I Disclosure Report — {{ report.section_a.corporate_name }}</title>
     <style>
         {{ styles_css }}
     </style>
@@ -10,22 +10,39 @@
 <body>
     <div class="watermark">SEALED AUDIT COPY</div>
 
+    <div class="print-toolbar">
+        <div>
+            <strong>SEBI Annexure I — Official BRSR Disclosure Format</strong>
+            <span style="color:#475569;margin-left:8px;">Entity: {{ report.entity_name or report.section_a.corporate_name }} | FY: {{ report.section_a.financial_year }}</span>
+        </div>
+        <button class="print-btn" onclick="window.print()">Print / Save as PDF</button>
+    </div>
+
+    <div class="annexure-label">Annexure I</div>
+    <h1 class="format-title">BUSINESS RESPONSIBILITY &amp; SUSTAINABILITY REPORTING FORMAT</h1>
+
     <div class="report-header">
-        <h1 class="report-title">{{ report.section_a.company_name }}</h1>
-        <p class="report-subtitle">Business Responsibility and Sustainability Report (BRSR) — {{ report.section_a.financial_year }}</p>
+        <div class="report-title">{{ report.section_a.corporate_name or report.entity_name }}</div>
+        <div class="report-subtitle">
+            Entity Code: <strong>{{ report.entity_code }}</strong> | Period: <strong>{{ report.period_code }}</strong> ({{ report.section_a.financial_year }}) | Report Type: <strong>{{ report.report_type }}</strong>
+        </div>
         <div class="seal-badge">
-            🔒 Cryptographic Snapshot Seal: {{ report.snapshot_hash }}
+            Cryptographic Snapshot Seal (SHA-256): {{ report.snapshot_hash }} | Report ID: {{ report.report_id }}
         </div>
     </div>
 
     <!-- Section A: General Disclosures -->
-    {{ section_a_html }}
+    {{ section_a_html | safe }}
+
+    <div class="page-break"></div>
 
     <!-- Section B: Management and Process Disclosures -->
-    {{ section_b_html }}
+    {{ section_b_html | safe }}
 
-    <!-- Section C: Principle-wise Performance -->
-    {{ section_c_html }}
+    <div class="page-break"></div>
+
+    <!-- Section C: Principle-wise Performance Disclosure -->
+    {{ section_c_html | safe }}
 
 </body>
 </html>

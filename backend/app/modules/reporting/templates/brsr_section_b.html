@@ -1,39 +1,162 @@
-<div class="section-container">
+{% set sec_b = report.section_b %}
+{% set pmatrix = sec_b.principles_matrix or {} %}
+<div class="section-container" id="section-b">
     <div class="section-title">SECTION B: MANAGEMENT AND PROCESS DISCLOSURES</div>
-    <table>
+    <p class="question-text">This section is aimed at helping businesses demonstrate the structures, policies and processes put in place towards adopting the NGRBC Principles and Core Elements.</p>
+
+    <table class="compact-matrix">
         <thead>
             <tr>
-                <th style="width: 50%;">Disclosure Question / Policy Area</th>
-                <th style="text-align: center;">Policy In Place (P1 - P9)</th>
-                <th>Board Approved & Web Link</th>
+                <th style="width: 37%;">Disclosure Questions</th>
+                {% for idx in range(1, 10) %}
+                <th class="th-center" style="width: 7%;">P<br>{{ idx }}</th>
+                {% endfor %}
             </tr>
         </thead>
         <tbody>
             <tr>
-                <td>1. Whether the entity's policy/policies cover each principle and its core elements of the NGRBCs (Yes/No)</td>
-                <td style="text-align: center;"><strong>YES (P1 to P9)</strong></td>
-                <td>Approved by Board of Directors</td>
+                <td colspan="10"><strong>Policy and management processes</strong></td>
             </tr>
             <tr>
-                <td>2. Has the policy been translated into procedures?</td>
-                <td style="text-align: center;"><strong>YES</strong></td>
-                <td>Standard Operating Procedures active across all sites</td>
+                <td>1. &nbsp; a. Whether your entity’s policy/policies cover each principle and its core elements of the NGRBCs. (Yes/No)</td>
+                {% for idx in range(1, 10) %}
+                <td class="td-center">{{ (pmatrix.get('P' ~ idx, {})).get('policy_covered', '') }}</td>
+                {% endfor %}
             </tr>
             <tr>
-                <td>3. Do the enlisted policies extend to value chain partners?</td>
-                <td style="text-align: center;"><strong>YES</strong></td>
-                <td>Supplier Code of Conduct mandatory for Tier-1 vendors</td>
+                <td>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; b. Has the policy been approved by the Board? (Yes/No)</td>
+                {% for idx in range(1, 10) %}
+                <td class="td-center">{{ (pmatrix.get('P' ~ idx, {})).get('board_approved', '') }}</td>
+                {% endfor %}
             </tr>
             <tr>
-                <td>4. National and international codes/certifications/standards adopted</td>
-                <td style="text-align: center;"><strong>ISO 14001, ISO 45001, ISO 9001</strong></td>
-                <td>Accredited third-party certified</td>
+                <td>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; c. Web Link of the Policies, if available</td>
+                {% for idx in range(1, 10) %}
+                <td class="td-center">{{ (pmatrix.get('P' ~ idx, {})).get('web_link', '') }}</td>
+                {% endfor %}
             </tr>
             <tr>
-                <td>5. Specific commitments, goals and targets set by entity</td>
-                <td style="text-align: center;"><strong>Active ESG Roadmap 2030</strong></td>
-                <td>Net-Zero Scope 1 & 2 target by 2040</td>
+                <td>2. &nbsp; Whether the entity has translated the policy into procedures. (Yes / No)</td>
+                {% for idx in range(1, 10) %}
+                <td class="td-center">{{ (pmatrix.get('P' ~ idx, {})).get('translated_to_procedures', '') }}</td>
+                {% endfor %}
             </tr>
+            <tr>
+                <td>3. &nbsp; Do the enlisted policies extend to your value chain partners? (Yes/No)</td>
+                {% for idx in range(1, 10) %}
+                <td class="td-center">{{ (pmatrix.get('P' ~ idx, {})).get('extends_to_value_chain', '') }}</td>
+                {% endfor %}
+            </tr>
+            <tr>
+                <td>4. &nbsp; Name of the national and international codes/certifications/labels/ standards (e.g. Forest Stewardship Council, Fairtrade, Rainforest Alliance, Trustea) standards (e.g. SA 8000, OHSAS, ISO, BIS) adopted by your entity and mapped to each principle.</td>
+                {% for idx in range(1, 10) %}
+                <td class="td-center">{{ (pmatrix.get('P' ~ idx, {})).get('standards', '') }}</td>
+                {% endfor %}
+            </tr>
+            <tr>
+                <td>5. &nbsp; Specific commitments, goals and targets set by the entity with defined timelines, if any.</td>
+                {% for idx in range(1, 10) %}
+                <td>{{ (pmatrix.get('P' ~ idx, {})).get('commitments', '') }}</td>
+                {% endfor %}
+            </tr>
+            <tr>
+                <td>6. &nbsp; Performance of the entity against the specific commitments, goals and targets along-with reasons in case the same are not met.</td>
+                {% for idx in range(1, 10) %}
+                <td>{{ (pmatrix.get('P' ~ idx, {})).get('performance', '') }}</td>
+                {% endfor %}
+            </tr>
+
+            <tr>
+                <td colspan="10"><strong>Governance, leadership and oversight</strong></td>
+            </tr>
+            <tr>
+                <td colspan="10">
+                    7. &nbsp; Statement by director responsible for the business responsibility report, highlighting ESG related challenges, targets and achievements <em>(listed entity has flexibility regarding the placement of this disclosure)</em>
+                    {% if sec_b.director_statement %}
+                    <div style="margin-top: 6px; padding-left: 16px;">{{ sec_b.director_statement }}</div>
+                    {% endif %}
+                </td>
+            </tr>
+            <tr>
+                <td>8. &nbsp; Details of the highest authority responsible for implementation and oversight of the Business Responsibility policy (ies).</td>
+                <td colspan="9">{{ sec_b.highest_authority or '' }}</td>
+            </tr>
+            <tr>
+                <td>9. &nbsp; Does the entity have a specified Committee of the Board/ Director responsible for decision making on sustainability related issues? (Yes / No). If yes, provide details.</td>
+                <td colspan="9">{{ sec_b.sustainability_committee or sec_b.board_oversight_committee or '' }}</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <table class="compact-matrix">
+        <thead>
+            <tr>
+                <th colspan="19">10. Details of Review of NGRBCs by the Company:</th>
+            </tr>
+            <tr>
+                <th rowspan="2" style="width: 24%;">Subject for Review</th>
+                <th colspan="9" class="th-center">Indicate whether review was undertaken by Director / Committee of the Board/ Any other Committee</th>
+                <th colspan="9" class="th-center">Frequency<br>(Annually/ Half yearly/ Quarterly/ Any other – please specify)</th>
+            </tr>
+            <tr>
+                {% for idx in range(1, 10) %}<th class="th-center">P<br>{{ idx }}</th>{% endfor %}
+                {% for idx in range(1, 10) %}<th class="th-center">P<br>{{ idx }}</th>{% endfor %}
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>Performance against above policies and follow up action</td>
+                {% for idx in range(1, 10) %}<td></td>{% endfor %}
+                {% for idx in range(1, 10) %}<td></td>{% endfor %}
+            </tr>
+            <tr>
+                <td>Compliance with statutory requirements of relevance to the principles, and, rectification of any non-compliances</td>
+                {% for idx in range(1, 10) %}<td></td>{% endfor %}
+                {% for idx in range(1, 10) %}<td></td>{% endfor %}
+            </tr>
+            <tr>
+                <td style="width: 24%;" colspan="1">11. Has the entity carried out independent assessment/ evaluation of the working of its policies by an external agency? (Yes/No). If yes, provide name of the agency.</td>
+                <td colspan="18" style="padding: 0;">
+                    <table style="margin: 0; border: none; width: 100%;">
+                        <tr>
+                            {% for idx in range(1, 10) %}
+                            <th class="th-center" style="border-top: none; border-bottom: none; {% if loop.first %}border-left: none;{% endif %} {% if loop.last %}border-right: none;{% endif %}">P<br>{{ idx }}</th>
+                            {% endfor %}
+                        </tr>
+                        <tr>
+                            {% for idx in range(1, 10) %}
+                            <td class="td-center" style="border-bottom: none; {% if loop.first %}border-left: none;{% endif %} {% if loop.last %}border-right: none;{% endif %} height: 26px;">{{ (sec_b.independent_assessment or {}).get('P' ~ idx, '') }}</td>
+                            {% endfor %}
+                        </tr>
+                    </table>
+                </td>
+            </tr>
+        </tbody>
+    </table>
+
+    <p class="question-text">12. &nbsp; If answer to question (1) above is “No” i.e. not all Principles are covered by a policy, reasons to be stated:</p>
+    <table class="compact-matrix">
+        <thead>
+            <tr>
+                <th class="th-center" style="width: 37%;">Questions</th>
+                {% for idx in range(1, 10) %}
+                <th class="th-center" style="width: 7%;">P<br>{{ idx }}</th>
+                {% endfor %}
+            </tr>
+        </thead>
+        <tbody>
+            {% for reason_label in [
+                'The entity does not consider the Principles material to its business (Yes/No)',
+                'The entity is not at a stage where it is in a position to formulate and implement the policies on specified principles (Yes/No)',
+                'The entity does not have the financial or/human and technical resources available for the task (Yes/No)',
+                'It is planned to be done in the next financial year (Yes/No)',
+                'Any other reason (please specify)'
+            ] %}
+            <tr>
+                <td>{{ reason_label }}</td>
+                {% for idx in range(1, 10) %}<td></td>{% endfor %}
+            </tr>
+            {% endfor %}
         </tbody>
     </table>
 </div>
