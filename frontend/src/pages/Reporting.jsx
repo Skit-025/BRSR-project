@@ -276,26 +276,6 @@ function CorporateReporting() {
     }
   };
 
-  const handlePreviewAnnexure = () => {
-    if (!entityId || !periodId) { setNotice({ type: 'error', text: 'Select entity and period first.' }); return; }
-    const token = sessionStorage.getItem('brsr_token') || localStorage.getItem('brsr_token');
-    const url = reportingApi.getExportHtmlUrl(entityId, periodId);
-    fetch(url, { headers: { Authorization: `Bearer ${token}` } })
-      .then(r => {
-        if (!r.ok) throw new Error('Failed to load SEBI Annexure I template');
-        return r.text();
-      })
-      .then(html => {
-        const win = window.open('', '_blank');
-        if (win) {
-          win.document.open();
-          win.document.write(html);
-          win.document.close();
-        }
-      })
-      .catch(() => setNotice({ type: 'error', text: 'Failed to open SEBI Annexure I template.' }));
-  };
-
   const handleExportHtml = () => {
     if (!entityId || !periodId) { setNotice({ type: 'error', text: 'Select entity and period first.' }); return; }
     const token = sessionStorage.getItem('brsr_token') || localStorage.getItem('brsr_token');
@@ -462,9 +442,6 @@ function CorporateReporting() {
         </div>
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
           <PageHelpButton title="Reporting Guide" route="/reporting" />
-          <button onClick={handlePreviewAnnexure} className="btn btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '7px 14px', borderRadius: 6, border: '1px solid #cbd5e1', background: '#fff', color: '#0f172a', fontWeight: 600 }}>
-            <FileCheck size={13} /> SEBI Annexure I Format
-          </button>
           <button onClick={handleExportHtml} className="btn btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '7px 14px', borderRadius: 6, border: '1px solid #e2e8f0', background: '#fff', color: '#09090b', fontWeight: 600 }}>
             <Download size={13} /> Export HTML
           </button>

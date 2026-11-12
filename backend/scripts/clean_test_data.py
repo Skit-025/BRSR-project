@@ -27,10 +27,7 @@ from app.modules.reporting.models import Report
 from app.modules.snapshots.models import ReportSnapshot
 from app.modules.notifications.models import Notification
 from app.modules.calc.models import CalculationLog
-from app.modules.disclosures.models import CalculationJob, OrgLevelDisclosure
-from app.modules.valuechain.models import ValueChainAssessment
-from app.modules.assurance.models import AssuranceEngagement
-from app.modules.calc.models import CustomEmissionFactor
+from app.modules.disclosures.models import CalculationJob
 from app.ai.models import AIRun
 
 def run_cleanup(dry_run: bool = True):
@@ -114,6 +111,7 @@ def run_cleanup(dry_run: bool = True):
             "BU-IBD",
             # User created real projects
             "PRJ-NH-18-HIGHWAY-C-9350",
+            "PRJ-TEST-1",
             "PRJ-RAILWAY-TUNNEL--6713",
             "PRJ-BUIDING-A-TUNNE-0278",
             "PRJ-A-HIGHWAY-CONST-5174",
@@ -195,7 +193,6 @@ def run_cleanup(dry_run: bool = True):
                 or ev.original_name.startswith("invoice_electricity")
                 or ev.original_name.startswith("energy_branch")
                 or ev.original_name.startswith("waste_branch")
-                or ev.original_name == "meter_reading.pdf"
                 or ev.storage_key.startswith("mock_storage_")
                 or (ev.uploader_id and str(ev.uploader_id) in test_user_ids)
             ):
@@ -298,16 +295,11 @@ def run_cleanup(dry_run: bool = True):
             del_ev = db.query(EvidenceFile).filter(EvidenceFile.id.in_(list(test_ev_ids))).delete(synchronize_session=False)
             print(f"Deleted {del_ev} evidence files.")
 
-            # Clean orphaned files in test vaults whose disk basename is not in remaining DB EvidenceFile records
-            preserved_vault_basenames = {
-                os.path.basename(r[0])
-                for r in db.query(EvidenceFile.storage_key).all()
-                if r[0]
-            }
+            # Clean orphaned files in test vaults not present in preserved files
             for vault in storage_vaults:
                 if os.path.exists(vault):
                     for fname in os.listdir(vault):
-                        if fname not in preserved_vault_basenames:
+                        if fname not in PRESERVED_FILES:
                             full_p = os.path.join(vault, fname)
                             try:
                                 if os.path.isfile(full_p):
@@ -315,15 +307,15 @@ def run_cleanup(dry_run: bool = True):
                             except Exception:
                                 pass
 
-        # Remove accidental nested backend/backend directory if empty or test artifact
-        accidental_nested = os.path.join(backend_dir, "backend")
-        if os.path.exists(accidental_nested):
-            import shutil
-            try:
-                shutil.rmtree(accidental_nested, ignore_errors=True)
-                print("Removed accidental nested backend/backend test artifact directory.")
-            except Exception:
-                pass
+            # Remove accidental nested backend/backend directory if empty or test artifact
+            accidental_nested = os.path.join(backend_dir, "backend")
+            if os.path.exists(accidental_nested):
+                import shutil
+                try:
+                    shutil.rmtree(accidental_nested, ignore_errors=True)
+                    print("Removed accidental nested backend/backend test artifact directory.")
+                except Exception:
+                    pass
 
         # 3. Reviews
         if test_review_ids:
@@ -358,36 +350,15 @@ def run_cleanup(dry_run: bool = True):
             del_cv = db.query(ConsolidatedValue).filter(ConsolidatedValue.id.in_(list(test_cv_ids))).delete(synchronize_session=False)
             print(f"Deleted {del_cv} consolidated values.")
 
-        # 8. Reports & Report Snapshots & Disclosures / Assurance / Value Chain / Custom Factors
+        # 8. Reports & Report Snapshots
         if test_report_ids:
             del_rep = db.query(Report).filter(Report.id.in_(list(test_report_ids))).delete(synchronize_session=False)
             print(f"Deleted {del_rep} reports.")
 
-        if test_period_ids or test_node_ids:
-            db.query(ReportSnapshot).filter(
-                (ReportSnapshot.period_id.in_(list(test_period_ids))) |
-                (ReportSnapshot.entity_id.in_(list(test_node_ids)))
-            ).delete(synchronize_session=False)
-
-            db.query(OrgLevelDisclosure).filter(
-                (OrgLevelDisclosure.org_node_id.in_(list(test_node_ids))) |
-                (OrgLevelDisclosure.period_id.in_(list(test_period_ids)))
-            ).delete(synchronize_session=False)
-
-            db.query(AssuranceEngagement).filter(
-                (AssuranceEngagement.period_id.in_(list(test_period_ids))) |
-                (AssuranceEngagement.entity_id.in_(list(test_node_ids)))
-            ).delete(synchronize_session=False)
-
-        if test_period_ids:
-            db.query(ValueChainAssessment).filter(
-                ValueChainAssessment.period_id.in_(list(test_period_ids))
-            ).delete(synchronize_session=False)
-
-        if test_node_ids:
-            db.query(CustomEmissionFactor).filter(
-                CustomEmissionFactor.org_node_id.in_(list(test_node_ids))
-            ).delete(synchronize_session=False)
+        db.query(ReportSnapshot).filter(
+            (ReportSnapshot.period_id.in_(list(test_period_ids))) |
+            (ReportSnapshot.entity_id.in_(list(test_node_ids)))
+        ).delete(synchronize_session=False)
 
         # 9. Calculation Jobs & Logs
         db.query(CalculationJob).filter(
@@ -407,35 +378,8 @@ def run_cleanup(dry_run: bool = True):
             del_req = db.query(UserCreationRequest).filter(UserCreationRequest.id.in_(list(test_req_ids))).delete(synchronize_session=False)
             print(f"Deleted {del_req} user creation requests.")
 
-        if test_user_ids:
-            db.query(UserCreationRequest).filter(UserCreationRequest.requested_by_user_id.in_(list(test_user_ids))).update(
-                {UserCreationRequest.requested_by_user_id: None}, synchronize_session=False
-            )
-            db.query(UserCreationRequest).filter(UserCreationRequest.approved_by_user_id.in_(list(test_user_ids))).update(
-                {UserCreationRequest.approved_by_user_id: None}, synchronize_session=False
-            )
-            db.query(UserCreationRequest).filter(UserCreationRequest.rejected_by_user_id.in_(list(test_user_ids))).update(
-                {UserCreationRequest.rejected_by_user_id: None}, synchronize_session=False
-            )
-            db.query(UserCreationRequest).filter(UserCreationRequest.created_user_id.in_(list(test_user_ids))).update(
-                {UserCreationRequest.created_user_id: None}, synchronize_session=False
-            )
-
-        if test_node_ids:
-            db.query(UserCreationRequest).filter(UserCreationRequest.org_node_id.in_(list(test_node_ids))).update(
-                {UserCreationRequest.org_node_id: None}, synchronize_session=False
-            )
-
-        inv_filters = []
         if test_inv_ids:
-            inv_filters.append(UserInvitation.id.in_(list(test_inv_ids)))
-        if test_user_ids:
-            inv_filters.append(UserInvitation.invited_by_id.in_(list(test_user_ids)))
-        if test_node_ids:
-            inv_filters.append(UserInvitation.org_node_id.in_(list(test_node_ids)))
-        if inv_filters:
-            from sqlalchemy import or_
-            del_inv = db.query(UserInvitation).filter(or_(*inv_filters)).delete(synchronize_session=False)
+            del_inv = db.query(UserInvitation).filter(UserInvitation.id.in_(list(test_inv_ids))).delete(synchronize_session=False)
             print(f"Deleted {del_inv} user invitations.")
 
         # 11. Notifications
@@ -443,44 +387,12 @@ def run_cleanup(dry_run: bool = True):
             del_not = db.query(Notification).filter(Notification.id.in_(list(test_notif_ids))).delete(synchronize_session=False)
             print(f"Deleted {del_not} notifications.")
 
-        # 11b. Test AI Runs & Admin Audit Entries & Residual User FKs
+        # 11b. Test AI Runs
         del_ai = db.query(AIRun).filter(
             (AIRun.input_ref.in_(["GENERAL", "GENERAL-QUERY", "test_file_id", "test_input", "TEST"])) |
             (AIRun.reviewer_id.in_(list(test_user_ids)))
         ).delete(synchronize_session=False)
         print(f"Deleted {del_ai} test AI runs.")
-
-        if test_user_ids:
-            del_audit = db.query(AdminAuditEntry).filter(
-                (AdminAuditEntry.actor_id.in_(list(test_user_ids))) |
-                (AdminAuditEntry.target_user_id.in_(list(test_user_ids)))
-            ).delete(synchronize_session=False)
-            print(f"Deleted {del_audit} test admin audit entries.")
-
-            db.query(EvidenceFile).filter(EvidenceFile.uploader_id.in_(list(test_user_ids))).update(
-                {EvidenceFile.uploader_id: None}, synchronize_session=False
-            )
-            db.query(EvidenceFile).filter(EvidenceFile.deleted_by_id.in_(list(test_user_ids))).update(
-                {EvidenceFile.deleted_by_id: None}, synchronize_session=False
-            )
-            db.query(OrgLevelDisclosure).filter(OrgLevelDisclosure.submitted_by_id.in_(list(test_user_ids))).update(
-                {OrgLevelDisclosure.submitted_by_id: None}, synchronize_session=False
-            )
-            db.query(OrgLevelDisclosure).filter(OrgLevelDisclosure.approved_by_id.in_(list(test_user_ids))).update(
-                {OrgLevelDisclosure.approved_by_id: None}, synchronize_session=False
-            )
-            db.query(Submission).filter(Submission.maker_id.in_(list(test_user_ids))).update(
-                {Submission.maker_id: None}, synchronize_session=False
-            )
-            db.query(Review).filter(Review.reviewer_id.in_(list(test_user_ids))).delete(synchronize_session=False)
-            db.query(UserRoleAssignment).filter(UserRoleAssignment.assigned_by_id.in_(list(test_user_ids))).update(
-                {UserRoleAssignment.assigned_by_id: None}, synchronize_session=False
-            )
-
-        if test_node_ids:
-            db.query(EvidenceFile).filter(EvidenceFile.project_id.in_(list(test_node_ids))).update(
-                {EvidenceFile.project_id: None}, synchronize_session=False
-            )
 
         # 12. User Role Assignments
         del_ura = db.query(UserRoleAssignment).filter(

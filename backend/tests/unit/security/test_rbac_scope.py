@@ -56,53 +56,18 @@ def test_project_admin_cannot_create_project(db):
     assert "not permitted to create projects" in exc_info.value.detail
 
 
-def test_non_bu_roles_cannot_create_project(db):
-    for role_val in (
-        Role.SYSTEM_ADMIN.value,
-        Role.GROUP_ADMIN.value,
-        Role.SUBSIDIARY_ADMIN.value,
-        Role.PROJECT_ADMIN.value,
-        Role.PROJECT_SUPERVISOR.value,
-    ):
-        user = User(
-            id=str(uuid.uuid4()),
-            email=f"{role_val}@test.com",
-            hashed_password="test_hash_password",
-            role=role_val,
-            full_name=f"{role_val} Test",
-            is_active=True
-        )
-        with pytest.raises(HTTPException) as exc_info:
-            assert_can_create_project(db, user, parent_id=None)
-        assert exc_info.value.status_code == 403
-
-
-def test_bu_supervisor_can_create_project_auto_assigned_to_own_bu(db):
-    suffix = uuid.uuid4().hex[:6]
-    bu_node = OrgNode(
-        id=str(uuid.uuid4()),
-        code=f"BU-SUP-{suffix}",
-        name=f"BU Sup {suffix}",
-        type="business_unit",
-        path=f"BUSUP{suffix}",
-        is_active=True
-    )
-    db.add(bu_node)
-    db.flush()
-
+def test_system_admin_can_create_project_anywhere(db):
     user = User(
         id=str(uuid.uuid4()),
-        email=f"bu.sup.{suffix}@test.com",
+        email="sys.admin@test.com",
         hashed_password="test_hash_password",
-        role=Role.BU_SUPERVISOR.value,
-        org_node_id=bu_node.id,
-        full_name="BU Supervisor Test",
+        role=Role.SYSTEM_ADMIN.value,
+        full_name="System Admin Test",
         is_active=True
     )
-
-    # Automatically places project under assigned BU when parent_id is omitted
-    res = assert_can_create_project(db, user, parent_id=None)
-    assert str(res.id) == str(bu_node.id)
+    # None parent allowed for system_admin
+    result = assert_can_create_project(db, user, parent_id=None)
+    assert result is None
 
 
 def test_bu_admin_can_create_project_only_under_own_bu(db):

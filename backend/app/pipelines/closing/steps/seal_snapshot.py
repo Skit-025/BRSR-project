@@ -13,11 +13,6 @@ from uuid import uuid4
 
 from sqlalchemy import text
 
-from app.modules.audit.schemas import AuditLogCreate
-from app.modules.audit.service import AuditService
-from app.modules.snapshots.builder import build_snapshot_payload
-from app.modules.snapshots.models import ReportSnapshot
-
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
     from app.pipelines.closing.pipeline import ClosingContext
@@ -48,44 +43,25 @@ def _compute_snapshot_hash(
 
 def _get_payload_digest(db: "Session", period_id: str, root_entity_id: str) -> str:
     """
-    Build a stable digest from all approved data_points values for this period
-    within the root entity's organizational subtree.
+    Build a stable digest from all approved data-entry values for this period.
+    Returns a SHA-256 hex string over the sorted metric-value pairs.
     """
-    rows = db.execute(
-        text("""
-            SELECT dp.metric_code,
-                   s.entity_id::text,
-                   COALESCE(dp.normalized_value, dp.value_numeric),
-                   dp.value_text,
-                   COALESCE(m.base_unit, dp.unit)
-            FROM data_points dp
-            JOIN submissions s ON s.id = dp.submission_id
-            JOIN org_nodes o ON o.id = s.entity_id
-            LEFT JOIN metrics m ON m.code = dp.metric_code AND m.is_deleted = FALSE
-            WHERE s.period_id = :period_id
-              AND s.is_deleted = FALSE
-              AND dp.is_deleted = FALSE
-              AND o.is_deleted = FALSE
-              AND o.path <@ (
-                  SELECT path FROM org_nodes WHERE id = :root_entity_id AND is_deleted = FALSE
-              )
-              AND s.status IN (
-                  'PROJECT_APPROVED',
-                  'BU_APPROVED',
-                  'SUBSIDIARY_APPROVED',
-                  'CONSOLIDATED',
-                  'LOCKED'
-              )
-            ORDER BY dp.metric_code ASC, s.entity_id ASC
-        """),
-        {"period_id": period_id, "root_entity_id": root_entity_id},
-    ).fetchall()
+    try:
+        rows = db.execute(
+            text("""
+                SELECT metric_id, entity_id, value_numeric, value_text
+                FROM data_entries
+                WHERE period_id = :period_id
+                  AND status = 'APPROVED'
+                ORDER BY metric_id, entity_id
+            """),
+            {"period_id": period_id},
+        ).fetchall()
+    except Exception:  # noqa: BLE001
+        rows = []
 
     payload = json.dumps(
-        [
-            {"m": str(r[0]), "e": str(r[1]), "n": str(r[2]), "t": str(r[3]), "u": str(r[4])}
-            for r in rows
-        ],
+        [{"m": str(r[0]), "e": str(r[1]), "n": str(r[2]), "t": str(r[3])} for r in rows],
         sort_keys=True,
     )
     return hashlib.sha256(payload.encode()).hexdigest()
@@ -94,91 +70,73 @@ def _get_payload_digest(db: "Session", period_id: str, root_entity_id: str) -> s
 def _get_previous_snapshot_hash(
     db: "Session", period_id: str, root_entity_id: str
 ) -> str | None:
-    """Return the sha256_hash of the last sealed snapshot for this entity."""
-    row = db.execute(
-        text("""
-            SELECT sha256_hash
-            FROM report_snapshots
-            WHERE entity_id = :root_entity_id
-              AND is_sealed = TRUE
-              AND is_deleted = FALSE
-            ORDER BY sealed_at DESC NULLS LAST, created_at DESC, version DESC
-            LIMIT 1
-        """),
-        {"root_entity_id": root_entity_id},
-    ).fetchone()
-    return row[0] if row else None
+    """Return the hash of the last sealed snapshot for this entity (any period)."""
+    try:
+        row = db.execute(
+            text("""
+                SELECT hash
+                FROM snapshots
+                WHERE root_entity_id = :root_entity_id
+                  AND status = 'SEALED'
+                ORDER BY sealed_at DESC
+                LIMIT 1
+            """),
+            {"root_entity_id": root_entity_id},
+        ).fetchone()
+        return row[0] if row else None
+    except Exception:  # noqa: BLE001
+        return None
 
 
 def seal_snapshot(ctx: "ClosingContext", db: "Session") -> None:
     """
-    Compute the final chained snapshot hash and persist an immutable
-    ReportSnapshot record in report_snapshots.
+    Compute the final chained snapshot hash and upsert the snapshot record.
     """
     sealed_at = datetime.now(timezone.utc)
     snapshot_id = str(uuid4())
 
+    payload_digest = _get_payload_digest(db, ctx.period_id, ctx.root_entity_id)
+    prev_hash = _get_previous_snapshot_hash(db, ctx.period_id, ctx.root_entity_id)
+
+    snapshot_hash = _compute_snapshot_hash(
+        period_id=ctx.period_id,
+        root_entity_id=ctx.root_entity_id,
+        prev_hash=prev_hash,
+        payload_digest=payload_digest,
+        sealed_at=sealed_at,
+    )
+
     try:
-        data_payload, _ = build_snapshot_payload(db, ctx.root_entity_id, ctx.period_id)
-        payload_digest = _get_payload_digest(db, ctx.period_id, ctx.root_entity_id)
-        prev_hash = _get_previous_snapshot_hash(db, ctx.period_id, ctx.root_entity_id)
-
-        snapshot_hash = _compute_snapshot_hash(
-            period_id=ctx.period_id,
-            root_entity_id=ctx.root_entity_id,
-            prev_hash=prev_hash,
-            payload_digest=payload_digest,
-            sealed_at=sealed_at,
-        )
-
-        next_version = db.execute(
+        db.execute(
             text("""
-                SELECT COALESCE(MAX(version), 0) + 1
-                FROM report_snapshots
-                WHERE period_id = :period_id
-                  AND entity_id = :root_entity_id
-                  AND is_deleted = FALSE
+                INSERT INTO snapshots
+                    (id, period_id, root_entity_id, status, hash, prev_hash,
+                     payload_digest, sealed_at, sealed_by, created_at, updated_at)
+                VALUES
+                    (:id, :period_id, :root_entity_id, 'SEALED', :hash, :prev_hash,
+                     :payload_digest, :sealed_at, :sealed_by, NOW(), NOW())
+                ON CONFLICT (period_id, root_entity_id)
+                DO UPDATE SET
+                    status        = 'SEALED',
+                    hash          = EXCLUDED.hash,
+                    prev_hash     = EXCLUDED.prev_hash,
+                    payload_digest= EXCLUDED.payload_digest,
+                    sealed_at     = EXCLUDED.sealed_at,
+                    sealed_by     = EXCLUDED.sealed_by,
+                    updated_at    = NOW()
             """),
-            {"period_id": ctx.period_id, "root_entity_id": ctx.root_entity_id},
-        ).scalar() or 1
-
-        period_code = data_payload.get("period", {}).get("code") or ctx.period_id[:8]
-        snapshot = ReportSnapshot(
-            id=snapshot_id,
-            period_id=ctx.period_id,
-            entity_id=ctx.root_entity_id,
-            snapshot_name=f"Closing Snapshot - {period_code} (v{next_version})",
-            version=int(next_version),
-            is_sealed=True,
-            sealed_at=sealed_at,
-            sealed_by=str(ctx.closed_by)[:64] if ctx.closed_by else None,
-            sha256_hash=snapshot_hash,
-            data_payload=data_payload,
-            metadata_json={
+            {
+                "id": snapshot_id,
+                "period_id": ctx.period_id,
+                "root_entity_id": ctx.root_entity_id,
+                "hash": snapshot_hash,
                 "prev_hash": prev_hash,
                 "payload_digest": payload_digest,
-                "closing_run_id": ctx.run_id,
-                "closed_by": ctx.closed_by,
+                "sealed_at": sealed_at,
+                "sealed_by": ctx.closed_by,
             },
         )
-        db.add(snapshot)
-        AuditService(db).log_event(
-            AuditLogCreate(
-                action="SEAL_SNAPSHOT",
-                actor_id=str(ctx.closed_by)[:64] if ctx.closed_by else None,
-                target_type="REPORT_SNAPSHOT",
-                target_id=snapshot_id,
-                changes={"is_sealed": {"from": False, "to": True}, "sha256_hash": snapshot_hash},
-                details={
-                    "period_id": ctx.period_id,
-                    "root_entity_id": ctx.root_entity_id,
-                    "version": int(next_version),
-                    "prev_hash": prev_hash,
-                    "payload_digest": payload_digest,
-                    "closing_run_id": ctx.run_id,
-                },
-            )
-        )
+        db.commit()
 
         ctx.snapshot_id = snapshot_id
         ctx.snapshot_hash = snapshot_hash

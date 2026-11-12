@@ -5,7 +5,6 @@ Celery tasks for aggregation and closing pipeline execution.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from app.workers import celery_app
@@ -48,8 +47,7 @@ def run_aggregation(
             "root_entity_id": root_entity_id,
             "entities_processed": res.consolidated_nodes_count,
             "metrics_processed": res.consolidated_metrics_count,
-            "message": res.message,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": res.timestamp,
         }
     except Exception as exc:
         logger.exception("run_aggregation task failed: %s", exc)
@@ -100,8 +98,6 @@ def trigger_incremental_aggregation_all() -> Dict[str, Any]:
                 FROM reporting_periods rp
                 JOIN org_nodes e ON e.is_root = TRUE
                 WHERE rp.status = 'OPEN'
-                  AND rp.is_deleted = FALSE
-                  AND e.is_deleted = FALSE
             """)
         ).fetchall()
 

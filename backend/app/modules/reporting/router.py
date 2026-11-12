@@ -114,28 +114,84 @@ def export_html_report(
     db: Session = Depends(get_db)
 ):
     """
-    Renders official SEBI Annexure I BRSR report in printable HTML/CSS format with assurance seal.
+    Renders official SEBI BRSR report in printable HTML/CSS format with assurance seal footer.
     """
-    from app.modules.reporting.renderers.pdf import render_brsr_html
     assert_user_authorized_for_project(db, current_user, entity_id, "export HTML report for this entity")
     report = compile_brsr_report(db, entity_id, period_id, ReportType.BRSR_FULL.value)
-    html_content = render_brsr_html(report.model_dump())
+
+    rows_html = ""
+    for item in report.section_c:
+        core_badge = "<span style='background:#e0f2fe;color:#0369a1;padding:2px 6px;border-radius:4px;font-size:11px;'>BRSR CORE</span>" if item.brsr_core else ""
+        evidence_badge = "<span style='color:#15803d;'>&#10003; Verified</span>" if item.evidence_verified else "<span style='color:#b45309;'>Reported</span>"
+        if item.disclosed_value is not None:
+            val_display = f"{item.disclosed_value:,.2f} {item.unit}"
+        else:
+            status_text = getattr(item, 'status', None) or 'NOT REPORTED'
+            val_display = f"<span style='color:#6b7280;font-style:italic;'>{status_text}</span>"
+
+        rows_html += f"""
+        <tr>
+            <td style="padding:10px;border-bottom:1px solid #e5e7eb;"><b>{item.metric_code}</b></td>
+            <td style="padding:10px;border-bottom:1px solid #e5e7eb;">{item.indicator_name} {core_badge}</td>
+            <td style="padding:10px;border-bottom:1px solid #e5e7eb;text-align:right;"><b>{val_display}</b></td>
+            <td style="padding:10px;border-bottom:1px solid #e5e7eb;text-align:center;">{item.aggregation_method.upper()}</td>
+            <td style="padding:10px;border-bottom:1px solid #e5e7eb;text-align:center;">{evidence_badge}</td>
+        </tr>
+        """
+
+    html_content = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="utf-8"/>
+        <title>SEBI BRSR Report - {report.entity_name} ({report.financial_year})</title>
+        <style>
+            body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 40px; color: #1f2937; }}
+            .header {{ border-bottom: 3px solid #0f766e; padding-bottom: 15px; margin-bottom: 25px; }}
+            .seal {{ background: #f0fdfa; border: 1px solid #99f6e4; padding: 12px; border-radius: 6px; font-family: monospace; font-size: 12px; margin-bottom: 25px; }}
+            table {{ width: 100%; border-collapse: collapse; margin-top: 15px; }}
+            th {{ background: #f8fafc; padding: 10px; text-align: left; border-bottom: 2px solid #cbd5e1; font-size: 13px; }}
+            .footer {{ margin-top: 50px; border-top: 1px solid #cbd5e1; padding-top: 15px; font-size: 12px; color: #64748b; }}
+        </style>
+    </head>
+    <body>
+        <div class="header">
+            <h1 style="margin:0 0 5px 0;color:#0f766e;">MEIL ESG-BRSR Reporting Portal</h1>
+            <h2 style="margin:0;color:#334155;font-size:18px;">Business Responsibility and Sustainability Report (SEBI Guidelines)</h2>
+            <p style="margin:5px 0 0 0;color:#64748b;">Entity: <b>{report.entity_name} ({report.entity_code})</b> | Period: <b>{report.period_code} ({report.financial_year})</b></p>
+        </div>
+
+        <div class="seal">
+            <b>&#128274; CRYPTOGRAPHIC ASSURANCE SEAL (SHA-256):</b><br/>
+            {report.snapshot_hash}<br/>
+            <i>Generated: {report.generated_at.strftime("%Y-%m-%d %H:%M:%S UTC")} | Report ID: {report.report_id}</i>
+        </div>
+
+        <h3>Section A: General Information</h3>
+        <p>Corporate Name: <b>{report.section_a.corporate_name}</b> | CIN: <b>{report.section_a.cin}</b></p>
+        <p>Reporting Boundary: <b>{report.section_a.reporting_boundary}</b> | Operating Sites: <b>{report.section_a.operating_plants_and_sites_count}</b></p>
+
+        <h3>Section C: Principle-wise Performance Indicators</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th style="width:150px;">Metric Code</th>
+                    <th>Indicator Description</th>
+                    <th style="text-align:right;">Disclosed Quantity</th>
+                    <th style="text-align:center;">Method</th>
+                    <th style="text-align:center;">Assurance Proof</th>
+                </tr>
+            </thead>
+            <tbody>
+                {rows_html}
+            </tbody>
+        </table>
+
+        <div class="footer">
+            <p>Certified in compliance with Securities and Exchange Board of India (SEBI) BRSR framework. Traceable to verified evidence documents in MEIL Evidence Vault.</p>
+        </div>
+    </body>
+    </html>
+    """
+
     return Response(content=html_content, media_type="text/html")
-
-
-@router.get("/export/pdf/{entity_id}/{period_id}", response_class=Response)
-def export_pdf_report(
-    entity_id: str,
-    period_id: str,
-    current_user: User = Depends(get_current_active_user),
-    db: Session = Depends(get_db)
-):
-    """
-    Renders official SEBI Annexure I BRSR report as PDF bytes (or print-ready HTML fallback when WeasyPrint is absent).
-    """
-    from app.modules.reporting.renderers.pdf import render_brsr_pdf_bytes
-    assert_user_authorized_for_project(db, current_user, entity_id, "export PDF report for this entity")
-    report = compile_brsr_report(db, entity_id, period_id, ReportType.BRSR_FULL.value)
-    pdf_bytes = render_brsr_pdf_bytes(report.model_dump())
-    media = "application/pdf" if pdf_bytes.startswith(b"%PDF") else "text/html"
-    return Response(content=pdf_bytes, media_type=media)
