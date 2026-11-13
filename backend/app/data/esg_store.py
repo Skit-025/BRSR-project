@@ -90,13 +90,22 @@ def get_status(node_id: str, owner_role: str) -> Dict[str, Any]:
     return data.get("statuses", {}).get(node_id, {}).get(owner_role, {"status": "draft", "reason": None})
 
 
-def set_status(node_id: str, owner_role: str, status_val: str, reason: Optional[str] = None) -> Dict[str, Any]:
+def set_status(node_id: str, owner_role: str, status_val: str, reason: Optional[str] = None, actor_id: Optional[str] = None, actor_name: Optional[str] = None) -> Dict[str, Any]:
     with _LOCK:
         data = load_data()
         data.setdefault("statuses", {}).setdefault(node_id, {})[owner_role] = {
             "status": status_val,
             "reason": reason,
         }
+        data.setdefault("audit_log", []).append({
+            "node_id": node_id,
+            "owner_role": owner_role,
+            "event": status_val,
+            "reason": reason,
+            "actor_id": actor_id,
+            "actor_name": actor_name,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        })
         save_data(data)
         return data["statuses"][node_id][owner_role]
 
@@ -111,6 +120,8 @@ def save_role_entries(
     owner_role: str,
     updates: Dict[str, Dict[str, Any]],
     new_status: Optional[str] = None,
+    actor_id: Optional[str] = None,
+    actor_name: Optional[str] = None,
 ) -> Dict[str, Any]:
     with _LOCK:
         data = load_data()
@@ -129,6 +140,21 @@ def save_role_entries(
                 "status": new_status,
                 "reason": None,
             }
+            data.setdefault("audit_log", []).append({
+                "node_id": node_id,
+                "owner_role": owner_role,
+                "event": "submitted" if new_status == "submitted" else "draft_saved",
+                "actor_id": actor_id,
+                "actor_name": actor_name,
+                "created_at": datetime.now(timezone.utc).isoformat(),
+                "revision": 1 + sum(
+                    1 for item in data.get("audit_log", [])
+                    if item.get("node_id") == node_id
+                    and item.get("owner_role") == owner_role
+                    and item.get("event") == "submitted"
+                ) if new_status == "submitted" else None,
+                "snapshot": updates if new_status == "submitted" else None,
+            })
         save_data(data)
         return role_bucket
 

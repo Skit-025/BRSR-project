@@ -3,6 +3,7 @@ import logging
 from pydantic import BaseModel
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, status, Response
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.modules.auth.models import User
@@ -28,6 +29,117 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/evidence", tags=["Evidence Vault & AI Pre-fill"])
 
 security = HTTPBearer(auto_error=False)
+
+
+_EVIDENCE_TIER_ROLES = {
+    Role.PROJECT_ADMIN.value: {Role.PROJECT_ADMIN.value, Role.PROJECT_SUPERVISOR.value},
+    Role.PROJECT_SUPERVISOR.value: {Role.PROJECT_ADMIN.value, Role.PROJECT_SUPERVISOR.value},
+    Role.BU_ADMIN.value: {Role.BU_ADMIN.value, Role.BU_ESG_MANAGER.value, Role.BU_SUPERVISOR.value},
+    Role.BU_ESG_MANAGER.value: {Role.BU_ADMIN.value, Role.BU_ESG_MANAGER.value, Role.BU_SUPERVISOR.value},
+    Role.BU_SUPERVISOR.value: {Role.BU_ADMIN.value, Role.BU_ESG_MANAGER.value, Role.BU_SUPERVISOR.value},
+    Role.SUBSIDIARY_ADMIN.value: {Role.SUBSIDIARY_ADMIN.value, Role.SUBSIDIARY_ESG_MANAGER.value, Role.SUBSIDIARY_SUPERVISOR.value},
+    Role.SUBSIDIARY_ESG_MANAGER.value: {Role.SUBSIDIARY_ADMIN.value, Role.SUBSIDIARY_ESG_MANAGER.value, Role.SUBSIDIARY_SUPERVISOR.value},
+    Role.SUBSIDIARY_SUPERVISOR.value: {Role.SUBSIDIARY_ADMIN.value, Role.SUBSIDIARY_ESG_MANAGER.value, Role.SUBSIDIARY_SUPERVISOR.value},
+}
+_UNIVERSAL_EVIDENCE_ROLES = {
+    Role.SYSTEM_ADMIN.value,
+    Role.GROUP_ADMIN.value,
+    Role.GROUP_ESG_MANAGER.value,
+    Role.GROUP_SUPERVISOR.value,
+}
+
+
+def _current_role(user: User) -> str:
+    return user.role.value if hasattr(user.role, "value") else str(user.role)
+
+
+def _evidence_scope_ids(db: Session, user: User) -> set[str]:
+    from app.security.scope import get_user_effective_scope_node_ids
+    return {str(value) for value in get_user_effective_scope_node_ids(db, user)}
+
+
+def _can_access_evidence(db: Session, user: User, evidence: EvidenceFile) -> bool:
+    """Evidence is shared within a tier/entity pair; group roles see the universal vault."""
+    role = _current_role(user)
+    if role in _UNIVERSAL_EVIDENCE_ROLES:
+        return True
+    allowed_roles = _EVIDENCE_TIER_ROLES.get(role)
+    if not allowed_roles or evidence.attached_by_role not in allowed_roles:
+        return False
+    if evidence.project_id and evidence.project_id != "__":
+        return str(evidence.project_id) in _evidence_scope_ids(db, user)
+    if str(evidence.uploader_id or "") == str(user.id):
+        return True
+    uploader = db.query(User).filter(User.id == evidence.uploader_id, User.is_deleted == False).first()
+    return bool(
+        uploader
+        and _current_role(uploader) in allowed_roles
+        and (_evidence_scope_ids(db, uploader) & _evidence_scope_ids(db, user))
+    )
+
+
+def _assert_evidence_access(db: Session, user: User, evidence: EvidenceFile) -> None:
+    if not _can_access_evidence(db, user, evidence):
+        # Do not disclose whether another entity's evidence exists.
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Evidence file not found.")
+
+
+def _resolve_token_user(db: Session, credentials: Optional[HTTPAuthorizationCredentials], token: Optional[str]) -> User:
+    auth_token = credentials.credentials if credentials and credentials.credentials else token
+    if not auth_token:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required to access evidence.")
+    from app.security.jwt import decode_access_token
+    payload = decode_access_token(auth_token)
+    if not payload or not payload.get("sub"):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid authentication token.")
+    current_user = db.query(User).filter(User.id == payload["sub"], User.is_deleted == False, User.is_active == True).first()
+    if not current_user:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Active user not found.")
+    return current_user
+
+
+def _scoped_evidence_query(db: Session, user: User, *, deleted: bool = False):
+    query = db.query(EvidenceFile).filter(EvidenceFile.is_deleted == deleted)
+    role = _current_role(user)
+    if role in _UNIVERSAL_EVIDENCE_ROLES:
+        return query
+    allowed_roles = _EVIDENCE_TIER_ROLES.get(role)
+    if not allowed_roles:
+        return query.filter(False)
+    scope_ids = _evidence_scope_ids(db, user)
+    import uuid
+    scope_uuids = set()
+    for value in scope_ids:
+        try:
+            scope_uuids.add(str(uuid.UUID(value)))
+        except (ValueError, TypeError, AttributeError):
+            continue
+    same_entity_records = (
+        and_(EvidenceFile.project_id.in_(scope_ids), EvidenceFile.attached_by_role.in_(allowed_roles))
+        if scope_ids else False
+    )
+    # Existing evidence uploads may have no entity ID. Share those only when
+    # their uploader belongs to this exact tier and one of the user's exact nodes.
+    peer_user_ids = {str(user.id)}
+    if scope_uuids:
+        for user_id, node_id in db.query(User.id, User.org_node_id).filter(
+            User.role.in_(allowed_roles), User.is_active == True, User.is_deleted == False
+        ).all():
+            if node_id and str(node_id) in scope_uuids:
+                peer_user_ids.add(str(user_id))
+        from app.modules.auth.models import UserRoleAssignment
+        for assignment in db.query(UserRoleAssignment.user_id).filter(
+            UserRoleAssignment.role.in_(allowed_roles),
+            UserRoleAssignment.is_active == True,
+            UserRoleAssignment.entity_id.in_(scope_uuids),
+        ).all():
+            peer_user_ids.add(str(assignment.user_id))
+    own_unscoped_records = and_(
+        EvidenceFile.uploader_id.in_(peer_user_ids),
+        EvidenceFile.attached_by_role.in_(allowed_roles),
+        or_(EvidenceFile.project_id.is_(None), EvidenceFile.project_id == "", EvidenceFile.project_id == "__"),
+    )
+    return query.filter(or_(same_entity_records, own_unscoped_records))
 
 @router.post("/upload", response_model=EvidenceUploadResponse, status_code=status.HTTP_201_CREATED)
 async def upload_evidence_file(
@@ -63,9 +175,35 @@ async def upload_evidence_file(
     uploader_id = str(current_user.id)
     attached_by_role = current_user.role.value if hasattr(current_user.role, "value") else str(current_user.role)
 
-    if project_id:
+    normalized_project_id = project_id
+    if normalized_project_id in (None, "", "__") and _current_role(current_user) not in _UNIVERSAL_EVIDENCE_ROLES:
+        # Automatically attach a single-scope upload to the user's own tier node
+        # so its paired Admin/ESG Manager can see it in their shared repository.
+        if current_user.org_node_id:
+            normalized_project_id = str(current_user.org_node_id)
+        else:
+            from app.modules.auth.models import UserRoleAssignment
+            assignment_ids = {
+                str(row.entity_id) for row in db.query(UserRoleAssignment.entity_id).filter(
+                    UserRoleAssignment.user_id == current_user.id,
+                    UserRoleAssignment.is_active == True,
+                    UserRoleAssignment.entity_id.isnot(None),
+                ).all()
+            }
+            if len(assignment_ids) == 1:
+                normalized_project_id = next(iter(assignment_ids))
+            else:
+                normalized_project_id = None
+
+    if normalized_project_id:
+        role = _current_role(current_user)
+        if role not in _UNIVERSAL_EVIDENCE_ROLES and str(normalized_project_id) not in _evidence_scope_ids(db, current_user):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Evidence must be attached to an entity at your assigned hierarchy level.",
+            )
         from app.security.scope import assert_user_authorized_for_project
-        assert_user_authorized_for_project(db, current_user, project_id, "upload evidence to this project")
+        assert_user_authorized_for_project(db, current_user, normalized_project_id, "upload evidence to this entity")
 
     try:
         evidence, suggestions, is_relevant, rejection_reason, esg_impact = process_and_store_evidence(
@@ -80,7 +218,7 @@ async def upload_evidence_file(
             doc_category=doc_category,
             bill_type=bill_type,
             attached_by_role=attached_by_role,
-            project_id=project_id,
+            project_id=normalized_project_id,
             esg_indicator=esg_indicator,
         )
 
@@ -117,39 +255,31 @@ def list_evidence_files(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Permission 'evidence:read' required to view evidence files.",
         )
-    from app.security.scope import get_user_assigned_project_ids
-
-    query = db.query(EvidenceFile).filter(EvidenceFile.is_deleted == False)
-
-    if current_user.role in (Role.PROJECT_ADMIN.value, Role.PROJECT_SUPERVISOR.value):
-        assigned_ids = get_user_assigned_project_ids(db, current_user)
-        from sqlalchemy import or_
-        query = query.filter(
-            or_(
-                EvidenceFile.project_id.in_(list(assigned_ids)) if assigned_ids else False,
-                EvidenceFile.uploader_id == current_user.id
-            )
-        )
-    elif current_user.role != Role.SYSTEM_ADMIN.value:
-        if current_user.org_node_id:
-            from app.modules.auth.service import get_descendant_node_ids
-            desc_ids = get_descendant_node_ids(db, str(current_user.org_node_id))
-            from sqlalchemy import or_
-            query = query.filter(
-                or_(
-                    EvidenceFile.project_id.in_(list(desc_ids)),
-                    EvidenceFile.uploader_id == current_user.id
-                )
-            )
-
-    return query.order_by(EvidenceFile.created_at.desc()).all()
+    query = _scoped_evidence_query(db, current_user)
+    records = query.order_by(EvidenceFile.created_at.desc()).all()
+    from app.modules.org.models import OrgNode
+    node_map = {}
+    for node in db.query(OrgNode).filter(OrgNode.is_deleted == False).all():
+        node_map[str(node.id)] = node
+        if node.code:
+            node_map[node.code] = node
+    parsed_records = []
+    for record in records:
+        row = EvidenceFileRead.model_validate(record).model_dump()
+        entity = node_map.get(str(record.project_id)) if record.project_id and record.project_id != "__" else None
+        row["project_name"] = entity.name if entity else None
+        parsed_records.append(row)
+    return parsed_records
 
 @router.get("/by-sha/{sha256_hex}", response_model=EvidenceFileRead)
-def get_evidence_by_sha256(sha256_hex: str, db: Session = Depends(get_db)):
+def get_evidence_by_sha256(sha256_hex: str, current_user: User = Depends(get_current_active_user), db: Session = Depends(get_db)):
     """Resolves a full SHA-256 hex string to an evidence record. Used by Ask AAROHAN AI to load a document directly by its cryptographic ID."""
+    if not has_permission(current_user.role, Permission.EVIDENCE_READ):
+        raise HTTPException(status_code=403, detail="Evidence read permission required.")
     evidence = db.query(EvidenceFile).filter(EvidenceFile.sha256 == sha256_hex, EvidenceFile.is_deleted == False).first()
     if not evidence:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No active evidence document with that SHA-256 hash found in the vault.")
+    _assert_evidence_access(db, current_user, evidence)
     return evidence
 
 
@@ -169,42 +299,9 @@ def get_evidence_trash(
     from app.modules.org.models import OrgNode
     from app.modules.auth.service import is_node_descendant, _resolve_org_hierarchy
 
-    query = db.query(EvidenceFile).filter(EvidenceFile.is_deleted == True)
-
-    if current_user.role == Role.SYSTEM_ADMIN.value:
-        raw_items = query.order_by(EvidenceFile.deleted_at.desc().nullslast(), EvidenceFile.updated_at.desc()).all()
-    elif current_user.role == Role.PROJECT_ADMIN.value:
-        raw_items = query.filter(
-            EvidenceFile.deleted_by_id == current_user.id
-        ).order_by(EvidenceFile.deleted_at.desc().nullslast(), EvidenceFile.updated_at.desc()).all()
-    else:
-        # group_admin, subsidiary_admin, bu_admin
-        all_deleted = query.order_by(EvidenceFile.deleted_at.desc().nullslast(), EvidenceFile.updated_at.desc()).all()
-        if not current_user.org_node_id and current_user.role == Role.GROUP_ADMIN.value:
-            raw_items = all_deleted
-        else:
-            from app.modules.auth.service import get_descendant_node_ids
-            descendant_nodes = get_descendant_node_ids(db, str(current_user.org_node_id)) if current_user.org_node_id else set()
-
-            filtered = []
-            for ev in all_deleted:
-                # Own records
-                if str(ev.deleted_by_id) == str(current_user.id) or str(ev.uploader_id) == str(current_user.id):
-                    filtered.append(ev)
-                    continue
-                # Scope check by project_id
-                if ev.project_id and (ev.project_id in descendant_nodes):
-                    filtered.append(ev)
-                    continue
-                # Scope check by deleting user's org node
-                if ev.deleted_by and ev.deleted_by.org_node_id and (str(ev.deleted_by.org_node_id) in descendant_nodes):
-                    filtered.append(ev)
-                    continue
-                # Scope check by uploader's org node
-                if ev.uploader and ev.uploader.org_node_id and (str(ev.uploader_id) in descendant_nodes or (ev.uploader.org_node_id and str(ev.uploader.org_node_id) in descendant_nodes)):
-                    filtered.append(ev)
-                    continue
-            raw_items = filtered
+    raw_items = _scoped_evidence_query(db, current_user, deleted=True).order_by(
+        EvidenceFile.deleted_at.desc().nullslast(), EvidenceFile.updated_at.desc()
+    ).all()
 
     results = []
     node_cache = {str(n.id): n for n in db.query(OrgNode).all()}
@@ -262,13 +359,13 @@ def get_evidence_metadata(
     db: Session = Depends(get_db)
 ):
     """Retrieves file metadata and cryptographic hash for assurance auditing."""
+    if not has_permission(current_user.role, Permission.EVIDENCE_READ):
+        raise HTTPException(status_code=403, detail="Evidence read permission required.")
     evidence = db.query(EvidenceFile).filter(EvidenceFile.id == evidence_id, EvidenceFile.is_deleted == False).first()
     if not evidence:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Evidence file not found or has been deleted.")
 
-    if evidence.project_id:
-        from app.security.scope import assert_user_authorized_for_project
-        assert_user_authorized_for_project(db, current_user, evidence.project_id, "view this evidence file metadata")
+    _assert_evidence_access(db, current_user, evidence)
 
     return evidence
 
@@ -404,9 +501,7 @@ def extract_from_existing_evidence(
     if not evidence:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Evidence file not found.")
 
-    if evidence.project_id:
-        from app.security.scope import assert_user_authorized_for_project
-        assert_user_authorized_for_project(db, current_user, evidence.project_id, "run extraction on this evidence file")
+    _assert_evidence_access(db, current_user, evidence)
 
     file_bytes = storage_service.get_file_bytes(evidence.storage_key)
     if not file_bytes:
@@ -554,18 +649,8 @@ def download_evidence_file(
             detail="Evidence file has been deleted and cannot be downloaded directly."
         )
 
-    auth_token = credentials.credentials if (credentials and credentials.credentials) else token
-    if auth_token:
-        from app.security.jwt import decode_access_token
-        payload = decode_access_token(auth_token)
-        if payload and payload.get("sub"):
-            current_user = db.query(User).filter(User.id == payload["sub"], User.is_deleted == False).first()
-            if current_user and evidence.project_id:
-                from app.security.scope import assert_user_authorized_for_project
-                try:
-                    assert_user_authorized_for_project(db, current_user, evidence.project_id, "download this evidence file")
-                except Exception as e:
-                    logger.warning(f"Scope check on download evidence: {e}")
+    current_user = _resolve_token_user(db, credentials, token)
+    _assert_evidence_access(db, current_user, evidence)
 
     file_bytes = storage_service.get_file_bytes(evidence.storage_key)
     if not file_bytes:
@@ -586,10 +671,16 @@ def link_evidence(link_req: EvidenceLinkCreate, db: Session = Depends(get_db)):
     return link
 
 @router.get("/datapoint/{data_point_id}", response_model=List[EvidenceLinkRead])
-def get_datapoint_evidence(data_point_id: str, db: Session = Depends(get_db)):
+def get_datapoint_evidence(data_point_id: str, current_user: User = Depends(get_current_active_user), db: Session = Depends(get_db)):
     """Lists all supporting evidence documents linked to a data point (3-click audit trace)."""
-    links = db.query(EvidenceLink).filter(EvidenceLink.data_point_id == data_point_id, EvidenceLink.is_deleted == False).all()
-    return links
+    if not has_permission(current_user.role, Permission.EVIDENCE_READ):
+        raise HTTPException(status_code=403, detail="Evidence read permission required.")
+    links = db.query(EvidenceLink).join(EvidenceFile).filter(
+        EvidenceLink.data_point_id == data_point_id,
+        EvidenceLink.is_deleted == False,
+        EvidenceFile.is_deleted == False,
+    ).all()
+    return [link for link in links if _can_access_evidence(db, current_user, link.evidence_file)]
 
 @router.get("/{evidence_id}/view")
 def view_evidence_file(
@@ -608,18 +699,8 @@ def view_evidence_file(
             detail="Evidence file has been deleted and cannot be viewed directly."
         )
 
-    auth_token = credentials.credentials if (credentials and credentials.credentials) else token
-    if auth_token:
-        from app.security.jwt import decode_access_token
-        payload = decode_access_token(auth_token)
-        if payload and payload.get("sub"):
-            current_user = db.query(User).filter(User.id == payload["sub"], User.is_deleted == False).first()
-            if current_user and evidence.project_id:
-                from app.security.scope import assert_user_authorized_for_project
-                try:
-                    assert_user_authorized_for_project(db, current_user, evidence.project_id, "view this evidence file")
-                except Exception as e:
-                    logger.warning(f"Scope check on view evidence: {e}")
+    current_user = _resolve_token_user(db, credentials, token)
+    _assert_evidence_access(db, current_user, evidence)
 
     file_bytes = storage_service.get_file_bytes(evidence.storage_key)
     if not file_bytes:
@@ -694,42 +775,7 @@ def delete_evidence_file(
     if not evidence:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Evidence file not found or already deleted.")
 
-    # Scope Authorization
-    if current_user.role == Role.PROJECT_ADMIN.value:
-        is_owner = str(evidence.uploader_id) == str(current_user.id)
-        is_node_match = False
-        if current_user.org_node_id and evidence.project_id:
-            from app.modules.org.models import OrgNode
-            node = db.query(OrgNode).filter(OrgNode.id == current_user.org_node_id).first()
-            if node and (node.code == evidence.project_id or str(node.id) == evidence.project_id):
-                is_node_match = True
-        if not is_owner and not is_node_match:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Project Admins can only delete evidence uploaded by themselves or within their assigned project."
-            )
-    elif current_user.role != Role.SYSTEM_ADMIN.value:
-        from app.modules.auth.service import is_node_descendant
-        if not current_user.org_node_id:
-            if current_user.role != Role.GROUP_ADMIN.value:
-                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Missing organizational scope for your role.")
-        else:
-            authorized = False
-            if evidence.project_id:
-                ev_node = _find_org_node(db, evidence.project_id)
-                if ev_node and is_node_descendant(db, str(current_user.org_node_id), str(ev_node.id)):
-                    authorized = True
-            if not authorized and evidence.uploader_id:
-                uploader_user = db.query(User).filter(User.id == evidence.uploader_id).first()
-                if uploader_user and uploader_user.org_node_id and is_node_descendant(db, str(current_user.org_node_id), str(uploader_user.org_node_id)):
-                    authorized = True
-            if not authorized and str(evidence.uploader_id) == str(current_user.id):
-                authorized = True
-            if not authorized:
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Evidence belongs to an organizational unit outside your authorized scope."
-                )
+    _assert_evidence_access(db, current_user, evidence)
 
     filename = evidence.original_name
     now = datetime.now(timezone.utc)
@@ -814,17 +860,7 @@ def restore_evidence_file(
     if not evidence:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Deleted evidence file not found.")
 
-    # Scope check
-    if current_user.role != Role.SYSTEM_ADMIN.value:
-        if current_user.role == Role.PROJECT_ADMIN.value:
-            if str(evidence.deleted_by_id) != str(current_user.id):
-                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You can only restore your own evidence records.")
-        else:
-            if current_user.org_node_id:
-                from app.modules.auth.service import is_node_descendant
-                ev_node = _find_org_node(db, evidence.project_id)
-                if ev_node and not is_node_descendant(db, str(current_user.org_node_id), str(ev_node.id)):
-                    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Evidence is outside your authorized scope.")
+    _assert_evidence_access(db, current_user, evidence)
 
     evidence.is_deleted = False
     evidence.scan_status = ScanStatus.CLEAN.value

@@ -1807,3 +1807,8 @@ button:active > svg.lucide-rotate-cw,
 }
 
 
+.workflow-review-grid { grid-template-columns: minmax(0, 1.55fr) minmax(320px, .95fr); }
+@media (max-width: 980px) {
+  .workflow-review-grid { grid-template-columns: minmax(0, 1fr) !important; }
+  .workflow-review-grid > :last-child { max-height: none !important; }
+}

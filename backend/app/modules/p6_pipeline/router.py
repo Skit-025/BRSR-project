@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -264,11 +265,16 @@ def get_descendant_blocks(
                 )
                 if not is_same_level_checker:
                     continue
+            form_status = dict(node_statuses.get(owner_role, {"status": "draft", "reason": None}))
+            form_status["history"] = [
+                event for event in data.get("audit_log", [])
+                if event.get("node_id") == nid and event.get("owner_role") == owner_role
+            ]
             blocks.append({
                 "node": nodes_by_id.get(nid, {"id": nid, "name": nid}),
                 "ownerRole": owner_role,
                 "formTitle": ROLE_FORM_TITLES.get(owner_role, owner_role),
-                "status": node_statuses.get(owner_role, {"status": "draft", "reason": None}),
+                "status": form_status,
                 "entries": r_entries,
             })
 
@@ -289,7 +295,7 @@ def save_draft(
     if cur_st.get("status") == "submitted":
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Submitted revisions are read-only.")
     cleaned = _validate_and_normalize_payload(role, caller_node.get("type", ""), body.entries)
-    saved = esg_store.save_role_entries(caller_node["id"], role, cleaned, new_status="draft")
+    saved = esg_store.save_role_entries(caller_node["id"], role, cleaned, new_status="draft", actor_id=str(current_user.id), actor_name=current_user.full_name)
     return {"status": "draft", "node_id": caller_node["id"], "role": role, "entries": saved}
 
 
@@ -304,7 +310,7 @@ def submit_form(
     if body.node_id and body.node_id != caller_node["id"]:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Cannot submit entries for another node.")
     cleaned = _validate_and_normalize_payload(role, caller_node.get("type", ""), body.entries)
-    saved = esg_store.save_role_entries(caller_node["id"], role, cleaned, new_status="submitted")
+    saved = esg_store.save_role_entries(caller_node["id"], role, cleaned, new_status="submitted", actor_id=str(current_user.id), actor_name=current_user.full_name)
     return {"status": "submitted", "node_id": caller_node["id"], "role": role, "entries": saved}
 
 
@@ -354,7 +360,7 @@ def review_submission(
         raise HTTPException(status_code=422, detail="Decision must be 'accepted' or 'rejected'.")
     if body.decision == "rejected" and not (body.reason or "").strip():
         raise HTTPException(status_code=422, detail="Rejection reason is required.")
-    st = esg_store.set_status(body.node_id, body.target_role, body.decision, body.reason)
+    st = esg_store.set_status(body.node_id, body.target_role, body.decision, body.reason, actor_id=str(current_user.id), actor_name=current_user.full_name)
     return {"node_id": body.node_id, "target_role": body.target_role, **st}
 
 
@@ -535,4 +541,32 @@ def get_all_evidence_for_node(
         "role": role,
         "evidence": esg_store.get_node_evidence(node_id, role),
     }
+
+
+@router.get("/evidence-download/{node_id}/{field_id}/{evidence_id}")
+def download_p6_evidence(
+    node_id: str,
+    field_id: str,
+    evidence_id: str,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+):
+    """Download a P6 evidence file after enforcing the caller's hierarchy scope."""
+    caller_node = _resolve_caller_node(db, current_user)
+    _assert_downward_access(caller_node, node_id)
+    field = REGISTRY_BY_ID.get(field_id)
+    if not field:
+        raise HTTPException(status_code=404, detail="Evidence field not found.")
+    evidence = esg_store.get_field_evidence(node_id, field["ownerRole"], field_id)
+    record = next(
+        (item for records in evidence.values() for item in records if item.get("evidence_id") == evidence_id),
+        None,
+    )
+    if not record:
+        raise HTTPException(status_code=404, detail="Evidence file not found.")
+    evidence_root = esg_store.EVIDENCE_DIR.resolve()
+    file_path = Path(record.get("file_path", "")).resolve()
+    if not file_path.is_relative_to(evidence_root) or not file_path.is_file():
+        raise HTTPException(status_code=404, detail="Evidence file is unavailable.")
+    return FileResponse(file_path, filename=record.get("file_name") or file_path.name, media_type=record.get("mime_type") or "application/octet-stream")
 

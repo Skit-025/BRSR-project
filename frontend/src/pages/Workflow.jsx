@@ -16,6 +16,7 @@ import { workflowApi, collectionApi } from '../api/client';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../context/AuthContext';
 import PageHelpButton from '../components/PageHelpButton';
+import WorkflowP6Queue from './WorkflowP6Queue';
 
 const STATUS_STYLES = {
   DRAFT:                   { label: 'Draft',               color: '#475569', bg: '#f1f5f9' },
@@ -99,7 +100,7 @@ export default function Workflow() {
   const [reviewAction, setReviewAction]   = useState('');
   const [lockingPeriod, setLockingPeriod] = useState('');
   const [notice, setNotice]               = useState(null);
-  const [activeTab, setActiveTab]         = useState('overview');
+  const [activeTab, setActiveTab]         = useState('queue');
   const [packDetail, setPackDetail]       = useState(null);  // loaded data points for selected pack
   const [loadingDetail, setLoadingDetail] = useState(false);
 
@@ -228,7 +229,7 @@ export default function Workflow() {
     <div className="page-content anim-fade-up" style={{ background: '#f8fafc' }}>
       {/* ── Status Ticker ── */}
       <div style={{
-        display: 'flex', alignItems: 'center', gap: 16, marginBottom: 8,
+        display: activeTab === 'queue' ? 'none' : 'flex', alignItems: 'center', gap: 16, marginBottom: 8,
         fontSize: 11, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
         fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#64748b'
       }}>
@@ -241,7 +242,7 @@ export default function Workflow() {
       </div>
 
       {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
+      <div style={{ display: activeTab === 'queue' ? 'none' : 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
         <div>
           <h1 style={{ fontSize: '26px', fontWeight: 700, color: '#09090b', margin: 0, letterSpacing: '-0.02em', display: 'flex', alignItems: 'center', gap: '10px' }}>
             <GitBranch size={24} color="#09090b" />
@@ -300,7 +301,7 @@ export default function Workflow() {
       )}
 
       {/* KPI Cards — Matching Reference */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '14px', marginBottom: '20px' }}>
+      <div style={{ display: activeTab === 'queue' ? 'none' : 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '14px', marginBottom: '20px' }}>
         {[
           { label: 'TOTAL SUBMISSIONS', value: totalPacks, badge: `${totalPacks} registered`, badgeType: 'gray', sub: 'Across active entities' },
           { label: 'PENDING BU REVIEW', value: pendingCount, badge: pendingCount > 0 ? `${pendingCount} urgent` : '0 backlog', badgeType: pendingCount > 0 ? 'red' : 'green', sub: 'Maker-Checker gate' },
@@ -490,6 +491,10 @@ export default function Workflow() {
       )}
 
       {/* ── REVIEW QUEUE TAB ──────────────────────────────────────── */}
+      {activeTab === 'queue' && (
+        <WorkflowP6Queue user={user} />
+      )}
+
       {activeTab === 'queue' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           {/* Queue Table */}

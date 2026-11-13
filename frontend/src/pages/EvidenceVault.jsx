@@ -272,9 +272,16 @@ export default function EvidenceVault() {
   const { user } = useAuth();
   const userRole = user?.role || '';
   const canDelete = ['system_admin', 'group_admin', 'subsidiary_admin', 'bu_admin', 'project_admin'].includes(userRole);
+  const repoScopeLabel = ['system_admin', 'group_admin', 'group_esg_manager', 'group_supervisor'].includes(userRole)
+    ? 'Universal repository · all entities'
+    : ['subsidiary_admin', 'subsidiary_esg_manager', 'subsidiary_supervisor'].includes(userRole)
+      ? 'Shared repository · your subsidiary tier'
+      : ['bu_admin', 'bu_esg_manager', 'bu_supervisor'].includes(userRole)
+        ? 'Shared repository · your business unit tier'
+        : 'Shared repository · your assigned project';
 
   const { data: evidenceList = [], isLoading, refetch, isRefetching } = useQuery({
-    queryKey: ['evidence-list'],
+    queryKey: ['evidence-list', user?.id, userRole],
     queryFn: () => evidenceApi.list().then((response) => response.data),
   });
 
@@ -509,6 +516,7 @@ export default function EvidenceVault() {
           <p style={{ color: '#64748b', fontSize: 13, margin: '4px 0 0 0' }}>
             Immutable SHA-256 evidence repository. Upload a bill → save to vault → optionally run E1 OCR for instant BRSR field extraction.
           </p>
+          <div style={{ color: '#475569', fontSize: 11, marginTop: 5, fontWeight: 600 }}>{repoScopeLabel}</div>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <PageHelpButton title="Evidence Vault Guide" route="/evidence" />
@@ -845,7 +853,7 @@ export default function EvidenceVault() {
                     <td style={{ padding: '10px 16px' }}>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 2, fontSize: 11 }}>
                         <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
-                          {ev.project_id && ev.project_id !== '__' ? ev.project_id : 'Site'}
+                          {ev.project_name || (ev.project_id && ev.project_id !== '__' ? ev.project_id : 'Unassigned evidence')}
                         </span>
                         <span style={{ color: 'var(--text-muted)', fontSize: 10 }}>
                           {ev.esg_indicator && ev.esg_indicator !== '__' ? ev.esg_indicator : 'General'} · {ev.attached_by_role || 'project_admin'}

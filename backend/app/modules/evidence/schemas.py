@@ -35,6 +35,7 @@ class EvidenceFileRead(BaseModel):
     bill_type:           Optional[str] = None
     attached_by_role:    Optional[str] = None
     project_id:          Optional[str] = None
+    project_name:        Optional[str] = None
     esg_indicator:       Optional[str] = None
     is_deleted:          bool = False
     deleted_at:          Optional[datetime] = None
