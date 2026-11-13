@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -483,26 +483,54 @@ async def upload_field_evidence(
     content = await file.read()
     if len(content) > _MAX_FILE_BYTES:
         raise HTTPException(status_code=422, detail="File exceeds 20 MB limit.")
-
-    # Store file on disk
-    dest_dir = esg_store.EVIDENCE_DIR / caller_node["id"] / role / field_id
-    dest_dir.mkdir(parents=True, exist_ok=True)
-    safe_stem = Path(file.filename or "evidence").stem[:80]
-    dest_name = f"{uuid.uuid4().hex}_{safe_stem}{Path(file.filename or 'file').suffix or '.bin'}"
-    dest_path = dest_dir / dest_name
-    dest_path.write_bytes(content)
-
+    from app.modules.evidence.service import process_and_store_evidence
+    from app.modules.evidence.integrity import compute_sha256
+    vault_project_id = db.query(OrgNode.id).filter(OrgNode.code == caller_node["id"]).scalar() or caller_node["id"]
+    vault_record, _, _, _, _ = process_and_store_evidence(
+        db=db,
+        filename=file.filename or "evidence",
+        file_bytes=content,
+        mime_type=mime,
+        client_sha256=compute_sha256(content),
+        uploader_id=str(current_user.id),
+        run_ocr=False,
+        doc_category="Report",
+        attached_by_role=role,
+        project_id=str(vault_project_id),
+        esg_indicator=field_id,
+    )
     record = esg_store.save_field_evidence(
         node_id=caller_node["id"],
         role=role,
         field_id=field_id,
         fy_key=fy_key,
-        file_name=file.filename or dest_name,
-        file_path=str(dest_path),
+        file_name=file.filename or "evidence",
+        file_path=None,
         mime_type=mime,
         uploaded_by=getattr(current_user, "email", None) or getattr(current_user, "full_name", str(current_user.id)),
+        vault_evidence_id=str(vault_record.id),
+        evidence_display_id=vault_record.evidence_display_id,
+        sha256=vault_record.sha256,
+        storage_key=vault_record.storage_key,
     )
     return {"success": True, **record}
+
+
+@router.delete("/evidence/{node_id}/{field_id}/{fy_key}/{evidence_id}")
+def detach_field_evidence(
+    node_id: str, field_id: str, fy_key: str, evidence_id: str,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+):
+    caller_node = _resolve_caller_node(db, current_user)
+    if node_id != caller_node["id"]:
+        raise HTTPException(status_code=403, detail="Can only detach evidence from your own node.")
+    if field_id not in REGISTRY_BY_ID or REGISTRY_BY_ID[field_id]["ownerRole"] != _role_str(current_user):
+        raise HTTPException(status_code=403, detail="Cannot detach evidence from this field.")
+    removed = esg_store.remove_field_evidence(node_id, _role_str(current_user), field_id, fy_key, evidence_id)
+    if not removed:
+        raise HTTPException(status_code=404, detail="Evidence attachment not found.")
+    return {"success": True, "detached": True}
 
 
 @router.get("/evidence/{node_id}/{field_id}")
@@ -564,8 +592,14 @@ def download_p6_evidence(
     )
     if not record:
         raise HTTPException(status_code=404, detail="Evidence file not found.")
+    if record.get("storage_key"):
+        from app.modules.evidence.storage import storage_service
+        payload = storage_service.get_file_bytes(record["storage_key"])
+        if payload is None:
+            raise HTTPException(status_code=404, detail="Evidence file is unavailable.")
+        return Response(payload, media_type=record.get("mime_type") or "application/octet-stream", headers={"Content-Disposition": f'attachment; filename="{record.get("file_name") or "evidence"}"'})
     evidence_root = esg_store.EVIDENCE_DIR.resolve()
-    file_path = Path(record.get("file_path", "")).resolve()
+    file_path = Path(record.get("file_path") or "").resolve()
     if not file_path.is_relative_to(evidence_root) or not file_path.is_file():
         raise HTTPException(status_code=404, detail="Evidence file is unavailable.")
     return FileResponse(file_path, filename=record.get("file_name") or file_path.name, media_type=record.get("mime_type") or "application/octet-stream")

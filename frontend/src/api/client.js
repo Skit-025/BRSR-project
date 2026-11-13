@@ -590,6 +590,7 @@ export const p6FormsApi = {
     return api.post('/p6-forms/upload-evidence', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
   },
   getFieldEvidence: (nodeId, fieldId) => api.get(`/p6-forms/evidence/${encodeURIComponent(nodeId)}/${encodeURIComponent(fieldId)}`),
+  removeEvidence: (nodeId, fieldId, fyKey, evidenceId) => api.delete(`/p6-forms/evidence/${encodeURIComponent(nodeId)}/${encodeURIComponent(fieldId)}/${encodeURIComponent(fyKey)}/${encodeURIComponent(evidenceId)}`),
   downloadEvidence: (nodeId, fieldId, evidenceId) => api.get(`/p6-forms/evidence-download/${encodeURIComponent(nodeId)}/${encodeURIComponent(fieldId)}/${encodeURIComponent(evidenceId)}`, { responseType: 'blob' }),
   getNodeEvidence: (nodeId) => api.get(`/p6-forms/evidence/${encodeURIComponent(nodeId)}`),
 };

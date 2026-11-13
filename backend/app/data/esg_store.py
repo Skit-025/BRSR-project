@@ -623,9 +623,13 @@ def save_field_evidence(
     field_id: str,
     fy_key: str,
     file_name: str,
-    file_path: str,
+    file_path: Optional[str],
     mime_type: str,
     uploaded_by: str,
+    vault_evidence_id: Optional[str] = None,
+    evidence_display_id: Optional[str] = None,
+    sha256: Optional[str] = None,
+    storage_key: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Persist evidence metadata inside esgData.json under evidence[node_id][role][field_id][fy_key]."""
     evidence_id = str(uuid.uuid4())
@@ -635,6 +639,10 @@ def save_field_evidence(
         "file_path": file_path,
         "mime_type": mime_type,
         "uploaded_by": uploaded_by,
+        "vault_evidence_id": vault_evidence_id,
+        "evidence_display_id": evidence_display_id,
+        "sha256": sha256,
+        "storage_key": storage_key,
         "uploaded_at": datetime.now(timezone.utc).isoformat(),
         "fy_key": fy_key,
     }
@@ -650,6 +658,21 @@ def save_field_evidence(
         bucket.setdefault(fy_key, []).append(record)
         save_data(data)
     return record
+
+
+def remove_field_evidence(node_id: str, role: str, field_id: str, fy_key: str, evidence_id: str) -> bool:
+    """Detach a file from a P6 form while leaving its universal vault record intact."""
+    with _LOCK:
+        data = load_data()
+        records = (
+            data.get("evidence", {}).get(node_id, {}).get(role, {}).get(field_id, {}).get(fy_key, [])
+        )
+        kept = [record for record in records if record.get("evidence_id") != evidence_id]
+        if len(kept) == len(records):
+            return False
+        data["evidence"][node_id][role][field_id][fy_key] = kept
+        save_data(data)
+        return True
 
 
 def get_field_evidence(node_id: str, role: str, field_id: str) -> Dict[str, List[Dict[str, Any]]]:

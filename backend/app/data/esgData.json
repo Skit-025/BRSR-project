@@ -78,7 +78,7 @@
     },
     "PRJ-HWY-001": {
       "project_supervisor": {
-        "status": "accepted",
+        "status": "submitted",
         "reason": null
       },
       "project_admin": {
@@ -122,7 +122,7 @@
         "reason": null
       },
       "bu_admin": {
-        "status": "accepted",
+        "status": "submitted",
         "reason": null
       }
     },
@@ -132,8 +132,8 @@
         "reason": null
       },
       "project_admin": {
-        "status": "accepted",
-        "reason": null
+        "status": "rejected",
+        "reason": "Please reconcile the diesel consumption total with the March fuel ledger and attach the corrected invoice summary."
       }
     },
     "MEGHA-POWER-EPC": {
@@ -142,8 +142,8 @@
         "reason": null
       },
       "subsidiary_admin": {
-        "status": "accepted",
-        "reason": null
+        "status": "rejected",
+        "reason": "Please correct the reporting boundary note before resubmission."
       }
     },
     "BU-POWER": {
@@ -158,7 +158,7 @@
     },
     "PRJ-SOLAR-003": {
       "project_supervisor": {
-        "status": "accepted",
+        "status": "submitted",
         "reason": null
       },
       "project_admin": {
@@ -1898,41 +1898,12 @@
     "PRJ-ZOJILA-P7": {
       "project_admin": {
         "pa_ei7_has_project": {
-          "current": [
-            {
-              "evidence_id": "35cc39e3-6cc1-4f38-b9bb-f7ab7d1b0cdc",
-              "file_name": "bu.jpeg",
-              "file_path": "C:\\Users\\codes\\Desktop\\BRSR-project\\backend\\uploads\\evidence\\PRJ-ZOJILA-P7\\project_admin\\pa_ei7_has_project\\7dff555678914b66b2f29d7994e059d4_bu.jpeg",
-              "mime_type": "image/jpeg",
-              "uploaded_by": "project.admin@aarohan.in",
-              "uploaded_at": "2026-11-12T12:12:54.003352+00:00",
-              "fy_key": "current"
-            }
-          ]
+          "current": []
         }
       },
       "project_supervisor": {
         "ei1_ren_elec": {
-          "current": [
-            {
-              "evidence_id": "29b5cc00-984c-4baa-a725-bb34824d42bf",
-              "file_name": "bu.jpeg",
-              "file_path": "C:\\Users\\codes\\Desktop\\BRSR-project\\backend\\uploads\\evidence\\PRJ-ZOJILA-P7\\project_supervisor\\ei1_ren_elec\\6eb80558bac94a5cbd785eb51e788afa_bu.jpeg",
-              "mime_type": "image/jpeg",
-              "uploaded_by": "project.supervisor@aarohan.in",
-              "uploaded_at": "2026-11-12T12:44:09.154001+00:00",
-              "fy_key": "current"
-            },
-            {
-              "evidence_id": "696a90f7-58f2-4737-bfd5-e5e58535e8f6",
-              "file_name": "proj.jpeg",
-              "file_path": "C:\\Users\\codes\\Desktop\\BRSR-project\\backend\\uploads\\evidence\\PRJ-ZOJILA-P7\\project_supervisor\\ei1_ren_elec\\275e93c08e654720a453b56d6f55ebf4_proj.jpeg",
-              "mime_type": "image/jpeg",
-              "uploaded_by": "project.supervisor@aarohan.in",
-              "uploaded_at": "2026-11-12T12:44:16.461612+00:00",
-              "fy_key": "current"
-            }
-          ]
+          "current": []
         }
       }
     }

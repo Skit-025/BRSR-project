@@ -122,14 +122,19 @@ export default function RoleESGForm() {
     }
   };
 
-  const removeLocalEvidence = (fieldId, fyKey, evidenceId) => {
-    setFieldEvidence((prev) => {
-      const updated = { ...prev };
-      if (updated[fieldId]?.[fyKey]) {
-        updated[fieldId][fyKey] = updated[fieldId][fyKey].filter((r) => r.evidence_id !== evidenceId);
-      }
-      return updated;
-    });
+  const removeLocalEvidence = async (fieldId, fyKey, evidenceId) => {
+    try {
+      await p6FormsApi.removeEvidence(schema.node.id, fieldId, fyKey, evidenceId);
+      setFieldEvidence((prev) => {
+        const updated = { ...prev };
+        if (updated[fieldId]?.[fyKey]) {
+          updated[fieldId][fyKey] = updated[fieldId][fyKey].filter((r) => r.evidence_id !== evidenceId);
+        }
+        return updated;
+      });
+    } catch (err) {
+      setErrorMsg(`Could not detach evidence: ${getFriendlyErrorMessage(err)}`);
+    }
   };
 
   const EvidencePanel = ({ fieldId, fyKey }) => {
@@ -153,12 +158,13 @@ export default function RoleESGForm() {
               <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 140 }}>
                 {r.file_name}
               </span>
+              {r.evidence_display_id && <span title={`SHA-256: ${r.sha256 || 'stored in vault'}`} style={{ fontSize: 9, color: '#065F46', whiteSpace: 'nowrap' }}>{r.evidence_display_id}</span>}
               {!isReadOnly && (
                 <button
                   type="button"
                   onClick={() => removeLocalEvidence(fieldId, fyKey, r.evidence_id)}
                   style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: '#6B7280', padding: 0 }}
-                  title="Remove from view (file remains stored)"
+                  title="Detach from form (vault copy remains stored)"
                 >
                   <X size={10} />
                 </button>
