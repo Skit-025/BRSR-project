@@ -70,6 +70,12 @@
       "type": "project",
       "parentId": "BU-TRANSPORTATION",
       "is_mock": true
+    },
+    {
+      "id": "PRJ-HIGWAY-EXPANSIO-1274",
+      "name": "HIGWAY EXPANSION TO KHURDHA",
+      "type": "project",
+      "parentId": "BU-TRANSPORTATION"
     }
   ],
   "statuses": {
@@ -2065,7 +2071,28 @@
         }
       }
     },
-    "BU-TRANSPORTATION": {}
+    "BU-TRANSPORTATION": {},
+    "PRJ-HIGWAY-EXPANSIO-1274": {
+      "project_admin": {
+        "pa_ei7_has_project": {
+          "current": [
+            {
+              "evidence_id": "d9db76ea-56a8-4da9-a9a8-2711da4f1e32",
+              "file_name": "images (1).jpeg",
+              "file_path": null,
+              "mime_type": "image/jpeg",
+              "uploaded_by": "durgarta@gmail.com",
+              "vault_evidence_id": "fcfa01d3-c58a-4de6-9b03-e7541bc68dba",
+              "evidence_display_id": "EVD-4D7EA0C0",
+              "sha256": "841174a54958ab2b40294fe0ec92afc4a6a59ed851caa50dd49075381c853cf6",
+              "storage_key": "evidence/a6102648862940c4a0b79bc411f8a034.jpeg",
+              "uploaded_at": "2026-11-13T03:41:31.089126+00:00",
+              "fy_key": "current"
+            }
+          ]
+        }
+      }
+    }
   },
   "audit_log": [
     {

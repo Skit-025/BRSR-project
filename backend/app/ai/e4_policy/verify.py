@@ -22,11 +22,18 @@ def verify_quote(element: str, policy_text: str) -> Tuple[bool, Optional[str]]:
     lower = text.lower()
     groups = TERMS.get(element, [(element.lower(),)])
     for group in groups:
-        positions = [lower.find(term) for term in group]
-        if any(pos < 0 for pos in positions):
+        # Match whole phrases: e.g. "audit" must not match "auditorium".
+        spans = []
+        for term in group:
+            match = re.search(rf"(?<!\w){re.escape(term)}(?!\w)", lower)
+            if not match:
+                spans = []
+                break
+            spans.append(match.span())
+        if not spans:
             continue
-        start = min(positions)
-        end = max(pos + len(term) for pos, term in zip(positions, group))
+        start = min(pos for pos, _ in spans)
+        end = max(pos for _, pos in spans)
         # Include the containing sentence while keeping the citation exact.
         sentence_start = max(text.rfind(".", 0, start), text.rfind("\n", 0, start)) + 1
         sentence_end_candidates = [p for p in (text.find(".", end), text.find("\n", end)) if p >= 0]

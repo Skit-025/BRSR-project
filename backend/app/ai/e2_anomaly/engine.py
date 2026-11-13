@@ -54,7 +54,8 @@ def _plain_language_interpretation(req, is_anomaly, severity, reasons):
 
     lead = "Invalid value" if "non_negative" in features else f"Potential anomaly flagged ({getattr(severity, 'value', severity) or 'review needed'})."
     explanation = " ".join(checks) if checks else "One or more data checks found an unusual pattern."
-    return (f"{lead} {explanation} This flag does not prove the figure is wrong. Check the unit, reporting period, "
+    return (f"{lead} {explanation} The score shows the strength of the detector signals; it is not the probability "
+            f"that the figure is wrong. Check the unit, reporting period, "
             "and supporting bill or meter record before accepting it.")
 
 

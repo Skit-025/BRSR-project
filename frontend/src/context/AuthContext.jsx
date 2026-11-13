@@ -108,7 +108,7 @@ const ROLE_PERMISSIONS = {
   ]),
 
   bu_admin: new Set([
-    'org:read', 'org:hierarchy_view', 'metric:read',
+    'org:read', 'org:write', 'org:hierarchy_view', 'metric:read',
     'form:review', 'submission:read', 'submission:review', 'submission:approve', 'evidence:read',
     'consolidation:read',
     'bu_disclosure:read',

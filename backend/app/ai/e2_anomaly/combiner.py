@@ -1,10 +1,6 @@
-"""
-E2 Engine: Score Combiner
-Aggregates L1, L2, L3, L4 layer scores into a single composite anomaly score
-using the weighted formula from Page 24 of the MEIL BRSR Build Guide:
-  composite = 0.50*L1 + 0.20*L2 + 0.15*L3 + 0.15*L4
-"""
-from typing import List, Dict
+"""Combine normalized detector strengths without diluting a single strong signal."""
+from math import prod
+from typing import List
 from app.ai.schemas import AnomalySeverity, AnomalyReason
 
 
@@ -18,13 +14,7 @@ def combine_scores(
     """
     Returns (composite_score, is_anomaly, severity, top_reasons)
     """
-    weighted_score = (
-        0.50 * l1_score +
-        0.20 * l2_score +
-        0.15 * l3_score +
-        0.15 * l4_score
-    )
-    strongest_layer = max(l1_score, l2_score, l3_score, l4_score)
+    layer_scores = [min(1.0, max(0.0, score)) for score in (l1_score, l2_score, l3_score, l4_score)]
 
     # Sort reasons by contribution descending, keep top 5
     top_reasons = sorted(all_reasons, key=lambda r: r.contribution, reverse=True)[:5]
@@ -37,18 +27,13 @@ def combine_scores(
         severity = AnomalySeverity.ERROR
         is_anomaly = True
     else:
-        # The original weighted average could hide a decisive single-layer signal
-        # (for example an extreme MAD/YoY outlier became only 20% when the other
-        # layers had no benchmark data). Preserve the weight for corroboration,
-        # while giving one strong detector enough influence to trigger review.
-        evidence_floor = 0.40 if all_reasons else 0.0
-        composite = max(weighted_score, 0.80 * strongest_layer, evidence_floor)
-        composite = min(1.0, max(0.0, composite))
+        # Noisy-OR: independent detectors add support, while a zero score from an
+        # unavailable/non-triggering layer cannot suppress a strong signal.
+        composite = 1.0 - prod(1.0 - score for score in layer_scores)
     if not hard_invalid and composite >= 0.65:
         severity = AnomalySeverity.WARNING
-        is_anomaly = True
-    elif not hard_invalid and composite >= 0.40:
+    elif not hard_invalid and all_reasons:
         severity = AnomalySeverity.INFO
-        is_anomaly = True
+    is_anomaly = severity is not None
 
     return round(composite, 3), is_anomaly, severity, top_reasons
