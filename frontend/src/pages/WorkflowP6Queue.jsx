@@ -34,7 +34,11 @@ export default function WorkflowP6Queue({ user }) {
       setError(e.response?.data?.detail || 'Unable to load submissions for your entity scope.');
     } finally { setLoading(false); setRefreshing(false); }
   };
-  useEffect(() => { load(); }, [user?.id, user?.role]);
+  useEffect(() => {
+    load();
+    const timer = window.setInterval(() => load(true), 15000);
+    return () => window.clearInterval(timer);
+  }, [user?.id, user?.role]);
 
   const reports = useMemo(() => (snapshot.blocks || []).map((b) => {
     const node = b.node || {};
@@ -43,7 +47,7 @@ export default function WorkflowP6Queue({ user }) {
     const first = fields[0]?.[0] || '';
     const indicator = first.split('_').slice(0, 1)[0]?.toUpperCase() || 'P6';
     const id = `${node.id || 'node'}:${b.ownerRole}`;
-    const canReview = ['project_admin', 'bu_admin', 'subsidiary_admin', 'group_admin', 'system_admin'].includes(user?.role)
+    const canReview = ['project_admin', 'bu_esg_manager', 'bu_supervisor', 'bu_admin', 'subsidiary_esg_manager', 'subsidiary_supervisor', 'subsidiary_admin', 'group_esg_manager', 'group_supervisor', 'group_admin', 'system_admin'].includes(user?.role)
       && status === 'submitted' && b.ownerRole !== user?.role;
     return { ...b, node, status, fields, first, indicator, id, canReview };
   }).filter((r) => statusFilter === 'active' ? ['submitted', 'rejected'].includes(r.status) : statusFilter === 'history' ? ['accepted', 'rejected'].includes(r.status) : true)

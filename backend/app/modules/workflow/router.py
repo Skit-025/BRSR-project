@@ -75,8 +75,9 @@ def review_submission_pack(
             detail="Segregation of Duties Violation: You cannot review or approve your own submission pack."
         )
 
-    if not action.reviewer_id:
-        action.reviewer_id = str(current_user.id)
+    # Reviewer identity comes only from the authenticated session, never from
+    # a client-supplied ID.
+    action.reviewer_id = str(current_user.id)
 
     review = process_review(db, submission_id, action)
     return review

@@ -345,7 +345,7 @@ def get_review_queue(db: Session, reviewer_user=None) -> List[ReviewQueueItem]:
     - System Admin: all pending packs
     """
     from app.security.rbac import Role
-    from app.security.scope import get_user_assigned_project_ids
+    from app.security.scope import get_user_effective_scope_node_ids
 
     role = getattr(reviewer_user, "role", None)
 
@@ -386,30 +386,59 @@ def get_review_queue(db: Session, reviewer_user=None) -> List[ReviewQueueItem]:
         matching_nodes = db.query(OrgNode.id).filter(OrgNode.type.in_(entity_types), OrgNode.is_deleted == False).subquery()
         pending_query = pending_query.filter(Submission.entity_id.in_(matching_nodes))
 
-    # Scoped isolation
-    if reviewer_user:
-        if exact_entity and reviewer_user.org_node_id:
-            pending_query = pending_query.filter(Submission.entity_id == str(reviewer_user.org_node_id))
-        elif reviewer_user.role == Role.PROJECT_ADMIN.value:
-            assigned_ids = get_user_assigned_project_ids(db, reviewer_user)
-            if assigned_ids:
-                pending_query = pending_query.filter(Submission.entity_id.in_(list(assigned_ids)))
-            elif reviewer_user.org_node_id:
-                pending_query = pending_query.filter(Submission.entity_id == str(reviewer_user.org_node_id))
-        elif reviewer_user.org_node_id:
-            scoped_node = db.query(OrgNode).filter(OrgNode.id == reviewer_user.org_node_id).first()
-            if scoped_node and scoped_node.path:
-                try:
-                    from sqlalchemy import text
-                    subtree_rows = db.execute(
-                        text("SELECT id::text FROM org_nodes WHERE path <@ :path AND is_deleted = false"),
-                        {"path": scoped_node.path}
-                    ).fetchall()
-                    allowed_ids = [row[0] for row in subtree_rows]
-                    if allowed_ids:
-                        pending_query = pending_query.filter(Submission.entity_id.in_(allowed_ids))
-                except Exception:
-                    pass
+    # Scope by all direct and role-assignment nodes. Resolve node codes to UUIDs
+    # before filtering the UUID submission column (passing codes here causes
+    # intermittent PostgreSQL invalid-UUID errors and an empty review queue).
+    if reviewer_user and role != Role.SYSTEM_ADMIN.value:
+        scope_identifiers = get_user_effective_scope_node_ids(db, reviewer_user)
+        active_nodes = db.query(OrgNode).filter(OrgNode.is_deleted == False).all()
+        nodes_by_identifier = {}
+        for scope_node in active_nodes:
+            nodes_by_identifier[str(scope_node.id)] = scope_node
+            if scope_node.code:
+                nodes_by_identifier[scope_node.code] = scope_node
+
+        scoped_nodes = [nodes_by_identifier[key] for key in scope_identifiers if key in nodes_by_identifier]
+        allowed_ids = set()
+        if role == Role.PROJECT_ADMIN.value:
+            # Project Admins review only explicitly assigned project/site packs.
+            allowed_ids.update(
+                str(node.id) for node in scoped_nodes
+                if (node.type or "").lower() in ("project", "site")
+            )
+        else:
+            # Tier managers review descendants in their assigned organizational
+            # branch. Use ltree where available, with parent traversal fallback.
+            for scoped_node in scoped_nodes:
+                if scoped_node.path:
+                    try:
+                        from sqlalchemy import text
+                        rows = db.execute(
+                            text("SELECT id::text FROM org_nodes WHERE path <@ CAST(:path AS ltree) AND is_deleted = false"),
+                            {"path": str(scoped_node.path)},
+                        ).fetchall()
+                        allowed_ids.update(row[0] for row in rows)
+                        continue
+                    except Exception:
+                        pass
+                allowed_ids.add(str(scoped_node.id))
+                stack = [str(scoped_node.id)]
+                while stack:
+                    parent_id = stack.pop()
+                    child_ids = db.query(OrgNode.id).filter(
+                        OrgNode.parent_id == parent_id,
+                        OrgNode.is_deleted == False,
+                    ).all()
+                    for (child_id,) in child_ids:
+                        child_id = str(child_id)
+                        if child_id not in allowed_ids:
+                            allowed_ids.add(child_id)
+                            stack.append(child_id)
+
+        if allowed_ids:
+            pending_query = pending_query.filter(Submission.entity_id.in_(sorted(allowed_ids)))
+        else:
+            pending_query = pending_query.filter(Submission.entity_id == "00000000-0000-0000-0000-000000000000")
 
     pending = pending_query.all()
     items: List[ReviewQueueItem] = []

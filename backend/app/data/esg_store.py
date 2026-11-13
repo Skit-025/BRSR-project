@@ -41,6 +41,24 @@ def get_nodes() -> List[Dict[str, Any]]:
     return load_data().get("nodes", [])
 
 
+def ensure_node(node: Dict[str, Any]) -> Dict[str, Any]:
+    """Add a relational org node to the P6 hierarchy store on first use."""
+    with _LOCK:
+        data = load_data()
+        nodes = data.setdefault("nodes", [])
+        existing = next((item for item in nodes if str(item.get("id")) == str(node.get("id"))), None)
+        if existing:
+            return existing
+        nodes.append({
+            "id": str(node["id"]),
+            "name": node["name"],
+            "type": node["type"],
+            "parentId": str(node["parentId"]) if node.get("parentId") else None,
+        })
+        save_data(data)
+        return nodes[-1]
+
+
 def resolve_node(node_ref: Optional[str], fallback_role: Optional[str] = None, strict: bool = False) -> Optional[Dict[str, Any]]:
     nodes = get_nodes()
     if not nodes:
@@ -238,7 +256,11 @@ def compute_waste_totals(entries_map: Dict[str, Any], fy_key: str) -> Dict[str, 
     }
 
 
-def rollup_node(node_id: str, only_accepted: bool = True) -> Dict[str, Any]:
+def rollup_node(
+    node_id: str,
+    only_accepted: bool = True,
+    include_node_data_id: Optional[str] = None,
+) -> Dict[str, Any]:
     """
     Aggregates all P6_REGISTRY fields for `node_id` across itself + accepted descendants.
     - SUM fields: sum of values across matching nodes (empty != 0 -> None if none reported)
@@ -256,7 +278,9 @@ def rollup_node(node_id: str, only_accepted: bool = True) -> Dict[str, Any]:
         if not only_accepted:
             return True
         st = statuses.get(nid, {}).get(role, {}).get("status", "draft")
-        return st == "accepted"
+        return st == "accepted" or (
+            nid == include_node_data_id
+        )
 
     summed_entries: Dict[str, Dict[str, Any]] = {}
     list_entries: Dict[str, Dict[str, List[Dict[str, Any]]]] = {}
@@ -385,10 +409,25 @@ def rollup_node(node_id: str, only_accepted: bool = True) -> Dict[str, Any]:
     }
 
 
-def get_dashboard_data(node_id: Optional[str] = None) -> Dict[str, Any]:
+def get_dashboard_data(
+    node_id: Optional[str] = None,
+    include_node_data_id: Optional[str] = None,
+) -> Dict[str, Any]:
     nodes = get_nodes()
     target_id = node_id or (nodes[0]["id"] if nodes else "MEIL-GROUP")
-    rolled = rollup_node(target_id, only_accepted=True)
+    rolled = rollup_node(
+        target_id,
+        only_accepted=True,
+        include_node_data_id=include_node_data_id,
+    )
+    local_node = next((node for node in get_nodes() if node["id"] == target_id), {})
+    local_owner_role = {
+        "project": "project_supervisor", "site": "project_supervisor",
+        "plant": "project_supervisor", "manufacturing": "project_supervisor",
+        "bu": "bu_supervisor", "business_unit": "bu_supervisor",
+        "subsidiary": "subsidiary_supervisor", "company": "subsidiary_supervisor",
+        "group": "group_supervisor", "root": "group_supervisor",
+    }.get((local_node.get("type") or "").lower(), "project_supervisor")
     t = rolled["totals"]
     f = rolled["fields"]
     fy = rolled["fy"]
@@ -439,6 +478,7 @@ def get_dashboard_data(node_id: Optional[str] = None) -> Dict[str, Any]:
     return {
         "fy": fy,
         "node": rolled["node"],
+        "local_report_status": statuses.get(target_id, {}).get(local_owner_role),
         "has_data": has_data,
         "cards": {
             "energy": {
@@ -562,7 +602,11 @@ def get_dashboard_data(node_id: Optional[str] = None) -> Dict[str, Any]:
     }
 
 
-def get_lineage_breakdown(node_id: str, kpi_key: str = "energy") -> Dict[str, Any]:
+def get_lineage_breakdown(
+    node_id: str,
+    kpi_key: str = "energy",
+    include_node_data_id: Optional[str] = None,
+) -> Dict[str, Any]:
     """Returns per-node breakdown from esgData.json for the lineage drawer."""
     data = load_data()
     nodes_by_id = {n["id"]: n for n in data.get("nodes", [])}
@@ -573,6 +617,10 @@ def get_lineage_breakdown(node_id: str, kpi_key: str = "energy") -> Dict[str, An
     rows = []
     for nid in desc_ids:
         n = nodes_by_id.get(nid, {"id": nid, "name": nid, "type": "unknown"})
+        role_used = "bu_supervisor" if kpi_key == "scope3" else "project_supervisor"
+        entry_status = statuses.get(nid, {}).get(role_used, {}).get("status", "draft")
+        if entry_status != "accepted" and nid != include_node_data_id:
+            continue
         ps = entries.get(nid, {}).get("project_supervisor", {})
         bs = entries.get(nid, {}).get("bu_supervisor", {})
         val = None
@@ -596,12 +644,11 @@ def get_lineage_breakdown(node_id: str, kpi_key: str = "energy") -> Dict[str, An
             unit = "MT"
 
         if val is not None:
-            role_used = "bu_supervisor" if kpi_key == "scope3" else "project_supervisor"
             rows.append({
                 "node_id": nid,
                 "node_name": n["name"],
                 "node_type": n["type"],
-                "status": statuses.get(nid, {}).get(role_used, {}).get("status", "draft"),
+                "status": entry_status,
                 "value": val,
                 "unit": unit,
             })

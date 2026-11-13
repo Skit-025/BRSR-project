@@ -44,6 +44,8 @@ def assert_can_submit(role: str) -> None:
         Role.GROUP_ESG_MANAGER.value,
         Role.GROUP_SUPERVISOR.value,
         Role.PROJECT_ADMIN.value,
+        Role.BU_ADMIN.value,
+        Role.SUBSIDIARY_ADMIN.value,
         Role.SYSTEM_ADMIN.value,
     }
     if role not in allowed:

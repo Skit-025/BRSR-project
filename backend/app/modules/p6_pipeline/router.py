@@ -49,41 +49,82 @@ def _role_str(user: User) -> str:
 
 def _resolve_caller_node(db: Session, user: User) -> Dict[str, Any]:
     role = _role_str(user)
-    raw_ref = getattr(user, "assigned_project_id", None) or getattr(user, "org_node_id", None)
     all_nodes = esg_store.get_nodes()
     allowed_types = ROLE_NODE_TYPES.get(role, [])
-
+    references = []
+    raw_ref = getattr(user, "assigned_project_id", None) or getattr(user, "org_node_id", None)
     if raw_ref:
-        # Try direct strict match in esgData.json
-        node = esg_store.resolve_node(str(raw_ref), fallback_role=None, strict=True)
+        references.append(str(raw_ref))
+    try:
+        from app.security.scope import get_user_effective_scope_node_ids
+        references.extend(sorted(
+            str(value) for value in get_user_effective_scope_node_ids(db, user)
+            if str(value) not in references
+        ))
+    except Exception:
+        pass
+
+    # Resolve every direct or audited assignment. Choosing the first node of a
+    # matching role can silently route a user to the wrong project.
+    for reference in references:
+        node = esg_store.resolve_node(str(reference), fallback_role=None, strict=True)
         if node:
             return node
-        # Try resolving DB OrgNode UUID -> code/name -> esgData.json node
-        db_node = db.query(OrgNode).filter(OrgNode.id == str(raw_ref)).first()
+        db_node = db.query(OrgNode).filter(
+            OrgNode.code == str(reference),
+            OrgNode.is_deleted == False,
+        ).first()
+        if not db_node:
+            try:
+                db_node = db.query(OrgNode).filter(
+                    OrgNode.id == str(uuid.UUID(str(reference))),
+                    OrgNode.is_deleted == False,
+                ).first()
+            except (ValueError, TypeError, AttributeError):
+                db_node = None
         if db_node:
-            by_code = esg_store.resolve_node(db_node.code, fallback_role=None, strict=True)
-            if by_code:
-                return by_code
-            by_name = esg_store.resolve_node(db_node.name, fallback_role=None, strict=True)
-            if by_name:
-                return by_name
-            # Try substring match among nodes compatible with the caller's role tier
-            db_name_low = (db_node.name or "").strip().lower()
-            if db_name_low:
-                for n in all_nodes:
-                    n_type_low = (n.get("type") or "").lower()
-                    if allowed_types and n_type_low not in allowed_types:
-                        continue
-                    n_name_low = (n.get("name") or "").lower()
-                    if db_name_low in n_name_low or n_name_low in db_name_low:
-                        return n
+            # Synchronize the assigned relational project and its ancestors into
+            # the P6 mock-data hierarchy when a newly created project is first
+            # opened. That lets its submitted P6 report appear in its dashboard.
+            chain = []
+            current = db_node
+            while current:
+                chain.append(current)
+                current = db.query(OrgNode).filter(
+                    OrgNode.id == current.parent_id,
+                    OrgNode.is_deleted == False,
+                ).first() if current.parent_id else None
+            mapped_ids = {}
+            for org_node in reversed(chain):
+                match = None
+                for candidate_ref in (org_node.code, org_node.name):
+                    if candidate_ref:
+                        match = esg_store.resolve_node(candidate_ref, fallback_role=None, strict=True)
+                        if match:
+                            break
+                if not match and (org_node.type or "").lower() == "group":
+                    match = next((n for n in all_nodes if (n.get("type") or "").lower() == "group"), None)
+                if match:
+                    mapped_ids[str(org_node.id)] = str(match["id"])
+                    continue
+                parent_p6_id = mapped_ids.get(str(org_node.parent_id)) if org_node.parent_id else None
+                if org_node.parent_id and not parent_p6_id:
+                    continue
+                p6_id = str(org_node.code or org_node.id)
+                mapped = esg_store.ensure_node({
+                    "id": p6_id,
+                    "name": org_node.name or p6_id,
+                    "type": (org_node.type or "project").lower(),
+                    "parentId": parent_p6_id,
+                })
+                mapped_ids[str(org_node.id)] = str(mapped["id"])
+            mapped_ref = mapped_ids.get(str(db_node.id))
+            if mapped_ref:
+                node = esg_store.resolve_node(mapped_ref, fallback_role=None, strict=True)
+                if node:
+                    return node
 
-    # Fallback by role level — never allow a scoped role to fall back to Group root
-    if allowed_types:
-        for n in all_nodes:
-            if n.get("type", "").lower() in allowed_types:
-                return n
-    if role in ("system_admin", "group_admin", "group_supervisor"):
+    if role in ("system_admin", "group_admin", "group_esg_manager", "group_supervisor"):
         return esg_store.resolve_node(None, fallback_role=role) or {"id": "MEIL-GROUP", "name": "Group", "type": "group", "parentId": None}
     raise HTTPException(
         status_code=status.HTTP_403_FORBIDDEN,
@@ -96,6 +137,15 @@ def _assert_downward_access(caller_node: Dict[str, Any], target_node_id: str) ->
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Access denied: you may only view your own node or its descendants.",
+        )
+
+
+def _ensure_report_editable(node_id: str, role: str) -> None:
+    report_status = esg_store.get_status(node_id, role).get("status", "draft")
+    if report_status not in ("draft", "rejected"):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"This report is locked while its status is '{report_status}'. It can only be edited after it is returned for correction.",
         )
 
 
@@ -291,9 +341,7 @@ def save_draft(
     caller_node = _resolve_caller_node(db, current_user)
     if body.node_id and body.node_id != caller_node["id"]:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Cannot save entries for another node.")
-    cur_st = esg_store.get_status(caller_node["id"], role)
-    if cur_st.get("status") == "submitted":
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Submitted revisions are read-only.")
+    _ensure_report_editable(caller_node["id"], role)
     cleaned = _validate_and_normalize_payload(role, caller_node.get("type", ""), body.entries)
     saved = esg_store.save_role_entries(caller_node["id"], role, cleaned, new_status="draft", actor_id=str(current_user.id), actor_name=current_user.full_name)
     return {"status": "draft", "node_id": caller_node["id"], "role": role, "entries": saved}
@@ -309,6 +357,7 @@ def submit_form(
     caller_node = _resolve_caller_node(db, current_user)
     if body.node_id and body.node_id != caller_node["id"]:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Cannot submit entries for another node.")
+    _ensure_report_editable(caller_node["id"], role)
     cleaned = _validate_and_normalize_payload(role, caller_node.get("type", ""), body.entries)
     saved = esg_store.save_role_entries(caller_node["id"], role, cleaned, new_status="submitted", actor_id=str(current_user.id), actor_name=current_user.full_name)
     return {"status": "submitted", "node_id": caller_node["id"], "role": role, "entries": saved}
@@ -316,9 +365,25 @@ def submit_form(
 
 _REVIEWABLE_TARGET_ROLES: Dict[str, set] = {
     "project_admin": {"project_supervisor"},
+    "bu_esg_manager": {"project_supervisor", "project_admin"},
+    "bu_supervisor": {"project_supervisor", "project_admin"},
     "bu_admin": {"bu_supervisor", "bu_esg_manager", "project_supervisor", "project_admin"},
+    "subsidiary_esg_manager": {
+        "bu_supervisor", "bu_esg_manager", "bu_admin",
+        "project_supervisor", "project_admin",
+    },
     "subsidiary_admin": {
         "subsidiary_supervisor", "subsidiary_esg_manager",
+        "bu_supervisor", "bu_esg_manager", "bu_admin",
+        "project_supervisor", "project_admin",
+    },
+    "group_esg_manager": {
+        "subsidiary_supervisor", "subsidiary_esg_manager", "subsidiary_admin",
+        "bu_supervisor", "bu_esg_manager", "bu_admin",
+        "project_supervisor", "project_admin",
+    },
+    "group_supervisor": {
+        "subsidiary_supervisor", "subsidiary_esg_manager", "subsidiary_admin",
         "bu_supervisor", "bu_esg_manager", "bu_admin",
         "project_supervisor", "project_admin",
     },
@@ -360,6 +425,18 @@ def review_submission(
         raise HTTPException(status_code=422, detail="Decision must be 'accepted' or 'rejected'.")
     if body.decision == "rejected" and not (body.reason or "").strip():
         raise HTTPException(status_code=422, detail="Rejection reason is required.")
+    current_status = esg_store.get_status(body.node_id, body.target_role).get("status", "draft")
+    if current_status != "submitted":
+        raise HTTPException(status_code=409, detail=f"This report is no longer awaiting review (status: {current_status}).")
+    data = esg_store.load_data()
+    latest_submitter = next((
+        event.get("actor_id") for event in reversed(data.get("audit_log", []))
+        if event.get("node_id") == body.node_id
+        and event.get("owner_role") == body.target_role
+        and event.get("event") == "submitted"
+    ), None)
+    if latest_submitter and str(latest_submitter) == str(current_user.id):
+        raise HTTPException(status_code=409, detail="Segregation of Duties violation: you cannot review your own submission.")
     st = esg_store.set_status(body.node_id, body.target_role, body.decision, body.reason, actor_id=str(current_user.id), actor_name=current_user.full_name)
     return {"node_id": body.node_id, "target_role": body.target_role, **st}
 
@@ -399,7 +476,19 @@ def get_p6_dashboard(
         for n in nodes
         if n["id"] in desc_set and (not allowed_types or n.get("type", "").lower() in allowed_types)
     ]
-    summary = esg_store.get_dashboard_data(target_id)
+    include_local_data = (
+        role in (
+            "project_supervisor", "project_admin",
+            "bu_supervisor", "bu_esg_manager", "bu_admin",
+            "subsidiary_supervisor", "subsidiary_esg_manager", "subsidiary_admin",
+            "group_supervisor", "group_esg_manager", "group_admin",
+        )
+        and target_id == caller_node["id"]
+    )
+    summary = esg_store.get_dashboard_data(
+        target_id,
+        include_node_data_id=target_id if include_local_data else None,
+    )
     summary["accessible_nodes"] = scoped_nodes
     return summary
 
@@ -414,7 +503,21 @@ def get_p6_lineage(
     caller_node = _resolve_caller_node(db, current_user)
     target_id = node_id or caller_node["id"]
     _assert_downward_access(caller_node, target_id)
-    return esg_store.get_lineage_breakdown(target_id, kpi)
+    role = _role_str(current_user)
+    include_local_data = (
+        role in (
+            "project_supervisor", "project_admin",
+            "bu_supervisor", "bu_esg_manager", "bu_admin",
+            "subsidiary_supervisor", "subsidiary_esg_manager", "subsidiary_admin",
+            "group_supervisor", "group_esg_manager", "group_admin",
+        )
+        and target_id == caller_node["id"]
+    )
+    return esg_store.get_lineage_breakdown(
+        target_id,
+        kpi,
+        include_node_data_id=target_id if include_local_data else None,
+    )
 
 
 @router.get("/rollup")
@@ -463,6 +566,7 @@ async def upload_field_evidence(
     # Only allow uploading for the caller's own node
     if node_id and node_id != caller_node["id"]:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Cannot upload evidence for another node.")
+    _ensure_report_editable(caller_node["id"], role)
 
     # Validate field ownership
     if field_id not in REGISTRY_BY_ID:
@@ -525,6 +629,7 @@ def detach_field_evidence(
     caller_node = _resolve_caller_node(db, current_user)
     if node_id != caller_node["id"]:
         raise HTTPException(status_code=403, detail="Can only detach evidence from your own node.")
+    _ensure_report_editable(node_id, _role_str(current_user))
     if field_id not in REGISTRY_BY_ID or REGISTRY_BY_ID[field_id]["ownerRole"] != _role_str(current_user):
         raise HTTPException(status_code=403, detail="Cannot detach evidence from this field.")
     removed = esg_store.remove_field_evidence(node_id, _role_str(current_user), field_id, fy_key, evidence_id)

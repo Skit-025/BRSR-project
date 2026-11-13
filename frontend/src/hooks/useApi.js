@@ -183,6 +183,8 @@ export const useWorkflowQueue = (opts) => {
   return useQuery({
     queryKey: ['workflow-queue'],
     queryFn: () => workflowApi.getQueue().then(r => r.data),
+    refetchInterval: 15000,
+    refetchOnWindowFocus: true,
     ...opts,
   });
 };

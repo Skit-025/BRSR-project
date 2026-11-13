@@ -93,7 +93,7 @@ export default function RoleESGForm() {
     loadAll();
   }, []);
 
-  const isReadOnly = statusObj?.status === 'submitted';
+  const isReadOnly = !['draft', 'rejected'].includes(statusObj?.status || 'draft');
 
   // ── Evidence helpers ──────────────────────────────────────────────────────
   const handleEvidenceUpload = async (fieldId, fyKey, file) => {

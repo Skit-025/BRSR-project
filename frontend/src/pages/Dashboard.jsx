@@ -55,21 +55,26 @@ export default function Dashboard() {
       setSelectedEntityId('');
     }
 
-    setLoading(true);
-    setErrorMsg('');
-    p6FormsApi
-      .getDashboard(entityToFetch)
-      .then((res) => {
-        if (active) setData(res.data);
-      })
-      .catch((err) => {
-        if (active) setErrorMsg(getFriendlyErrorMessage(err));
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
+    const loadDashboard = (initial = false) => {
+      if (initial) setLoading(true);
+      setErrorMsg('');
+      p6FormsApi
+        .getDashboard(entityToFetch)
+        .then((res) => {
+          if (active) setData(res.data);
+        })
+        .catch((err) => {
+          if (active) setErrorMsg(getFriendlyErrorMessage(err));
+        })
+        .finally(() => {
+          if (active && initial) setLoading(false);
+        });
+    };
+    loadDashboard(true);
+    const refreshTimer = window.setInterval(() => loadDashboard(false), 15000);
     return () => {
       active = false;
+      window.clearInterval(refreshTimer);
     };
   }, [selectedEntityId, user?.id, user?.role]);
 
@@ -188,6 +193,19 @@ export default function Dashboard() {
   const cards = data?.cards || {};
   const fy = data?.fy || { current: '2024-25', previous: '2023-24' };
   const hasData = !!data?.has_data;
+  const localReportStatus = data?.local_report_status?.status;
+  const dashboardStatusLabel = localReportStatus === 'submitted'
+    ? 'Submitted · awaiting verification'
+    : localReportStatus === 'rejected'
+      ? 'Returned for correction'
+      : localReportStatus === 'draft'
+        ? 'Draft project data'
+        : hasData ? 'Accepted Data Active' : 'Awaiting accepted data';
+  const dashboardStatusColor = localReportStatus === 'submitted' || localReportStatus === 'rejected'
+    ? '#B45309'
+    : localReportStatus === 'draft'
+      ? '#1D4ED8'
+      : hasData ? '#15803D' : '#64748B';
 
   // Ordered 2-column grid (left column: Energy, Scope 3, Waste; right column: GHG, Water, Coverage)
   // Rendered in CSS 2-column grid with gridAutoFlow: 'column' and 3 rows so left column is 1,2,3 and right column is 4,5,6
@@ -328,11 +346,11 @@ export default function Dashboard() {
 
           <span style={{
             padding: '5px 12px', borderRadius: 9999, fontSize: 12, fontWeight: 700,
-            background: hasData ? '#DCFCE7' : '#F1F5F9',
-            color: hasData ? '#15803D' : '#64748B',
-            border: `1px solid ${hasData ? '#BBF7D0' : '#E2E8F0'}`,
+            background: localReportStatus === 'submitted' || localReportStatus === 'rejected' ? '#FEF3C7' : localReportStatus === 'draft' ? '#DBEAFE' : hasData ? '#DCFCE7' : '#F1F5F9',
+            color: dashboardStatusColor,
+            border: `1px solid ${localReportStatus === 'submitted' || localReportStatus === 'rejected' ? '#FDE68A' : localReportStatus === 'draft' ? '#BFDBFE' : hasData ? '#BBF7D0' : '#E2E8F0'}`,
           }}>
-            {hasData ? 'Accepted Data Active' : 'Awaiting accepted data'}
+            {dashboardStatusLabel}
           </span>
         </div>
       </div>

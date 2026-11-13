@@ -1841,7 +1841,7 @@ export default function DataEntry() {
   const activePeriod = periods.find(p => p.id === selectedPeriod);
 
   // ── Fetch scoped form from API ──────────────────────────────────────────
-  const { data: form, isLoading: formLoading, refetch: refetchForm } = useScopedForm(selectedPeriod, selectedEntity);
+  const { data: form, isLoading: formLoading, isError: formLoadFailed, error: formLoadError, refetch: refetchForm } = useScopedForm(selectedPeriod, selectedEntity);
 
   // ── Local state for field values ────────────────────────────────────────
   const [values, setValues] = useState({});
@@ -1946,7 +1946,11 @@ export default function DataEntry() {
     }
     setReviewing(true);
     try {
-      await workflowApi.review(subId, { decision, comments: reviewComment.trim() || undefined });
+      await workflowApi.review(subId, {
+        decision: decision === "approve" ? "APPROVE" : "RETURN",
+        reviewer_id: user.id,
+        comment: reviewComment.trim() || undefined,
+      });
       setNotice({
         type: "success",
         msg: decision === "approve" ? "Submission approved and forwarded to BU!" : "Submission returned to Project Supervisor with comments.",
@@ -2000,8 +2004,10 @@ export default function DataEntry() {
       const savedId = res?.data?.id || res?.id || res?.data?.submission_id;
       if (savedId) setActiveSubmissionId(savedId);
       setNotice({ type: "success", msg: "Draft saved successfully." });
+      return savedId || null;
     } catch (e) {
       setNotice({ type: "error", msg: e?.response?.data?.detail || "Save failed." });
+      return null;
     } finally {
       setSaving(false);
       setTimeout(() => setNotice(null), 3000);
@@ -2054,20 +2060,16 @@ export default function DataEntry() {
 
   const handleConfirmSubmit = async () => {
     setShowPreSubmitModal(false);
-    // Ensure we have a submission ID — if not, save first to create one
-    const submissionId = form?.submission_id || activeSubmissionId;
+    // Use the awaited save result because React state updates are asynchronous.
+    let submissionId = form?.submission_id || activeSubmissionId;
+    if (!submissionId) submissionId = await handleSave();
     if (!submissionId) {
-      await handleSave();
+      setNotice({ type: "error", msg: "Could not save this report. Please retry before submitting." });
+      return;
     }
     setSubmitting(true);
     try {
-      // Use whichever submission ID we have — prefer the freshly saved one
-      const finalId = form?.submission_id || activeSubmissionId;
-      if (!finalId) {
-        setNotice({ type: "error", msg: "Could not resolve submission. Please save again and retry." });
-        return;
-      }
-      await submitPack(finalId);
+      await submitPack(submissionId);
       setSubmitted(true);
       setActiveSubmissionId(null);
       setNotice({ type: "success", msg: "Submission sent for BU review!" });
@@ -2342,6 +2344,14 @@ export default function DataEntry() {
             <p style={{ color: "#64748b", fontSize: 13 }}>
               Loading applicable ESG parameters for this project…
             </p>
+          </div>
+        )}
+
+        {!formLoading && formLoadFailed && (
+          <div role="alert" style={{ padding: "16px 20px", marginBottom: 16, borderRadius: 10, background: "#fef2f2", border: "1px solid #fecaca", color: "#991b1b" }}>
+            <strong>Could not load this project’s reporting data.</strong>{" "}
+            {formLoadError?.response?.data?.detail || formLoadError?.message || "Please retry."}{" "}
+            <button type="button" onClick={() => refetchForm()} style={{ marginLeft: 8, padding: "5px 10px", border: "1px solid #fca5a5", borderRadius: 6, background: "#fff", color: "#991b1b", cursor: "pointer" }}>Retry</button>
           </div>
         )}
 

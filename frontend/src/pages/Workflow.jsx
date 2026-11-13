@@ -16,6 +16,7 @@ import { workflowApi, collectionApi } from '../api/client';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../context/AuthContext';
 import PageHelpButton from '../components/PageHelpButton';
+import WorkflowP6Queue from './WorkflowP6Queue';
 
 const STATUS_STYLES = {
   DRAFT:                   { label: 'Draft',               color: '#475569', bg: '#f1f5f9' },
@@ -100,7 +101,7 @@ export default function Workflow() {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const { user } = useAuth();
-  const { data: queue = [], isLoading, refetch, isRefetching } = useWorkflowQueue();
+  const { data: queue = [], isLoading, isError: queueLoadFailed, error: queueLoadError, refetch, isRefetching } = useWorkflowQueue();
   const reviewMutation = useReviewSubmission();
 
   const [selected, setSelected]           = useState(null);
@@ -109,6 +110,7 @@ export default function Workflow() {
   const [lockingPeriod, setLockingPeriod] = useState('');
   const [notice, setNotice]               = useState(null);
   const [activeTab, setActiveTab]         = useState('queue');
+  const [workflowSource, setWorkflowSource] = useState('p6');
   const [packDetail, setPackDetail]       = useState(null);  // loaded data points for selected pack
   const [loadingDetail, setLoadingDetail] = useState(false);
 
@@ -248,6 +250,15 @@ export default function Workflow() {
         <span style={{ color: '#cbd5e1' }}>/</span>
         <span>FOUR-EYES MAKER-CHECKER SOD ENFORCED</span>
       </div>
+
+      {activeTab === 'queue' && (
+        <div role="tablist" aria-label="Review queue source" style={{ display: 'flex', gap: 8, margin: '0 0 14px' }}>
+          <button type="button" role="tab" aria-selected={workflowSource === 'p6'} onClick={() => setWorkflowSource('p6')} className="btn btn-secondary" style={{ borderColor: workflowSource === 'p6' ? '#4f46e5' : '#e2e8f0', background: workflowSource === 'p6' ? '#eef2ff' : '#fff' }}>Site Operations (P6)</button>
+          <button type="button" role="tab" aria-selected={workflowSource === 'database'} onClick={() => setWorkflowSource('database')} className="btn btn-secondary" style={{ borderColor: workflowSource === 'database' ? '#4f46e5' : '#e2e8f0', background: workflowSource === 'database' ? '#eef2ff' : '#fff' }}>Other Submission Packs</button>
+        </div>
+      )}
+
+      {activeTab === 'queue' && workflowSource === 'p6' && <WorkflowP6Queue user={user} />}
 
       {/* Header */}
       <div style={{ display: activeTab === 'queue' ? 'none' : 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
@@ -499,7 +510,7 @@ export default function Workflow() {
       )}
 
       {/* ── REVIEW QUEUE TAB ──────────────────────────────────────── */}
-      {activeTab === 'queue' && (
+      {activeTab === 'queue' && workflowSource === 'database' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           {/* Queue Table */}
           <div style={{ background: 'var(--bg-card)', borderRadius: '12px', border: '1px solid var(--border-default)', overflowX: 'auto' }}>
@@ -522,7 +533,12 @@ export default function Workflow() {
                 </tr>
               </thead>
               <tbody>
-                {isLoading ? (
+                {queueLoadFailed ? (
+                  <tr><td colSpan={7} style={{ textAlign: 'center', padding: '40px', color: '#b91c1c' }}>
+                    Could not fetch the review queue: {queueLoadError?.response?.data?.detail || queueLoadError?.message || 'Request failed.'}{' '}
+                    <button type="button" onClick={() => refetch()} style={{ marginLeft: 8, padding: '5px 10px', border: '1px solid #cbd5e1', borderRadius: 6, background: '#fff', cursor: 'pointer' }}>Retry</button>
+                  </td></tr>
+                ) : isLoading ? (
                   <tr><td colSpan={7} style={{ textAlign: 'center', padding: '40px', color: 'var(--text-secondary)' }}>Loading review queue…</td></tr>
                 ) : queue.length === 0 ? (
                   <tr>

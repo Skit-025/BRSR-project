@@ -68,7 +68,7 @@
   "statuses": {
     "PRJ-ZOJILA-P7": {
       "project_supervisor": {
-        "status": "accepted",
+        "status": "submitted",
         "reason": null
       },
       "project_admin": {
@@ -1918,6 +1918,217 @@
       "created_at": "2026-11-13T00:21:35.014481+00:00",
       "revision": null,
       "snapshot": null
+    },
+    {
+      "node_id": "PRJ-ZOJILA-P7",
+      "owner_role": "project_supervisor",
+      "event": "submitted",
+      "actor_id": "c9535af5-f72f-4a0d-8e8e-f71c2d229212",
+      "actor_name": "Ravi Kumar (Site Engineer - Project Supervisor)",
+      "created_at": "2026-11-13T01:50:14.292590+00:00",
+      "revision": 1,
+      "snapshot": {
+        "ei1_ren_elec": {
+          "current": 4200.0,
+          "previous": 3600.0
+        },
+        "ei1_ren_fuel": {
+          "current": 850.0,
+          "previous": 700.0
+        },
+        "ei1_ren_other": {
+          "current": 150.0,
+          "previous": 120.0
+        },
+        "ei1_nonren_elec": {
+          "current": 18500.0,
+          "previous": 19200.0
+        },
+        "ei1_nonren_fuel": {
+          "current": 24000.0,
+          "previous": 25500.0
+        },
+        "ei1_nonren_other": {
+          "current": 600.0,
+          "previous": 650.0
+        },
+        "ei3_surface": {
+          "current": 32000.0,
+          "previous": 34000.0
+        },
+        "ei3_groundwater": {
+          "current": 8500.0,
+          "previous": 9100.0
+        },
+        "ei3_third_party": {
+          "current": 4200.0,
+          "previous": 4000.0
+        },
+        "ei3_seawater": {
+          "current": 0.0,
+          "previous": 0.0
+        },
+        "ei3_others": {
+          "current": 1100.0,
+          "previous": 950.0
+        },
+        "ei3_water_consumption": {
+          "current": 38400.0,
+          "previous": 40200.0
+        },
+        "li2_surface_no": {
+          "current": 0.0,
+          "previous": 0.0
+        },
+        "li2_surface_primary": {
+          "current": 1200.0,
+          "previous": 1400.0
+        },
+        "li2_surface_secondary": {
+          "current": 2800.0,
+          "previous": 2600.0
+        },
+        "li2_surface_tertiary": {
+          "current": 1900.0,
+          "previous": 1700.0
+        },
+        "li2_ground_no": {
+          "current": 0.0,
+          "previous": 0.0
+        },
+        "li2_ground_primary": {
+          "current": 0.0,
+          "previous": 0.0
+        },
+        "li2_ground_secondary": {
+          "current": 400.0,
+          "previous": 450.0
+        },
+        "li2_ground_tertiary": {
+          "current": 300.0,
+          "previous": 250.0
+        },
+        "li2_sea_no": {
+          "current": 0.0,
+          "previous": 0.0
+        },
+        "li2_sea_primary": {
+          "current": 0.0,
+          "previous": 0.0
+        },
+        "li2_sea_secondary": {
+          "current": 0.0,
+          "previous": 0.0
+        },
+        "li2_sea_tertiary": {
+          "current": 0.0,
+          "previous": 0.0
+        },
+        "li2_third_no": {
+          "current": 0.0,
+          "previous": 0.0
+        },
+        "li2_third_primary": {
+          "current": 200.0,
+          "previous": 220.0
+        },
+        "li2_third_secondary": {
+          "current": 450.0,
+          "previous": 480.0
+        },
+        "li2_third_tertiary": {
+          "current": 150.0,
+          "previous": 140.0
+        },
+        "li2_other_no": {
+          "current": 0.0,
+          "previous": 0.0
+        },
+        "li2_other_primary": {
+          "current": 0.0,
+          "previous": 0.0
+        },
+        "li2_other_secondary": {
+          "current": 0.0,
+          "previous": 0.0
+        },
+        "li2_other_tertiary": {
+          "current": 0.0,
+          "previous": 0.0
+        },
+        "li3_water_stressed": {
+          "current": "No",
+          "previous": "No"
+        },
+        "li3_area_name": {
+          "current": "Sindh Nallah Basin (Non-Stressed)",
+          "previous": "Sindh Nallah Basin (Non-Stressed)"
+        },
+        "ei6_scope1": {
+          "current": 1820.5,
+          "previous": 1940.0
+        },
+        "ei6_scope2": {
+          "current": 3910.2,
+          "previous": 4120.8
+        },
+        "ei8_plastic": {
+          "current": 14.2,
+          "previous": 15.8
+        },
+        "ei8_ewaste": {
+          "current": 1.8,
+          "previous": 1.4
+        },
+        "ei8_biomedical": {
+          "current": 0.4,
+          "previous": 0.5
+        },
+        "ei8_cd": {
+          "current": 480.0,
+          "previous": 510.0
+        },
+        "ei8_battery": {
+          "current": 2.1,
+          "previous": 1.9
+        },
+        "ei8_radioactive": {
+          "current": 0.0,
+          "previous": 0.0
+        },
+        "ei8_other_haz": {
+          "current": 9.5,
+          "previous": 10.2
+        },
+        "ei8_other_nonhaz": {
+          "current": 86.0,
+          "previous": 91.5
+        },
+        "ei8_recycled": {
+          "current": 412.0,
+          "previous": 390.0
+        },
+        "ei8_reused": {
+          "current": 95.0,
+          "previous": 88.0
+        },
+        "ei8_other_recovery": {
+          "current": 18.0,
+          "previous": 15.0
+        },
+        "ei8_incineration": {
+          "current": 4.5,
+          "previous": 5.1
+        },
+        "ei8_landfilling": {
+          "current": 54.5,
+          "previous": 122.2
+        },
+        "ei8_other_disposal": {
+          "current": 10.0,
+          "previous": 11.0
+        }
+      }
     }
   ]
 }
