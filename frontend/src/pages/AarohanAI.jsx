@@ -1510,6 +1510,19 @@ function E2Result({ result }) {
   const severity = result.severity;
   const sevColor = { error: C.red, warning: C.amber, info: C.green }[severity] || C.slate;
   const reasons = result.reasons || [];
+  const reasonLabels = {
+    non_negative: ['Invalid negative value', 'This metric cannot be below zero.'],
+    unit_slip_1000x: ['Possible unit mismatch', 'The value is far above its historical level; check whether the unit was entered correctly.'],
+    robust_mad_zscore: ['Different from past readings', 'This value is unusually far from the typical historical readings.'],
+    constant_history_deviation: ['Change from a steady pattern', 'Past readings were nearly unchanged, but this value is different.'],
+    yoy_change_35_pct: ['Large change from previous reading', 'The value changed substantially compared with the previous period.'],
+    yoy_from_zero: ['Change from a zero baseline', 'The previous value was zero, so confirm this new reading and its source.'],
+    peer_iqr_outlier: ['Different from peer values', 'This value is outside the range of the peer readings supplied.'],
+    zero_incidents_high_hours: ['Safety records need review', 'Confirm that incident records are complete for the hours worked.'],
+    isolation_forest: ['Unusual historical pattern', 'The pattern differs from the supplied historical readings.'],
+  };
+  const explanationColor = severity === 'error' ? C.red : result.is_anomaly ? C.amber : C.green;
+  const explanationBg = severity === 'error' ? C.redLt : result.is_anomaly ? C.amberLt : C.greenLt;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -1519,13 +1532,22 @@ function E2Result({ result }) {
         <ResultCard title="Reasons" value={reasons.length} color={reasons.length > 0 ? C.red : C.slate} />
       </div>
 
+      <div style={{ padding: '14px 16px', borderRadius: 8, background: explanationBg, border: `1px solid ${sevColor}55`, color: C.ink, lineHeight: 1.65 }}>
+        <div style={{ fontSize: 13, fontWeight: 750, color: explanationColor, marginBottom: 4 }}>
+          {severity === 'error' ? 'Invalid value — correction required' : result.is_anomaly ? `Potential anomaly flagged (${severity || 'review'})` : 'No anomaly detected'}
+        </div>
+        <div style={{ fontSize: 13 }}>{result.interpretation || (result.is_anomaly
+          ? 'The checks found an unusual value. This is a review flag, not proof the data is wrong; verify the unit, period, and source evidence.'
+          : 'The checks did not find an unusual value in the information provided.')}</div>
+      </div>
+
       {reasons.length > 0 && (
         <>
-          <SectionTitle>Triggered Rules</SectionTitle>
+          <SectionTitle>Why it was flagged</SectionTitle>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {reasons.map((f, i) => (
               <div key={i} style={{ padding: '10px 14px', borderRadius: 8, background: C.redLt, border: `1px solid #FECACA`, fontSize: 13, color: C.red, display: 'flex', gap: 8 }}>
-                <span>{f.feature ? `${f.feature}: ` : ''}{f.message}</span>
+                <span><b>{reasonLabels[f.feature]?.[0] || 'Review signal'}:</b> {reasonLabels[f.feature]?.[1] || f.message}</span>
               </div>
             ))}
           </div>

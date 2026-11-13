@@ -86,6 +86,7 @@ class E2AnomalyResponse(BaseModel):
     reasons: List[AnomalyReason] = Field(default_factory=list)
     suggested_correction: Optional[float] = None
     layer_scores: Optional[Dict[str, float]] = Field(default_factory=dict)
+    interpretation: Optional[str] = Field(None, description="Plain-language result, reason, and recommended review action")
     is_fallback: bool = False
 
 
