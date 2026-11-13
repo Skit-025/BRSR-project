@@ -17,6 +17,14 @@ from app.data.p6_registry import P6_REGISTRY, REGISTRY_BY_ID, ROLE_NODE_TYPES
 
 DATA_FILE_PATH = Path(os.environ.get("ESG_DATA_FILE", Path(__file__).resolve().parent / "esgData.json"))
 _LOCK = threading.RLock()
+_NODE_ID_ALIASES = {"BU-TRANS": "BU-TRANSPORTATION"}
+
+
+def _canonical_node_id(node_id: Optional[str]) -> Optional[str]:
+    if node_id is None:
+        return None
+    raw_id = str(node_id)
+    return _NODE_ID_ALIASES.get(raw_id.upper(), raw_id)
 
 
 def load_data() -> Dict[str, Any]:
@@ -46,14 +54,16 @@ def ensure_node(node: Dict[str, Any]) -> Dict[str, Any]:
     with _LOCK:
         data = load_data()
         nodes = data.setdefault("nodes", [])
-        existing = next((item for item in nodes if str(item.get("id")) == str(node.get("id"))), None)
+        node_id = _canonical_node_id(node.get("id"))
+        parent_id = _canonical_node_id(node.get("parentId"))
+        existing = next((item for item in nodes if str(item.get("id")) == str(node_id)), None)
         if existing:
             return existing
         nodes.append({
-            "id": str(node["id"]),
+            "id": str(node_id),
             "name": node["name"],
             "type": node["type"],
-            "parentId": str(node["parentId"]) if node.get("parentId") else None,
+            "parentId": str(parent_id) if parent_id else None,
         })
         save_data(data)
         return nodes[-1]
@@ -64,7 +74,7 @@ def resolve_node(node_ref: Optional[str], fallback_role: Optional[str] = None, s
     if not nodes:
         return None
     if node_ref:
-        ref_str = str(node_ref).strip()
+        ref_str = str(_canonical_node_id(str(node_ref).strip()))
         for n in nodes:
             if str(n["id"]) == ref_str or str(n["id"]).lower() == ref_str.lower():
                 return n
@@ -83,6 +93,7 @@ def resolve_node(node_ref: Optional[str], fallback_role: Optional[str] = None, s
 
 
 def get_descendant_ids(node_id: str, include_self: bool = True) -> List[str]:
+    node_id = _canonical_node_id(node_id) or node_id
     nodes = get_nodes()
     by_parent: Dict[Optional[str], List[str]] = {}
     for n in nodes:
@@ -268,6 +279,8 @@ def rollup_node(
     - NONE fields: own node value only (or per-facility list for EI-5)
     Also computes LI-3 water-stressed totals (sum of EI-3 & LI-2 for sites where li3_water_stressed == 'Yes').
     """
+    node_id = _canonical_node_id(node_id) or node_id
+    include_node_data_id = _canonical_node_id(include_node_data_id)
     data = load_data()
     nodes_by_id = {n["id"]: n for n in data.get("nodes", [])}
     desc_ids = get_descendant_ids(node_id, include_self=True)
@@ -412,7 +425,10 @@ def rollup_node(
 def get_dashboard_data(
     node_id: Optional[str] = None,
     include_node_data_id: Optional[str] = None,
+    local_owner_role: Optional[str] = None,
 ) -> Dict[str, Any]:
+    node_id = _canonical_node_id(node_id)
+    include_node_data_id = _canonical_node_id(include_node_data_id)
     nodes = get_nodes()
     target_id = node_id or (nodes[0]["id"] if nodes else "MEIL-GROUP")
     rolled = rollup_node(
@@ -421,7 +437,7 @@ def get_dashboard_data(
         include_node_data_id=include_node_data_id,
     )
     local_node = next((node for node in get_nodes() if node["id"] == target_id), {})
-    local_owner_role = {
+    local_owner_role = local_owner_role or {
         "project": "project_supervisor", "site": "project_supervisor",
         "plant": "project_supervisor", "manufacturing": "project_supervisor",
         "bu": "bu_supervisor", "business_unit": "bu_supervisor",
@@ -607,43 +623,84 @@ def get_lineage_breakdown(
     kpi_key: str = "energy",
     include_node_data_id: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Returns per-node breakdown from esgData.json for the lineage drawer."""
+    """Return source-level values, hierarchy paths, submission events and linked evidence."""
+    node_id = _canonical_node_id(node_id) or node_id
+    include_node_data_id = _canonical_node_id(include_node_data_id)
     data = load_data()
     nodes_by_id = {n["id"]: n for n in data.get("nodes", [])}
     desc_ids = get_descendant_ids(node_id, include_self=True)
     entries = data.get("entries", {})
     statuses = data.get("statuses", {})
+    evidence_store = data.get("evidence", {})
+    metric_fields = {
+        "energy": ["ei1_ren_elec", "ei1_ren_fuel", "ei1_ren_other", "ei1_nonren_elec", "ei1_nonren_fuel", "ei1_nonren_other"],
+        "ghg": ["ei6_scope1", "ei6_scope2"],
+        "scope3": ["bu_li4_scope3"],
+        "water": ["ei3_surface", "ei3_groundwater", "ei3_third_party", "ei3_seawater", "ei3_others", "ei3_water_consumption"],
+        "waste": ["ei8_plastic", "ei8_ewaste", "ei8_biomedical", "ei8_cd", "ei8_battery", "ei8_radioactive", "ei8_other_haz", "ei8_other_nonhaz", "ei8_recycled", "ei8_reused", "ei8_other_recovery", "ei8_incineration", "ei8_landfilling", "ei8_other_disposal"],
+    }
+    rows: List[Dict[str, Any]] = []
+    audit = data.get("audit_log", [])
+    fy = data.get("fy", {})
+    def hierarchy_path(nid: str) -> List[Dict[str, str]]:
+        path, seen, current = [], set(), nid
+        while current and current not in seen:
+            seen.add(current)
+            node = nodes_by_id.get(current)
+            if not node:
+                break
+            path.append({"id": str(current), "name": node.get("name", str(current)), "type": node.get("type", "unknown")})
+            current = node.get("parentId")
+        return list(reversed(path))
 
-    rows = []
     for nid in desc_ids:
         n = nodes_by_id.get(nid, {"id": nid, "name": nid, "type": "unknown"})
         role_used = "bu_supervisor" if kpi_key == "scope3" else "project_supervisor"
         entry_status = statuses.get(nid, {}).get(role_used, {}).get("status", "draft")
         if entry_status != "accepted" and nid != include_node_data_id:
             continue
-        ps = entries.get(nid, {}).get("project_supervisor", {})
-        bs = entries.get(nid, {}).get("bu_supervisor", {})
+        source_entries = entries.get(nid, {}).get(role_used, {})
+        if not source_entries:
+            continue
         val = None
         unit = ""
         if kpi_key == "energy":
-            val = compute_energy_totals(ps, "current")["grand_total"]
+            val = compute_energy_totals(source_entries, "current")["grand_total"]
             unit = "GJ"
         elif kpi_key == "ghg":
-            s1 = _num_or_none((ps.get("ei6_scope1") or {}).get("current"))
-            s2 = _num_or_none((ps.get("ei6_scope2") or {}).get("current"))
+            s1 = _num_or_none((source_entries.get("ei6_scope1") or {}).get("current"))
+            s2 = _num_or_none((source_entries.get("ei6_scope2") or {}).get("current"))
             val = _sum_optional([s1, s2])
             unit = "tCO2e"
         elif kpi_key == "scope3":
-            val = _num_or_none((bs.get("bu_li4_scope3") or {}).get("current"))
+            val = _num_or_none((source_entries.get("bu_li4_scope3") or {}).get("current"))
             unit = "tCO2e"
         elif kpi_key == "water":
-            val = compute_water_totals(ps, "current")["withdrawal_total"]
+            val = compute_water_totals(source_entries, "current")["withdrawal_total"]
             unit = "kL"
         elif kpi_key == "waste":
-            val = compute_waste_totals(ps, "current")["generated_total"]
+            val = compute_waste_totals(source_entries, "current")["generated_total"]
             unit = "MT"
 
         if val is not None:
+            relevant_fields = metric_fields.get(kpi_key, [])
+            field_values = []
+            linked_evidence = []
+            for fid in relevant_fields:
+                value_obj = source_entries.get(fid)
+                if value_obj is None:
+                    continue
+                field_values.append({"field_id": fid, "current": value_obj.get("current"), "previous": value_obj.get("previous")})
+                for ev in evidence_store.get(nid, {}).get(role_used, {}).get(fid, {}).get("current", []):
+                    linked_evidence.append({
+                        "filename": ev.get("file_name"), "sha256": ev.get("sha256"),
+                        "evidence_id": ev.get("evidence_id"), "evidence_display_id": ev.get("evidence_display_id"),
+                        "field_id": fid, "node_id": nid, "node_name": n.get("name", nid),
+                        "uploaded_at": ev.get("uploaded_at"),
+                    })
+            latest_submission = next((event for event in reversed(audit)
+                if event.get("node_id") == nid and event.get("owner_role") == role_used
+                and event.get("event") == "submitted"), None)
             rows.append({
                 "node_id": nid,
                 "node_name": n["name"],
@@ -651,9 +708,17 @@ def get_lineage_breakdown(
                 "status": entry_status,
                 "value": val,
                 "unit": unit,
+                "source_role": role_used,
+                "source_is_mock": bool(n.get("is_mock")) or any(bool(v.get("_sample")) for v in source_entries.values() if isinstance(v, dict)),
+                "source_path": hierarchy_path(nid),
+                "submitted_by": latest_submission.get("actor_name") if latest_submission else None,
+                "submitted_at": latest_submission.get("created_at") if latest_submission else None,
+                "source_fields": field_values,
+                "evidence": linked_evidence,
             })
 
-    return {"node_id": node_id, "kpi": kpi_key, "fy": data.get("fy"), "contributions": rows}
+    return {"node_id": node_id, "kpi": kpi_key, "fy": fy, "contributions": rows,
+            "total": _sum_optional([_num_or_none(row.get("value")) for row in rows])}
 
 
 # ── Evidence attachment helpers ───────────────────────────────────────────────

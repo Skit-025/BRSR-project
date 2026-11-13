@@ -843,8 +843,12 @@ function E2Form({ onRun, loading }) {
 
   const handleRun = () => {
     if (!currentValue || !Number.isFinite(Number(currentValue))) return;
-    const history = [h1, h2, h3, h4].map(Number).filter(Boolean);
-    const peers = [p1, p2, p3].map(Number).filter(Boolean);
+    const parseOptionalNumbers = (values) => values
+      .filter((value) => value !== '' && value !== null && value !== undefined)
+      .map(Number)
+      .filter(Number.isFinite);
+    const history = parseOptionalNumbers([h1, h2, h3, h4]);
+    const peers = parseOptionalNumbers([p1, p2, p3]);
     onRun({
       metric_code: metricCode,
       current_value: Number(currentValue),

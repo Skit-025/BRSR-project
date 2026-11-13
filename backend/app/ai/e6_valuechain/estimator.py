@@ -20,7 +20,9 @@ Two-layer architecture:
 import uuid
 import json
 import logging
+import math
 from typing import Optional
+from fastapi import HTTPException
 
 from app.ai.schemas import E6ValueChainRequest, E6ValueChainResponse
 from app.ai.e6_valuechain.classifier import classify_work_category, PROXY_FACTORS
@@ -148,22 +150,25 @@ class ValueChainEstimator:
 
         # ── Layer 1: Deterministic formula ────────────────────────────────────
         matched = classify_work_category(req.work_category)
+        if matched is None:
+            raise HTTPException(status_code=422, detail="Unsupported work category; choose a recognized activity before estimating.")
+        unit_key = " ".join(req.billed_unit.lower().strip().replace("_", " ").split())
+        multiplier = matched["accepted_units"].get(unit_key)
+        if multiplier is None:
+            raise HTTPException(status_code=422, detail=f"Unit '{req.billed_unit}' is incompatible with {matched['category']}; expected {matched['unit']}.")
+        if not math.isfinite(req.billed_quantity) or req.billed_quantity < 0:
+            raise HTTPException(status_code=422, detail="Billed quantity must be finite and non-negative.")
         factor = matched["factor"]
         factor_unit = matched["unit"]
         matched_category = matched.get("category", "civil_works")
 
-        formula_estimate = round(req.billed_quantity * factor, 4)
+        normalized_quantity = req.billed_quantity * multiplier
+        formula_estimate = round(normalized_quantity * factor, 4)
 
         # ── Layer 2: LLM validation & enrichment ──────────────────────────────
-        llm_result = _call_llm_validation(
-            work_category=req.work_category,
-            billed_quantity=req.billed_quantity,
-            billed_unit=req.billed_unit,
-            formula_factor=factor,
-            formula_factor_unit=factor_unit,
-            formula_estimate=formula_estimate,
-            matched_category=matched_category,
-        )
+        # Keep the figure deterministic and auditable. The current LLM catalogue
+        # contains unverified proxy factors, so it must not validate or adjust totals.
+        llm_result = None
 
         # ── Assemble response ─────────────────────────────────────────────────
         llm_validated = llm_result is not None and bool(llm_result.get("validated"))
@@ -176,7 +181,8 @@ class ValueChainEstimator:
 
         # Confidence: LLM-informed if available, else conservative formula-only value
         # Determine effective estimate: if LLM validated and adjusted with a better factor, apply the adjustment
-        effective_estimate = llm_adjusted if (llm_validated and llm_adjusted is not None and abs(llm_adjusted - formula_estimate) > 0.0001) else formula_estimate
+        # Model output is advisory only; only the deterministic, unit-checked result is reportable.
+        effective_estimate = formula_estimate
 
         if llm_validated:
             formula_ok = llm_result.get("formula_is_appropriate", True)
@@ -191,7 +197,7 @@ class ValueChainEstimator:
             proxy_factor_unit=factor_unit,
             estimated_emissions_tco2e=effective_estimate,
             confidence=confidence,
-            is_fallback=False,
+            is_fallback=not llm_validated,
             # LLM layer
             llm_validated=llm_validated,
             llm_adjusted_tco2e=llm_adjusted,

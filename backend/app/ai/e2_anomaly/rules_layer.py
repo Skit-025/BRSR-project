@@ -27,9 +27,10 @@ def run_rules_layer(value: float, history: List[float], metric_code: str, extra_
         ))
 
     # Rule 2: Unit-slip detection (>500x median = likely wrong unit)
-    if history:
+    finite_history = [x for x in history if isinstance(x, (int, float)) and __import__("math").isfinite(x)]
+    if finite_history:
         import numpy as np
-        hist_median = float(np.median(history))
+        hist_median = float(np.median(finite_history))
         if hist_median > 0:
             multiple = value / hist_median
             if multiple > 500:
@@ -43,7 +44,7 @@ def run_rules_layer(value: float, history: List[float], metric_code: str, extra_
     # Rule 3: Cross-metric plausibility — zero incidents on very high man-hours
     if "man_hours" in extra_context:
         mh = extra_context["man_hours"]
-        if mh > 100_000 and value == 0 and "SAFE" in metric_code:
+        if isinstance(mh, (int, float)) and mh > 100_000 and value == 0 and "SAFE" in metric_code:
             score = max(score, 0.5)
             reasons.append(AnomalyReason(
                 feature="zero_incidents_high_hours",

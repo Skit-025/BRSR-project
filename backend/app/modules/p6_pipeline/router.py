@@ -488,6 +488,7 @@ def get_p6_dashboard(
     summary = esg_store.get_dashboard_data(
         target_id,
         include_node_data_id=target_id if include_local_data else None,
+        local_owner_role=role,
     )
     summary["accessible_nodes"] = scoped_nodes
     return summary

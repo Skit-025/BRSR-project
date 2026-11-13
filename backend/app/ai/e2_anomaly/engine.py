@@ -3,6 +3,8 @@ E2 Engine: Main Orchestrator
 Runs all 4 anomaly layers sequentially and combines scores.
 """
 import uuid
+import math
+from fastapi import HTTPException
 from app.ai.schemas import E2AnomalyRequest, E2AnomalyResponse
 from app.ai.e2_anomaly.rules_layer import run_rules_layer
 from app.ai.e2_anomaly.robust_stats import run_robust_stats_layer
@@ -18,6 +20,11 @@ class AnomalyEngine:
     """
 
     def evaluate(self, req: E2AnomalyRequest, db_session=None) -> E2AnomalyResponse:
+        numbers = [req.current_value, *(req.history or []), *(req.peer_values or [])]
+        if any(not math.isfinite(float(value)) for value in numbers):
+            raise HTTPException(status_code=422, detail="Anomaly inputs must contain finite numeric values.")
+        if any(not math.isfinite(float(value)) for value in (req.extra_context or {}).values() if isinstance(value, (int, float))):
+            raise HTTPException(status_code=422, detail="Anomaly context values must be finite.")
         run_id = str(uuid.uuid4())
 
         # Run each layer independently
@@ -58,7 +65,7 @@ class AnomalyEngine:
                 "L3_peer_benchmark": round(l3_score, 3),
                 "L4_isolation_forest": round(l4_score, 3),
             },
-            is_fallback=False
+            is_fallback=len(req.history or []) < 3 or len(req.peer_values or []) < 3
         )
 
 

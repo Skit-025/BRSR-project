@@ -982,6 +982,7 @@ export default function Dashboard() {
       <DataLineageDrawer
         isOpen={lineageOpen}
         onClose={() => setLineageOpen(false)}
+        onSelectNode={(nodeId) => { setSelectedEntityId(nodeId); setLineageOpen(false); }}
         metricCode={selectedKpi}
         periodId={data?.node?.id}
       />

@@ -17,22 +17,16 @@
       "parentId": "MEIL-GROUP"
     },
     {
-      "id": "BU-TRANS",
-      "name": "Transportation & Tunneling Business Unit",
-      "type": "bu",
-      "parentId": "MEGHA-ROAD-TRANS"
-    },
-    {
       "id": "PRJ-ZOJILA-P7",
       "name": "Tunnel Project P7 (Zojila Tunnel)",
       "type": "project",
-      "parentId": "BU-TRANS"
+      "parentId": "BU-TRANSPORTATION"
     },
     {
       "id": "PRJ-HWY-001",
       "name": "Highway Asphalt & Batching Plant P-001",
       "type": "plant",
-      "parentId": "BU-TRANS"
+      "parentId": "BU-TRANSPORTATION"
     },
     {
       "id": "BU-INFRA",
@@ -63,12 +57,25 @@
       "name": "Telangana 250 MW Solar & Substation EPC",
       "type": "project",
       "parentId": "BU-POWER"
+    },
+    {
+      "id": "BU-TRANSPORTATION",
+      "name": "Transportation & Tunneling Business Unit",
+      "type": "business_unit",
+      "parentId": "MEGHA-ROAD-TRANS"
+    },
+    {
+      "id": "MOCK-PRJ-TRANS-02",
+      "name": "Demo Access Road Package 2 (Mock)",
+      "type": "project",
+      "parentId": "BU-TRANSPORTATION",
+      "is_mock": true
     }
   ],
   "statuses": {
     "PRJ-ZOJILA-P7": {
       "project_supervisor": {
-        "status": "submitted",
+        "status": "accepted",
         "reason": null
       },
       "project_admin": {
@@ -78,20 +85,10 @@
     },
     "PRJ-HWY-001": {
       "project_supervisor": {
-        "status": "submitted",
+        "status": "accepted",
         "reason": null
       },
       "project_admin": {
-        "status": "accepted",
-        "reason": null
-      }
-    },
-    "BU-TRANS": {
-      "bu_supervisor": {
-        "status": "accepted",
-        "reason": null
-      },
-      "bu_admin": {
         "status": "accepted",
         "reason": null
       }
@@ -158,10 +155,27 @@
     },
     "PRJ-SOLAR-003": {
       "project_supervisor": {
-        "status": "submitted",
+        "status": "accepted",
         "reason": null
       },
       "project_admin": {
+        "status": "accepted",
+        "reason": null
+      }
+    },
+    "MOCK-PRJ-TRANS-02": {
+      "project_supervisor": {
+        "status": "accepted",
+        "reason": null,
+        "is_mock": true
+      }
+    },
+    "BU-TRANSPORTATION": {
+      "bu_supervisor": {
+        "status": "accepted",
+        "reason": null
+      },
+      "bu_admin": {
         "status": "accepted",
         "reason": null
       }
@@ -779,62 +793,6 @@
             }
           ],
           "previous": [],
-          "_sample": true
-        }
-      }
-    },
-    "BU-TRANS": {
-      "bu_supervisor": {
-        "bu_li4_scope3": {
-          "current": 6420.0,
-          "previous": 6890.0,
-          "_sample": true
-        },
-        "bu_li8_adverse_impact": {
-          "current": "High embodied carbon in cement/bitumen haulage; mitigated via regional sourcing within 150 km and electric mixer fleet pilots.",
-          "previous": "Regional aggregate sourcing initiated.",
-          "_sample": true
-        },
-        "bu_li9_vc_assessed_pct": {
-          "current": 68.5,
-          "previous": 54.0,
-          "_sample": true
-        }
-      },
-      "bu_admin": {
-        "bu_ei2_pat_applicable": {
-          "current": "No",
-          "previous": "No",
-          "_sample": true
-        },
-        "bu_ei2_targets_achieved": {
-          "current": "No",
-          "previous": "No",
-          "_sample": true
-        },
-        "bu_ei2_remedial_action": {
-          "current": "Not a Designated Consumer under BEE PAT Cycle; voluntary energy audits conducted annually.",
-          "previous": "Voluntary energy audits completed.",
-          "_sample": true
-        },
-        "bu_ei4_zld_implemented": {
-          "current": "Yes",
-          "previous": "Yes",
-          "_sample": true
-        },
-        "bu_ei4_zld_details": {
-          "current": "Zero Liquid Discharge implemented at 100% of batching plants and tunnel portals via closed-loop settling tanks and STP reuse.",
-          "previous": "Implemented across 85% of sites.",
-          "_sample": true
-        },
-        "bu_ei9_waste_strategy": {
-          "current": "100% segregation at source; hazardous waste oil & batteries routed strictly through SPCB-authorized recyclers; C&D muck reused for embankment fill.",
-          "previous": "Source segregation and authorized disposal active.",
-          "_sample": true
-        },
-        "bu_li7_bcp_plan": {
-          "current": "ISO 22301-aligned Emergency Preparedness & Disaster Management Plan covering flash floods, landslides, and fuel spills.",
-          "previous": "Site emergency drills conducted quarterly.",
           "_sample": true
         }
       }
@@ -1892,6 +1850,206 @@
           "_sample": true
         }
       }
+    },
+    "MOCK-PRJ-TRANS-02": {
+      "project_supervisor": {
+        "ei1_ren_elec": {
+          "current": 5800,
+          "previous": 5100,
+          "_sample": true
+        },
+        "ei1_ren_fuel": {
+          "current": 900,
+          "previous": 820,
+          "_sample": true
+        },
+        "ei1_ren_other": {
+          "current": 200,
+          "previous": 180,
+          "_sample": true
+        },
+        "ei1_nonren_elec": {
+          "current": 21400,
+          "previous": 22600,
+          "_sample": true
+        },
+        "ei1_nonren_fuel": {
+          "current": 23500,
+          "previous": 24800,
+          "_sample": true
+        },
+        "ei1_nonren_other": {
+          "current": 600,
+          "previous": 650,
+          "_sample": true
+        },
+        "ei3_surface": {
+          "current": 23600,
+          "previous": 24800,
+          "_sample": true
+        },
+        "ei3_groundwater": {
+          "current": 7400,
+          "previous": 7900,
+          "_sample": true
+        },
+        "ei3_third_party": {
+          "current": 3200,
+          "previous": 3000,
+          "_sample": true
+        },
+        "ei3_seawater": {
+          "current": 0,
+          "previous": 0,
+          "_sample": true
+        },
+        "ei3_others": {
+          "current": 700,
+          "previous": 650,
+          "_sample": true
+        },
+        "ei3_water_consumption": {
+          "current": 27500,
+          "previous": 28800,
+          "_sample": true
+        },
+        "ei6_scope1": {
+          "current": 3650,
+          "previous": 3890,
+          "_sample": true
+        },
+        "ei6_scope2": {
+          "current": 4720,
+          "previous": 4980,
+          "_sample": true
+        },
+        "ei8_plastic": {
+          "current": 10.5,
+          "previous": 11.2,
+          "_sample": true
+        },
+        "ei8_ewaste": {
+          "current": 1.1,
+          "previous": 1.0,
+          "_sample": true
+        },
+        "ei8_biomedical": {
+          "current": 0,
+          "previous": 0,
+          "_sample": true
+        },
+        "ei8_cd": {
+          "current": 2380,
+          "previous": 2520,
+          "_sample": true
+        },
+        "ei8_battery": {
+          "current": 1.8,
+          "previous": 2.0,
+          "_sample": true
+        },
+        "ei8_radioactive": {
+          "current": 0,
+          "previous": 0,
+          "_sample": true
+        },
+        "ei8_other_haz": {
+          "current": 3.4,
+          "previous": 3.8,
+          "_sample": true
+        },
+        "ei8_other_nonhaz": {
+          "current": 185,
+          "previous": 192,
+          "_sample": true
+        },
+        "ei8_recycled": {
+          "current": 1560,
+          "previous": 1640,
+          "_sample": true
+        },
+        "ei8_reused": {
+          "current": 720,
+          "previous": 760,
+          "_sample": true
+        },
+        "ei8_other_recovery": {
+          "current": 85,
+          "previous": 80,
+          "_sample": true
+        },
+        "ei8_incineration": {
+          "current": 8,
+          "previous": 9,
+          "_sample": true
+        },
+        "ei8_landfilling": {
+          "current": 132,
+          "previous": 140,
+          "_sample": true
+        },
+        "ei8_other_disposal": {
+          "current": 22,
+          "previous": 24,
+          "_sample": true
+        }
+      }
+    },
+    "BU-TRANSPORTATION": {
+      "bu_supervisor": {
+        "bu_li4_scope3": {
+          "current": 6420.0,
+          "previous": 6890.0,
+          "_sample": true
+        },
+        "bu_li8_adverse_impact": {
+          "current": "High embodied carbon in cement/bitumen haulage; mitigated via regional sourcing within 150 km and electric mixer fleet pilots.",
+          "previous": "Regional aggregate sourcing initiated.",
+          "_sample": true
+        },
+        "bu_li9_vc_assessed_pct": {
+          "current": 68.5,
+          "previous": 54.0,
+          "_sample": true
+        }
+      },
+      "bu_admin": {
+        "bu_ei2_pat_applicable": {
+          "current": "No",
+          "previous": "No",
+          "_sample": true
+        },
+        "bu_ei2_targets_achieved": {
+          "current": "No",
+          "previous": "No",
+          "_sample": true
+        },
+        "bu_ei2_remedial_action": {
+          "current": "Not a Designated Consumer under BEE PAT Cycle; voluntary energy audits conducted annually.",
+          "previous": "Voluntary energy audits completed.",
+          "_sample": true
+        },
+        "bu_ei4_zld_implemented": {
+          "current": "Yes",
+          "previous": "Yes",
+          "_sample": true
+        },
+        "bu_ei4_zld_details": {
+          "current": "Zero Liquid Discharge implemented at 100% of batching plants and tunnel portals via closed-loop settling tanks and STP reuse.",
+          "previous": "Implemented across 85% of sites.",
+          "_sample": true
+        },
+        "bu_ei9_waste_strategy": {
+          "current": "100% segregation at source; hazardous waste oil & batteries routed strictly through SPCB-authorized recyclers; C&D muck reused for embankment fill.",
+          "previous": "Source segregation and authorized disposal active.",
+          "_sample": true
+        },
+        "bu_li7_bcp_plan": {
+          "current": "ISO 22301-aligned Emergency Preparedness & Disaster Management Plan covering flash floods, landslides, and fuel spills.",
+          "previous": "Site emergency drills conducted quarterly.",
+          "_sample": true
+        }
+      }
     }
   },
   "evidence": {
@@ -1906,7 +2064,8 @@
           "current": []
         }
       }
-    }
+    },
+    "BU-TRANSPORTATION": {}
   },
   "audit_log": [
     {
@@ -2129,6 +2288,53 @@
           "previous": 11.0
         }
       }
+    },
+    {
+      "node_id": "PRJ-HWY-001",
+      "owner_role": "project_supervisor",
+      "event": "accepted",
+      "actor_id": "mock-bu-reviewer",
+      "actor_name": "Demo BU Reviewer",
+      "created_at": "2026-11-13T00:00:00+00:00",
+      "reason": "Seeded demo approval for dashboard rollup."
+    },
+    {
+      "node_id": "PRJ-SOLAR-003",
+      "owner_role": "project_supervisor",
+      "event": "accepted",
+      "actor_id": "mock-bu-reviewer",
+      "actor_name": "Demo BU Reviewer",
+      "created_at": "2026-11-13T00:00:00+00:00",
+      "reason": "Seeded demo approval for dashboard rollup."
+    },
+    {
+      "node_id": "MOCK-PRJ-TRANS-02",
+      "owner_role": "project_supervisor",
+      "event": "submitted",
+      "actor_id": "mock-project-supervisor",
+      "actor_name": "Demo Project Supervisor",
+      "created_at": "2026-11-10T09:20:00+00:00",
+      "revision": 1,
+      "is_mock": true
+    },
+    {
+      "node_id": "MOCK-PRJ-TRANS-02",
+      "owner_role": "project_supervisor",
+      "event": "accepted",
+      "actor_id": "mock-bu-reviewer",
+      "actor_name": "Demo BU Reviewer",
+      "created_at": "2026-11-12T14:10:00+00:00",
+      "reason": "Seeded demo approval for dashboard rollup.",
+      "is_mock": true
+    },
+    {
+      "node_id": "PRJ-ZOJILA-P7",
+      "owner_role": "project_supervisor",
+      "event": "accepted",
+      "reason": null,
+      "actor_id": "21a6f7ec-3eab-4611-b5cf-fc207c00e098",
+      "actor_name": "Sunil Verma (Project Admin - Zojila Tunnel P7)",
+      "created_at": "2026-11-13T02:59:37.256603+00:00"
     }
   ]
 }

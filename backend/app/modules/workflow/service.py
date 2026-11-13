@@ -2,6 +2,7 @@ import json
 import hashlib
 from datetime import datetime, timezone
 from typing import List, Optional
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 from fastapi import HTTPException, status
 from app.modules.org.models import OrgNode, ReportingPeriod, PeriodStatus
@@ -383,7 +384,10 @@ def get_review_queue(db: Session, reviewer_user=None) -> List[ReviewQueueItem]:
         Submission.status.in_(pending_statuses)
     )
     if entity_types:
-        matching_nodes = db.query(OrgNode.id).filter(OrgNode.type.in_(entity_types), OrgNode.is_deleted == False).subquery()
+        matching_nodes = select(OrgNode.id).where(
+            OrgNode.type.in_(entity_types),
+            OrgNode.is_deleted == False,
+        )
         pending_query = pending_query.filter(Submission.entity_id.in_(matching_nodes))
 
     # Scope by all direct and role-assignment nodes. Resolve node codes to UUIDs

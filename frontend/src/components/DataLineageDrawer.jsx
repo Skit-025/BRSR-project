@@ -5,7 +5,7 @@ import {
 } from 'lucide-react';
 import { api, p6FormsApi } from '../api/client';
 
-export default function DataLineageDrawer({ isOpen, onClose, metricData, metricCode, periodId, entityId }) {
+export default function DataLineageDrawer({ isOpen, onClose, onSelectNode, metricData, metricCode, periodId, entityId }) {
   const [liveLineage, setLiveLineage] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -55,6 +55,12 @@ export default function DataLineageDrawer({ isOpen, onClose, metricData, metricC
                 raw_value: c.value,
                 unit: c.unit,
                 status: c.status,
+                submitted_by: c.submitted_by,
+                submitted_at: c.submitted_at,
+                source_path: c.source_path,
+                source_fields: c.source_fields || [],
+                source_is_mock: c.source_is_mock,
+                evidence: c.evidence || [],
               })),
             },
           };
@@ -106,10 +112,14 @@ export default function DataLineageDrawer({ isOpen, onClose, metricData, metricC
           steps.push({
             level: 'PROJECT OPERATIONAL LEVEL',
             entity: site.project_name || site.project_code || 'Site Operational Node',
-            actor: `Maker (${site.maker_id ? 'Authenticated User' : 'Site Engineer'})`,
+            actor: site.submitted_by ? `Submitted by ${site.submitted_by}` : 'Source contribution',
             timestamp: site.submitted_at ? new Date(site.submitted_at).toLocaleDateString('en-IN') : 'Logged',
             value: `${Number(site.raw_value || 0).toLocaleString()} ${site.unit || ''}`,
-            note: `Direct operational datapoint (Status: ${site.status || 'SUBMITTED'})`
+            note: `Direct source contribution (Status: ${site.status || 'SUBMITTED'})`,
+            sourcePath: site.source_path || [],
+            submittedBy: site.submitted_by,
+            sourceFields: site.source_fields || [],
+            sourceIsMock: site.source_is_mock,
           });
         });
       }
@@ -217,6 +227,23 @@ export default function DataLineageDrawer({ isOpen, onClose, metricData, metricC
   const evidenceItems = liveLineage?.tree
     ? extractEvidenceFromTree(liveLineage.tree)
     : (liveLineage?.evidence || defaultFallbackLineage.evidence);
+
+  const downloadEvidence = async (ev) => {
+    if (!ev?.evidence_id || !ev?.node_id || !ev?.field_id) return;
+    try {
+      const response = await p6FormsApi.downloadEvidence(ev.node_id, ev.field_id, ev.evidence_id);
+      const url = URL.createObjectURL(response.data);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = ev.filename || 'evidence';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Evidence download failed.');
+    }
+  };
 
   const consolidatedValue = liveLineage?.consolidated_group_value != null
     ? `${Number(liveLineage.consolidated_group_value).toLocaleString()} ${liveLineage.unit || ''}`
@@ -427,6 +454,26 @@ export default function DataLineageDrawer({ isOpen, onClose, metricData, metricC
                           {step.note}
                         </div>
 
+                        {step.sourcePath?.length > 0 && (
+                          <details style={{ marginTop: 8, fontSize: 11, color: '#334155' }}>
+                            <summary style={{ cursor: 'pointer', color: '#1D4ED8', fontWeight: 650 }}>Trace source and entered fields</summary>
+                            <div style={{ marginTop: 6, lineHeight: 1.6 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 4 }}>
+                                <b>Hierarchy:</b>{step.sourcePath.map((part, partIndex) => (
+                                  <React.Fragment key={part.id}>
+                                    {partIndex > 0 && <span>›</span>}
+                                    <button type="button" onClick={() => onSelectNode?.(part.id)} title={`Open ${part.type} dashboard`} style={{ border: 0, padding: 0, background: 'transparent', color: '#1D4ED8', cursor: 'pointer', textDecoration: 'underline', fontSize: 11 }}>{part.name}</button>
+                                  </React.Fragment>
+                                ))}
+                              </div>
+                              <div><b>Submitted by:</b> {step.submittedBy || 'Seeded sample data'} {step.sourceIsMock ? ' · Mock sample' : ''}</div>
+                              {step.sourceFields?.map((field) => (
+                                <div key={field.field_id}><b>{field.field_id}:</b> {field.current ?? '—'} (previous {field.previous ?? '—'})</div>
+                              ))}
+                            </div>
+                          </details>
+                        )}
+
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8, fontSize: '10px', color: '#64748B' }}>
                           <span>{step.actor}</span>
                           <span>•</span>
@@ -471,10 +518,10 @@ export default function DataLineageDrawer({ isOpen, onClose, metricData, metricC
                           <FileText size={20} color="#059669" />
                           <div style={{ flex: 1 }}>
                             <div style={{ fontWeight: 600, fontSize: '13px', color: '#09090B' }}>
-                              {ev.filename}
+                            {ev.filename || 'Evidence file'}
                             </div>
                             <div style={{ fontSize: '11px', color: '#64748B' }}>
-                              Site: {ev.projectName || 'Operational Site'}
+                            Source: {ev.projectName || 'Operational Site'}{ev.field_id ? ` · ${ev.field_id}` : ''}
                             </div>
                           </div>
                           <span style={{
@@ -485,7 +532,7 @@ export default function DataLineageDrawer({ isOpen, onClose, metricData, metricC
                             background: '#D1FAE5',
                             color: '#065F46'
                           }}>
-                            VERIFIED
+                            {ev.sha256 ? 'SHA-256' : 'MOCK'}
                           </span>
                         </div>
 
@@ -506,24 +553,11 @@ export default function DataLineageDrawer({ isOpen, onClose, metricData, metricC
                           </div>
                         )}
 
-                        {ev.download_url && (
+                        {ev.evidence_id && ev.node_id && ev.field_id && (
                           <div style={{ marginTop: 10, display: 'flex', justifyContent: 'flex-end' }}>
-                            <a
-                              href={ev.download_url.startsWith('http') ? ev.download_url : `${API_BASE}${ev.download_url}`}
-                              target="_blank"
-                              rel="noreferrer"
-                              style={{
-                                fontSize: '11px',
-                                color: '#059669',
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: 4,
-                                textDecoration: 'none',
-                                fontWeight: 600
-                              }}
-                            >
-                              <Download size={12} /> Download Evidence File
-                            </a>
+                            <button type="button" onClick={() => downloadEvidence(ev)} style={{ border: 0, background: 'transparent', color: '#059669', fontSize: 11, fontWeight: 650, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                              <Download size={12} /> Download source file
+                            </button>
                           </div>
                         )}
                       </div>

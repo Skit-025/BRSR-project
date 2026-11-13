@@ -4,6 +4,7 @@ Orchestrates checklist lookup, text verification, and completeness scoring.
 """
 import uuid
 from typing import List
+from fastapi import HTTPException
 from app.ai.schemas import E4PolicyCheckRequest, E4PolicyCheckResponse, PolicyCheckItem, PolicyCheckStatus
 from app.ai.e4_policy.checklists import get_checklist
 from app.ai.e4_policy.verify import verify_quote
@@ -15,7 +16,10 @@ class PolicyGapAnalyzer:
     def analyze(self, req: E4PolicyCheckRequest, db_session=None) -> E4PolicyCheckResponse:
         run_id = str(uuid.uuid4())
         policy_text = req.text_content or ""
-        requirements = get_checklist(req.policy_type)
+        try:
+            requirements = get_checklist(req.policy_type)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
 
         items: List[PolicyCheckItem] = []
         found_count = 0

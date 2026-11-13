@@ -1,121 +1,54 @@
-"""
-E3 Engine: Retriever
-Searches the knowledge base for the most relevant guidance chunk.
-Performs exact code lookup, partial matching, and keyword-based query matching.
-"""
+"""Rank local guidance snippets against indicator codes and question terms."""
 from typing import Optional, Tuple, Dict, List
 import re
 from app.ai.e3_rag.knowledge import BRSR_KNOWLEDGE_BASE
 from app.ai.schemas import Citation
 
-# Semantic keyword triggers mapped to specific BRSR knowledge base entries
 TOPIC_KEYWORDS: Dict[str, List[str]] = {
-    "ENV-ENERGY-001": [
-        "electricity", "power", "grid", "discom", "renewable", "non-renewable",
-        "megawatt", "kilowatt", "kwh", "mwh", "gj", "gigajoule", "energy consumption",
-        "power consumption", "electricity bill", "energy boundary"
-    ],
-    "ENV-ENERGY-002": [
-        "fuel", "diesel", "petrol", "coal", "natural gas", "lpg", "png", "scm",
-        "combustion", "furnace oil", "fuel consumption", "fuel receipt", "hsd"
-    ],
-    "ENV-GHG-001": [
-        "scope 1", "direct emission", "direct emissions", "stationary combustion",
-        "mobile combustion", "ghg protocol", "tco2e", "flaring"
-    ],
-    "ENV-GHG-002": [
-        "scope 2", "indirect emission", "indirect emissions", "purchased electricity",
-        "grid emission", "grid factor", "cea", "tco2e"
-    ],
-    "ENV-WATER-001": [
-        "water", "groundwater", "water withdrawal", "water discharge", "water consumption",
-        "water withdrawal", "kl", "kilolitre", "cubic meter", "sewerage", "third-party water"
-    ],
-    "ENV-WASTE-001": [
-        "waste", "hazardous", "non-hazardous", "plastic", "e-waste", "manifest",
-        "recycling", "landfill", "incineration", "waste disposal", "form 10"
-    ],
-    "SOC-SAFE-001": [
-        "safety", "ltifr", "lost time injury", "incident", "man-hour", "man-hours",
-        "frequency rate", "injury", "fatality rate", "health and safety"
-    ],
-    "SOC-SAFE-002": [
-        "fatalities", "fatality", "workplace death", "loss of life"
-    ],
-    "SOC-EMP-001": [
-        "employee", "employees", "worker", "workers", "headcount", "gender",
-        "diversity", "disability", "differently abled", "permanent", "attrition"
-    ],
-    "SOC-WELF-001": [
-        "training", "skill", "upskilling", "development", "training hours", "skill upgradation"
-    ],
-    "GOV-ETH-001": [
-        "anti-corruption", "anti-bribery", "ethics", "code of conduct", "whistleblower",
-        "governance", "bribery", "corruption", "grievance", "human rights", "child labour",
-        "forced labour"
-    ],
+    "ENV-ENERGY-001": ["electricity", "power", "grid", "discom", "renewable", "non-renewable", "megawatt", "kilowatt", "kwh", "mwh", "gj", "gigajoule", "energy consumption", "electricity bill", "energy boundary"],
+    "ENV-ENERGY-002": ["fuel", "diesel", "petrol", "coal", "natural gas", "lpg", "png", "combustion", "furnace oil", "fuel consumption", "hsd"],
+    "ENV-GHG-001": ["scope 1", "direct emission", "stationary combustion", "mobile combustion", "ghg protocol", "tco2e", "flaring"],
+    "ENV-GHG-002": ["scope 2", "indirect emission", "purchased electricity", "grid emission", "grid factor", "cea", "tco2e"],
+    "ENV-WATER-001": ["water", "groundwater", "withdrawal", "discharge", "consumption", "kl", "kilolitre", "cubic meter", "sewerage"],
+    "ENV-WASTE-001": ["waste", "hazardous", "non-hazardous", "plastic", "e-waste", "manifest", "recycling", "landfill", "incineration"],
+    "SOC-SAFE-001": ["safety", "ltifr", "lost time injury", "incident", "man-hour", "frequency rate", "injury", "fatality rate"],
+    "SOC-SAFE-002": ["fatalities", "fatality", "workplace death"],
+    "SOC-EMP-001": ["employee", "worker", "headcount", "gender", "diversity", "disability", "attrition"],
+    "SOC-WELF-001": ["training", "skill", "upskilling", "development"],
+    "GOV-ETH-001": ["anti-corruption", "anti-bribery", "ethics", "code of conduct", "whistleblower", "governance", "bribery", "corruption", "grievance", "human rights", "child labour", "forced labour"],
 }
 
+ALIASES = {"P6-EI-1": "ENV-ENERGY-001", "P6-EI-2": "ENV-ENERGY-002", "P6-EI-3": "ENV-WATER-001", "P6-EI-8": "ENV-WASTE-001"}
+
+def _citation(chunk: dict, code: str, score: float = 1.0) -> Citation:
+    return Citation(doc="Local BRSR guidance library", version=chunk.get("version", "BRSR-2023"), section=chunk.get("section", code), text=chunk.get("guidance", ""), score=score)
 
 def retrieve(indicator_code: Optional[str] = None, question: Optional[str] = None) -> Tuple[Optional[dict], Optional[Citation]]:
-    """
-    Retrieves the guidance chunk and Citation for a given indicator code and/or user question.
-    1. Exact match on indicator code (if provided and valid).
-    2. Partial match on indicator code or section name.
-    3. Keyword match on question text against BRSR knowledge base topics.
-    Returns (chunk_dict, Citation) or (None, None) if no matching context is found.
-    """
     code = (indicator_code or "").strip().upper()
-    q_lower = (question or "").lower()
-
-    # Step 1: Exact match on indicator code
-    if code and code not in ("GENERAL", "ANY", "NONE", "ALL", ""):
-        chunk = BRSR_KNOWLEDGE_BASE.get(code)
-        if chunk:
-            citation = Citation(
-                doc="SEBI BRSR Guidance Note",
-                version=chunk.get("version", "BRSR-2023"),
-                section=chunk.get("section", code),
-                text=chunk.get("guidance", "")
-            )
-            return chunk, citation
-
-        # Step 2: Partial match on indicator code or section name
-        for kb_code, data in BRSR_KNOWLEDGE_BASE.items():
-            if kb_code in code or code in kb_code or code in data.get("section", "").upper():
-                citation = Citation(
-                    doc="SEBI BRSR Guidance Note",
-                    version=data.get("version", "BRSR-2023"),
-                    section=data.get("section", kb_code),
-                    text=data.get("guidance", "")
-                )
-                return data, citation
-
-    # Step 3: Match based on question text keywords
-    if q_lower:
-        best_code = None
-        best_score = 0
-
-        for kb_code, keywords in TOPIC_KEYWORDS.items():
-            score = 0
-            for kw in keywords:
-                if kw in q_lower:
-                    # Multi-word phrase match gives higher confidence
-                    score += 3 if " " in kw else 1
-            if score > best_score:
-                best_score = score
-                best_code = kb_code
-
-        # If keyword overlap is sufficiently high (score >= 2), return the matching chunk
-        if best_code and best_score >= 2:
-            chunk = BRSR_KNOWLEDGE_BASE.get(best_code)
-            if chunk:
-                citation = Citation(
-                    doc="SEBI BRSR Guidance Note",
-                    version=chunk.get("version", "BRSR-2023"),
-                    section=chunk.get("section", best_code),
-                    text=chunk.get("guidance", "")
-                )
-                return chunk, citation
-
-    return None, None
+    code = ALIASES.get(code, code)
+    if code in BRSR_KNOWLEDGE_BASE:
+        chunk = BRSR_KNOWLEDGE_BASE[code]
+        return chunk, _citation(chunk, code)
+    # Resolve only complete identifiers/aliases; substring matches can map unrelated codes.
+    if code and code not in {"GENERAL", "ANY", "NONE", "ALL"}:
+        for kb_code, chunk in BRSR_KNOWLEDGE_BASE.items():
+            if code == str(chunk.get("section", "")).upper():
+                return chunk, _citation(chunk, kb_code)
+    tokens = set(re.findall(r"[a-z0-9]+", (question or "").lower()))
+    scored = []
+    for kb_code, phrases in TOPIC_KEYWORDS.items():
+        chunk = BRSR_KNOWLEDGE_BASE.get(kb_code)
+        if not chunk:
+            continue
+        score = sum(3 if " " in phrase and phrase in (question or "").lower() else 0 for phrase in phrases)
+        score += sum(1 for phrase in phrases if " " not in phrase and phrase in tokens)
+        if score:
+            scored.append((score, kb_code, chunk))
+    if not scored:
+        return None, None
+    scored.sort(key=lambda item: (item[0], item[1]), reverse=True)
+    score, kb_code, chunk = scored[0]
+    # Require unambiguous evidence to ground a response.
+    if score < 2 or (len(scored) > 1 and scored[0][0] == scored[1][0]):
+        return None, None
+    return chunk, _citation(chunk, kb_code, float(score))

@@ -26,7 +26,8 @@ POLICY_CHECKLISTS = {
 
 def get_checklist(policy_type: str) -> list:
     key = policy_type.lower().replace(" ", "_").replace("-", "_")
-    for k, v in POLICY_CHECKLISTS.items():
-        if k in key:
-            return v
-    return POLICY_CHECKLISTS["anti-corruption"]
+    aliases = {"anti_corruption": "anti-corruption", "anti_bribery": "anti-corruption", "human_rights": "human_rights", "environmental": "environmental", "environmental_policy": "environmental"}
+    canonical = aliases.get(key)
+    if canonical is None:
+        raise ValueError(f"Unsupported policy type: {policy_type}")
+    return POLICY_CHECKLISTS[canonical]

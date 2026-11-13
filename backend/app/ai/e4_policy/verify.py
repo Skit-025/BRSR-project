@@ -1,28 +1,36 @@
-"""
-E4 Engine: Verbatim Quote Verifier
-Checks whether a required policy element appears verbatim in the policy document text.
-"""
+"""Conservative clause matcher returning only verbatim source excerpts."""
+import re
 from typing import Tuple, Optional
 
+TERMS = {
+    "Anti-Bribery and Corruption Prohibition": [("anti-bribery", "corruption"), ("anti bribery", "corruption"), ("anti-corruption",), ("anti corruption",)],
+    "Whistleblower Protection Mechanism": [("whistleblower",), ("whistle blower",)],
+    "Board Oversight and Annual Review": [("board", "oversight"), ("board", "annual review")],
+    "Third-Party Due Diligence Requirement": [("third-party", "due diligence"), ("third party", "due diligence"), ("supplier", "due diligence")],
+    "Prohibition of Child and Forced Labour": [("child labour",), ("forced labour",), ("child labor",), ("forced labor",)],
+    "Non-Discrimination and Equal Opportunity": [("non-discrimination",), ("equal opportunity",), ("non discrimination",)],
+    "Grievance Redressal Mechanism": [("grievance", "redress"), ("grievance mechanism",), ("grievance reporting",)],
+    "Supplier Human Rights Code of Conduct": [("supplier", "human rights"), ("supplier", "code of conduct")],
+    "Commitment to Reduce GHG Emissions": [("reduce", "emissions"), ("emission reduction",), ("ghg reduction",)],
+    "Biodiversity and Land Use Policy": [("biodiversity",), ("land use",)],
+    "Waste Management and Circular Economy Plan": [("waste management",), ("circular economy",)],
+    "Annual Environmental Audit Requirement": [("environmental audit",), ("annual audit", "environment")],
+}
 
 def verify_quote(element: str, policy_text: str) -> Tuple[bool, Optional[str]]:
-    """
-    Returns (found: bool, quote: Optional[str]).
-    Searches for the element keywords in the policy text using case-insensitive matching.
-    Returns a snippet around the match as the verbatim quote.
-    """
-    element_lower = element.lower()
-    text_lower = policy_text.lower()
-
-    # Use first keyword of the element for search
-    keywords = [w for w in element_lower.split() if len(w) > 4]
-    for kw in keywords:
-        pos = text_lower.find(kw)
-        if pos >= 0:
-            # Return a short surrounding excerpt as the verbatim quote
-            start = max(0, pos - 30)
-            end = min(len(policy_text), pos + len(kw) + 100)
-            excerpt = policy_text[start:end].strip()
-            return True, excerpt
-
+    text = policy_text or ""
+    lower = text.lower()
+    groups = TERMS.get(element, [(element.lower(),)])
+    for group in groups:
+        positions = [lower.find(term) for term in group]
+        if any(pos < 0 for pos in positions):
+            continue
+        start = min(positions)
+        end = max(pos + len(term) for pos, term in zip(positions, group))
+        # Include the containing sentence while keeping the citation exact.
+        sentence_start = max(text.rfind(".", 0, start), text.rfind("\n", 0, start)) + 1
+        sentence_end_candidates = [p for p in (text.find(".", end), text.find("\n", end)) if p >= 0]
+        sentence_end = min(sentence_end_candidates) + 1 if sentence_end_candidates else len(text)
+        quote = text[sentence_start:sentence_end].strip()
+        return True, quote or text[start:end]
     return False, None
