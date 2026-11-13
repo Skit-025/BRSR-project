@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from app.data.p6_registry import P6_REGISTRY, REGISTRY_BY_ID, ROLE_NODE_TYPES
+from app.data.p6_registry import P6_REGISTRY, REGISTRY_BY_ID, ROLE_NODE_TYPES, get_fields_for_role
 
 DATA_FILE_PATH = Path(os.environ.get("ESG_DATA_FILE", Path(__file__).resolve().parent / "esgData.json"))
 _LOCK = threading.RLock()
@@ -139,9 +139,87 @@ def set_status(node_id: str, owner_role: str, status_val: str, reason: Optional[
         return data["statuses"][node_id][owner_role]
 
 
+def reopen_accepted_report(node_id: str, owner_role: str, actor_id: Optional[str] = None, actor_name: Optional[str] = None) -> Dict[str, Any]:
+    """Start an auditable revision while retaining the accepted report's history and data."""
+    with _LOCK:
+        data = load_data()
+        current = data.get("statuses", {}).get(node_id, {}).get(owner_role, {"status": "draft"})
+        if current.get("status") != "accepted":
+            raise ValueError(f"Only accepted reports can be reopened (status: {current.get('status', 'draft')}).")
+        updated = {"status": "draft", "reason": None}
+        data.setdefault("statuses", {}).setdefault(node_id, {})[owner_role] = updated
+        data.setdefault("audit_log", []).append({
+            "node_id": node_id,
+            "owner_role": owner_role,
+            "event": "reopened",
+            "reason": "Owner started a revision of the accepted report.",
+            "actor_id": actor_id,
+            "actor_name": actor_name,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        })
+        save_data(data)
+        return updated
+
+
 def get_role_entries(node_id: str, owner_role: str) -> Dict[str, Any]:
     data = load_data()
     return data.get("entries", {}).get(node_id, {}).get(owner_role, {})
+
+
+def get_daily_entries(node_id: str, owner_role: str) -> List[Dict[str, Any]]:
+    data = load_data()
+    rows = data.get("daily_entries", {}).get(node_id, {}).get(owner_role, [])
+    return sorted(rows, key=lambda row: (row.get("date", ""), row.get("created_at", "")), reverse=True)
+
+
+def get_entry_mode(node_id: str, owner_role: str) -> str:
+    data = load_data()
+    return data.get("entry_modes", {}).get(node_id, {}).get(owner_role, "daily")
+
+
+def add_daily_entry(
+    node_id: str,
+    owner_role: str,
+    daily_entry: Dict[str, Any],
+    aggregate_values: Dict[str, float],
+    period_key: str = "current",
+    actor_id: Optional[str] = None,
+    actor_name: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Append a date-stamped activity record and refresh its annual current totals."""
+    with _LOCK:
+        data = load_data()
+        rows = data.setdefault("daily_entries", {}).setdefault(node_id, {}).setdefault(owner_role, [])
+        rows.append(daily_entry)
+        role_bucket = data.setdefault("entries", {}).setdefault(node_id, {}).setdefault(owner_role, {})
+        for field in get_fields_for_role(owner_role, (resolve_node(node_id) or {}).get("type", "")):
+            if field.get("type") == "number" and field.get("aggregation") == "SUM":
+                entry_obj = role_bucket.setdefault(field["id"], {"current": None, "previous": None})
+                entry_obj[period_key] = None
+        for field_id, total in aggregate_values.items():
+            entry_obj = role_bucket.setdefault(field_id, {"current": None, "previous": None})
+            entry_obj[period_key] = total
+        data.setdefault("entry_modes", {}).setdefault(node_id, {})[owner_role] = "daily"
+        data.setdefault("statuses", {}).setdefault(node_id, {})[owner_role] = {"status": "draft", "reason": None}
+        data.setdefault("audit_log", []).append({
+            "node_id": node_id,
+            "owner_role": owner_role,
+            "event": "daily_entry_added",
+            "actor_id": actor_id,
+            "actor_name": actor_name,
+            "created_at": daily_entry.get("created_at"),
+            "daily_entry_id": daily_entry.get("id"),
+            "date": daily_entry.get("date"),
+            "fields": sorted(daily_entry.get("values", {}).keys()),
+        })
+        save_data(data)
+        return role_bucket
+
+
+def get_daily_entry(node_id: str, owner_role: str, entry_id: str) -> Optional[Dict[str, Any]]:
+    data = load_data()
+    rows = data.get("daily_entries", {}).get(node_id, {}).get(owner_role, [])
+    return next((row for row in rows if row.get("id") == entry_id), None)
 
 
 def save_role_entries(
@@ -151,11 +229,14 @@ def save_role_entries(
     new_status: Optional[str] = None,
     actor_id: Optional[str] = None,
     actor_name: Optional[str] = None,
+    entry_mode: Optional[str] = None,
 ) -> Dict[str, Any]:
     with _LOCK:
         data = load_data()
         node_bucket = data.setdefault("entries", {}).setdefault(node_id, {})
         role_bucket = node_bucket.setdefault(owner_role, {})
+        if owner_role == "project_supervisor" and entry_mode in ("daily", "annual"):
+            data.setdefault("entry_modes", {}).setdefault(node_id, {})[owner_role] = entry_mode
         for fid, val in updates.items():
             if val is None:
                 continue

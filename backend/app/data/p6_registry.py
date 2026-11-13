@@ -114,12 +114,32 @@ P6_REGISTRY: List[Dict[str, Any]] = [
     # 1. PROJECT SUPERVISOR — "Site Operations Data"
     # -----------------------------------------------------------------------
     # EI-1 / LI-1 Energy (GJ)
-    _f("ei1_ren_elec", "P6-EI-1", "ei1_energy", "From renewable sources — Total electricity consumption (A)", "GJ", "number", "project_supervisor", PROJ_TYPES, "SUM"),
-    _f("ei1_ren_fuel", "P6-EI-1", "ei1_energy", "From renewable sources — Total fuel consumption (B)", "GJ", "number", "project_supervisor", PROJ_TYPES, "SUM"),
-    _f("ei1_ren_other", "P6-EI-1", "ei1_energy", "From renewable sources — Energy consumption through other sources (C)", "GJ", "number", "project_supervisor", PROJ_TYPES, "SUM"),
-    _f("ei1_nonren_elec", "P6-EI-1", "ei1_energy", "From non-renewable sources — Total electricity consumption (D)", "GJ", "number", "project_supervisor", PROJ_TYPES, "SUM"),
-    _f("ei1_nonren_fuel", "P6-EI-1", "ei1_energy", "From non-renewable sources — Total fuel consumption (E)", "GJ", "number", "project_supervisor", PROJ_TYPES, "SUM"),
-    _f("ei1_nonren_other", "P6-EI-1", "ei1_energy", "From non-renewable sources — Energy consumption through other sources (F)", "GJ", "number", "project_supervisor", PROJ_TYPES, "SUM"),
+    _f("ei1_ren_elec", "P6-EI-1", "ei1_energy", "From renewable sources — Total electricity consumption (A)", "GJ", "number", "project_supervisor", PROJ_TYPES, "SUM", calculated=True),
+    _f("ei1_ren_fuel", "P6-EI-1", "ei1_energy", "From renewable sources — Total fuel consumption (B)", "GJ", "number", "project_supervisor", PROJ_TYPES, "SUM", calculated=True),
+    _f("ei1_ren_other", "P6-EI-1", "ei1_energy", "From renewable sources — Energy consumption through other sources (C)", "GJ", "number", "project_supervisor", PROJ_TYPES, "SUM", calculated=True),
+    _f("ei1_nonren_elec", "P6-EI-1", "ei1_energy", "From non-renewable sources — Total electricity consumption (D)", "GJ", "number", "project_supervisor", PROJ_TYPES, "SUM", calculated=True),
+    _f("ei1_nonren_fuel", "P6-EI-1", "ei1_energy", "From non-renewable sources — Total fuel consumption (E)", "GJ", "number", "project_supervisor", PROJ_TYPES, "SUM", calculated=True),
+    _f("ei1_nonren_other", "P6-EI-1", "ei1_energy", "From non-renewable sources — Energy consumption through other sources (F)", "GJ", "number", "project_supervisor", PROJ_TYPES, "SUM", calculated=True),
+
+    # Raw energy activity data. The UI converts these quantities to GJ and fills A-F.
+    _f("ei1_grid_electricity_kwh", "P6-EI-1", "ei1_energy", "Grid electricity consumed", "kWh", "number", "project_supervisor", PROJ_TYPES, "SUM", energy_input=True),
+    _f("ei1_renewable_grid_kwh", "P6-EI-1", "ei1_energy", "Renewable electricity included in grid total (verified PPA / green tariff)", "kWh", "number", "project_supervisor", PROJ_TYPES, "SUM", energy_input=True),
+    _f("ei1_captive_renewable_kwh", "P6-EI-1", "ei1_energy", "Captive renewable electricity consumed (solar / wind)", "kWh", "number", "project_supervisor", PROJ_TYPES, "SUM", energy_input=True),
+    _f("ei1_diesel_litres", "P6-EI-1", "ei1_energy", "Diesel / HSD consumed", "litres", "number", "project_supervisor", PROJ_TYPES, "SUM", energy_input=True),
+    _f("ei1_petrol_litres", "P6-EI-1", "ei1_energy", "Petrol consumed", "litres", "number", "project_supervisor", PROJ_TYPES, "SUM", energy_input=True),
+    _f("ei1_lpg_kg", "P6-EI-1", "ei1_energy", "LPG consumed", "kg", "number", "project_supervisor", PROJ_TYPES, "SUM", energy_input=True),
+    _f("ei1_cng_kg", "P6-EI-1", "ei1_energy", "CNG consumed", "kg", "number", "project_supervisor", PROJ_TYPES, "SUM", energy_input=True),
+    _f("ei1_png_scm", "P6-EI-1", "ei1_energy", "Piped natural gas consumed", "SCM", "number", "project_supervisor", PROJ_TYPES, "SUM", energy_input=True),
+    _f("ei1_furnace_oil_litres", "P6-EI-1", "ei1_energy", "Furnace oil consumed", "litres", "number", "project_supervisor", PROJ_TYPES, "SUM", energy_input=True),
+    _f("ei1_coal_anthracite_mt", "P6-EI-1", "ei1_energy", "Anthracite coal consumed", "tonnes", "number", "project_supervisor", PROJ_TYPES, "SUM", energy_input=True),
+    _f("ei1_coal_bituminous_mt", "P6-EI-1", "ei1_energy", "Bituminous coal consumed", "tonnes", "number", "project_supervisor", PROJ_TYPES, "SUM", energy_input=True),
+    _f("ei1_coal_grade_a_mt", "P6-EI-1", "ei1_energy", "Coal Grade A consumed", "tonnes", "number", "project_supervisor", PROJ_TYPES, "SUM", energy_input=True),
+    _f("ei1_coal_grade_e_mt", "P6-EI-1", "ei1_energy", "Coal Grade E consumed", "tonnes", "number", "project_supervisor", PROJ_TYPES, "SUM", energy_input=True),
+    _f("ei1_coal_grade_f_mt", "P6-EI-1", "ei1_energy", "Coal Grade F consumed", "tonnes", "number", "project_supervisor", PROJ_TYPES, "SUM", energy_input=True),
+    _f("ei1_lignite_mt", "P6-EI-1", "ei1_energy", "Lignite consumed", "tonnes", "number", "project_supervisor", PROJ_TYPES, "SUM", energy_input=True),
+    _f("ei1_renewable_fuel_gj", "P6-EI-1", "ei1_energy", "Renewable fuel energy (supplier calorific value)", "GJ", "number", "project_supervisor", PROJ_TYPES, "SUM", energy_input=True),
+    _f("ei1_renewable_other_gj", "P6-EI-1", "ei1_energy", "Other renewable energy (metered GJ)", "GJ", "number", "project_supervisor", PROJ_TYPES, "SUM", energy_input=True),
+    _f("ei1_nonrenewable_other_gj", "P6-EI-1", "ei1_energy", "Other non-renewable energy (metered GJ)", "GJ", "number", "project_supervisor", PROJ_TYPES, "SUM", energy_input=True),
 
     # EI-3 Water withdrawal & consumption (kL)
     _f("ei3_surface", "P6-EI-3", "ei3_water", "Water withdrawal by source — (i) Surface water", "kL", "number", "project_supervisor", PROJ_TYPES, "SUM"),
@@ -179,8 +199,8 @@ P6_REGISTRY: List[Dict[str, Any]] = [
     ),
 
     # EI-6 GHG (tCO2e)
-    _f("ei6_scope1", "P6-EI-6", "ei6_ghg", "Total Scope 1 emissions (Break-up of the GHG into CO2, CH4, N2O, HFCs, PFCs, SF6, NF3, if available)", "tCO2e", "number", "project_supervisor", PROJ_TYPES, "SUM"),
-    _f("ei6_scope2", "P6-EI-6", "ei6_ghg", "Total Scope 2 emissions (Break-up of the GHG into CO2, CH4, N2O, HFCs, PFCs, SF6, NF3, if available)", "tCO2e", "number", "project_supervisor", PROJ_TYPES, "SUM"),
+    _f("ei6_scope1", "P6-EI-6", "ei6_ghg", "Total Scope 1 emissions (Break-up of the GHG into CO2, CH4, N2O, HFCs, PFCs, SF6, NF3, if available)", "tCO2e", "number", "project_supervisor", PROJ_TYPES, "SUM", calculated=True),
+    _f("ei6_scope2", "P6-EI-6", "ei6_ghg", "Total Scope 2 emissions (Break-up of the GHG into CO2, CH4, N2O, HFCs, PFCs, SF6, NF3, if available)", "tCO2e", "number", "project_supervisor", PROJ_TYPES, "SUM", calculated=True),
 
     # EI-8 Waste (MT)
     _f("ei8_plastic", "P6-EI-8", "ei8_waste", "Total Waste generated — Plastic waste (A)", "MT", "number", "project_supervisor", PROJ_TYPES, "SUM"),

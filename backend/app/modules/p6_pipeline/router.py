@@ -3,6 +3,9 @@ from __future__ import annotations
 import os
 import shutil
 import uuid
+import math
+from datetime import date, datetime, timezone
+from decimal import Decimal
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -24,6 +27,7 @@ from app.data.p6_registry import (
     get_fields_for_role,
     normalize_p6_role,
 )
+from app.modules.calc.factors import FUEL_EMISSION_FACTORS, GRID_EMISSION_FACTOR_CEA_WEIGHTED_AVG
 from app.data import esg_store
 
 router = APIRouter(prefix="/p6-forms", tags=["Principle 6 Role Forms & Data Store"])
@@ -32,6 +36,7 @@ router = APIRouter(prefix="/p6-forms", tags=["Principle 6 Role Forms & Data Stor
 class P6SaveRequest(BaseModel):
     node_id: Optional[str] = None
     entries: Dict[str, Dict[str, Any]] = Field(default_factory=dict)
+    entry_mode: Optional[str] = None
 
 
 class P6ReviewRequest(BaseModel):
@@ -39,6 +44,12 @@ class P6ReviewRequest(BaseModel):
     target_role: str
     decision: str  # "accepted" | "rejected"
     reason: Optional[str] = None
+
+
+class DailyEntryRequest(BaseModel):
+    date: str
+    period_key: str = "current"
+    values: Dict[str, Any] = Field(default_factory=dict)
 
 
 def _role_str(user: User) -> str:
@@ -182,6 +193,8 @@ def _validate_and_normalize_payload(
                     num = float(raw)
                 except (TypeError, ValueError):
                     raise HTTPException(status_code=422, detail=f"'{fid}' ({lbl}) must be a valid number.")
+                if not math.isfinite(num):
+                    raise HTTPException(status_code=422, detail=f"'{fid}' ({lbl}) must be a finite number.")
                 if num < 0:
                     raise HTTPException(status_code=422, detail=f"'{fid}' ({lbl}) must be >= 0.")
                 if ftype == "percent" and num > 100:
@@ -195,7 +208,108 @@ def _validate_and_normalize_payload(
             if prev_val == "":
                 prev_val = None
         cleaned[fid] = {"current": cur_val, "previous": prev_val}
+
+    # Treat submitted energy buckets as derived outputs whenever source activity
+    # data is present. Recalculate on the server so the BRSR roll-up cannot be
+    # changed by editing browser-calculated values.
+    if role == "project_supervisor" and _DAILY_ENERGY_INPUTS.intersection(cleaned):
+        derived_ids = (*("ei1_ren_elec", "ei1_ren_fuel", "ei1_ren_other", "ei1_nonren_elec", "ei1_nonren_fuel", "ei1_nonren_other"), "ei6_scope1", "ei6_scope2")
+        for fy_key in ("current", "previous"):
+            raw_values = {
+                field_id: (cleaned.get(field_id) or {}).get(fy_key)
+                for field_id in _DAILY_ENERGY_INPUTS
+                if (cleaned.get(field_id) or {}).get(fy_key) not in (None, "")
+            }
+            derived = _derive_daily_energy_values(raw_values)
+            for field_id in derived_ids:
+                entry = cleaned.setdefault(field_id, {"current": None, "previous": None})
+                entry[fy_key] = round(float(derived[field_id]), 4) if field_id in derived else None
     return cleaned
+
+
+_DAILY_FUEL_INPUTS = {
+    "ei1_diesel_litres": "diesel", "ei1_petrol_litres": "petrol", "ei1_lpg_kg": "lpg",
+    "ei1_cng_kg": "cng", "ei1_png_scm": "png", "ei1_furnace_oil_litres": "furnace_oil",
+    "ei1_coal_anthracite_mt": "coal_ant", "ei1_coal_bituminous_mt": "coal_bit",
+    "ei1_coal_grade_a_mt": "coal_grade_a", "ei1_coal_grade_e_mt": "coal_grade_e",
+    "ei1_coal_grade_f_mt": "coal_grade_f", "ei1_lignite_mt": "coal_lig",
+}
+_DAILY_ELECTRICITY_INPUTS = {"ei1_grid_electricity_kwh", "ei1_renewable_grid_kwh", "ei1_captive_renewable_kwh"}
+_DAILY_ENERGY_INPUTS = _DAILY_ELECTRICITY_INPUTS | set(_DAILY_FUEL_INPUTS) | {
+    "ei1_renewable_fuel_gj", "ei1_renewable_other_gj", "ei1_nonrenewable_other_gj",
+}
+
+
+def _validate_daily_values(values: Dict[str, Any], node_type: str) -> Dict[str, float]:
+    allowed = {
+        field["id"] for field in get_fields_for_role("project_supervisor", node_type)
+        if field.get("type") == "number" and field.get("aggregation") == "SUM" and not field.get("calculated")
+    }
+    normalized: Dict[str, float] = {}
+    for field_id, raw in (values or {}).items():
+        if field_id not in allowed:
+            raise HTTPException(status_code=403, detail=f"'{field_id}' is not a daily activity field for the project supervisor.")
+        if raw is None or raw == "":
+            continue
+        try:
+            value = float(raw)
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(status_code=422, detail=f"'{field_id}' must be a valid number.") from exc
+        if not math.isfinite(value) or value < 0:
+            raise HTTPException(status_code=422, detail=f"'{field_id}' must be finite and non-negative.")
+        normalized[field_id] = value
+    if not normalized:
+        raise HTTPException(status_code=422, detail="Enter at least one daily activity quantity before saving.")
+    return normalized
+
+
+def _derive_daily_energy_values(values: Dict[str, float]) -> Dict[str, float]:
+    derived: Dict[str, float] = {}
+    if _DAILY_ENERGY_INPUTS.intersection(values):
+        grid_kwh = Decimal(str(values.get("ei1_grid_electricity_kwh", 0)))
+        renewable_grid_kwh = Decimal(str(values.get("ei1_renewable_grid_kwh", 0)))
+        captive_kwh = Decimal(str(values.get("ei1_captive_renewable_kwh", 0)))
+        if renewable_grid_kwh > grid_kwh:
+            raise HTTPException(status_code=422, detail="Renewable electricity included in the grid total cannot exceed total grid electricity.")
+        fossil_gj = Decimal("0")
+        scope1 = Decimal("0")
+        has_fuel = False
+        for field_id, factor_id in _DAILY_FUEL_INPUTS.items():
+            if field_id not in values:
+                continue
+            has_fuel = True
+            quantity = Decimal(str(values[field_id]))
+            factor = FUEL_EMISSION_FACTORS[factor_id]
+            fossil_gj += quantity * factor["net_calorific_value_gj_per_unit"]
+            scope1 += quantity * factor["factor"]
+        derived.update({
+            "ei1_ren_elec": float((renewable_grid_kwh + captive_kwh) * Decimal("0.0036")),
+            "ei1_ren_fuel": float(values.get("ei1_renewable_fuel_gj", 0)),
+            "ei1_ren_other": float(values.get("ei1_renewable_other_gj", 0)),
+            "ei1_nonren_elec": float((grid_kwh - renewable_grid_kwh) * Decimal("0.0036")),
+            "ei1_nonren_fuel": float(fossil_gj),
+            "ei1_nonren_other": float(values.get("ei1_nonrenewable_other_gj", 0)),
+        })
+        if has_fuel:
+            derived["ei6_scope1"] = float(scope1)
+        if "ei1_grid_electricity_kwh" in values:
+            derived["ei6_scope2"] = float(Decimal(str(values["ei1_grid_electricity_kwh"])) / Decimal("1000") * GRID_EMISSION_FACTOR_CEA_WEIGHTED_AVG)
+    return derived
+
+
+def _daily_rollup(rows: List[Dict[str, Any]], node_type: str, period_key: str) -> Dict[str, float]:
+    fields = {
+        field["id"] for field in get_fields_for_role("project_supervisor", node_type)
+        if field.get("type") == "number" and field.get("aggregation") == "SUM"
+    }
+    totals: Dict[str, float] = {}
+    for row in rows:
+        if row.get("period_key", "current") != period_key:
+            continue
+        for field_id, value in (row.get("values") or {}).items():
+            if field_id in fields and value is not None:
+                totals[field_id] = totals.get(field_id, 0.0) + float(value)
+    return {field_id: round(value, 4) for field_id, value in totals.items()}
 
 
 @router.get("/schema")
@@ -276,7 +390,86 @@ def get_my_entries(
         "fy": fy,
         "status": st,
         "entries": entries,
+        "entry_mode": esg_store.get_entry_mode(target_id, role),
         "totals": totals,
+    }
+
+
+@router.post("/reopen")
+def reopen_accepted_report(
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+):
+    """Let the report owner start a tracked revision of their accepted submission."""
+    role = _role_str(current_user)
+    caller_node = _resolve_caller_node(db, current_user)
+    try:
+        updated = esg_store.reopen_accepted_report(
+            caller_node["id"], role,
+            actor_id=str(current_user.id),
+            actor_name=current_user.full_name,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return {"node_id": caller_node["id"], "role": role, **updated}
+
+
+@router.get("/daily-entries")
+def get_project_daily_entries(
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+):
+    role = _role_str(current_user)
+    if role != "project_supervisor":
+        raise HTTPException(status_code=403, detail="Daily site activity logs are available to project supervisors.")
+    caller_node = _resolve_caller_node(db, current_user)
+    rows = esg_store.get_daily_entries(caller_node["id"], role)
+    return {"node_id": caller_node["id"], "daily_entries": rows}
+
+
+@router.post("/daily-entries")
+def add_project_daily_entry(
+    body: DailyEntryRequest,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+):
+    role = _role_str(current_user)
+    if role != "project_supervisor":
+        raise HTTPException(status_code=403, detail="Only project supervisors can add daily site activity logs.")
+    try:
+        day = date.fromisoformat(body.date)
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=422, detail="Choose a valid activity date.") from exc
+    caller_node = _resolve_caller_node(db, current_user)
+    reporting_periods = esg_store.get_fy()
+    if body.period_key not in ("current", "previous"):
+        raise HTTPException(status_code=422, detail="Choose the current or previous reporting period.")
+    values = _validate_daily_values(body.values, caller_node.get("type", ""))
+    values.update(_derive_daily_energy_values(values))
+    created_at = datetime.now(timezone.utc).isoformat()
+    daily_entry = {
+        "id": str(uuid.uuid4()),
+        "date": day.isoformat(),
+        "period_key": body.period_key,
+        "period": reporting_periods.get(body.period_key),
+        "created_at": created_at,
+        "created_by": str(current_user.id),
+        "created_by_name": current_user.full_name,
+        "values": values,
+    }
+    rows = esg_store.get_daily_entries(caller_node["id"], role)
+    rows.append(daily_entry)
+    aggregate_values = _daily_rollup(rows, caller_node.get("type", ""), body.period_key)
+    entries = esg_store.add_daily_entry(
+        caller_node["id"], role, daily_entry, aggregate_values, period_key=body.period_key,
+        actor_id=str(current_user.id), actor_name=current_user.full_name,
+    )
+    return {
+        "node_id": caller_node["id"],
+        "daily_entry": daily_entry,
+        "daily_entries": esg_store.get_daily_entries(caller_node["id"], role),
+        "entries": entries,
+        "status": "draft",
     }
 
 
@@ -342,9 +535,11 @@ def save_draft(
     if body.node_id and body.node_id != caller_node["id"]:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Cannot save entries for another node.")
     _ensure_report_editable(caller_node["id"], role)
+    if role == "project_supervisor" and body.entry_mode not in (None, "daily", "annual"):
+        raise HTTPException(status_code=422, detail="Entry mode must be daily or annual.")
     cleaned = _validate_and_normalize_payload(role, caller_node.get("type", ""), body.entries)
-    saved = esg_store.save_role_entries(caller_node["id"], role, cleaned, new_status="draft", actor_id=str(current_user.id), actor_name=current_user.full_name)
-    return {"status": "draft", "node_id": caller_node["id"], "role": role, "entries": saved}
+    saved = esg_store.save_role_entries(caller_node["id"], role, cleaned, new_status="draft", actor_id=str(current_user.id), actor_name=current_user.full_name, entry_mode=body.entry_mode)
+    return {"status": "draft", "node_id": caller_node["id"], "role": role, "entries": saved, "entry_mode": esg_store.get_entry_mode(caller_node["id"], role)}
 
 
 @router.post("/submit")
@@ -358,9 +553,11 @@ def submit_form(
     if body.node_id and body.node_id != caller_node["id"]:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Cannot submit entries for another node.")
     _ensure_report_editable(caller_node["id"], role)
+    if role == "project_supervisor" and body.entry_mode not in (None, "daily", "annual"):
+        raise HTTPException(status_code=422, detail="Entry mode must be daily or annual.")
     cleaned = _validate_and_normalize_payload(role, caller_node.get("type", ""), body.entries)
-    saved = esg_store.save_role_entries(caller_node["id"], role, cleaned, new_status="submitted", actor_id=str(current_user.id), actor_name=current_user.full_name)
-    return {"status": "submitted", "node_id": caller_node["id"], "role": role, "entries": saved}
+    saved = esg_store.save_role_entries(caller_node["id"], role, cleaned, new_status="submitted", actor_id=str(current_user.id), actor_name=current_user.full_name, entry_mode=body.entry_mode)
+    return {"status": "submitted", "node_id": caller_node["id"], "role": role, "entries": saved, "entry_mode": esg_store.get_entry_mode(caller_node["id"], role)}
 
 
 _REVIEWABLE_TARGET_ROLES: Dict[str, set] = {
@@ -545,6 +742,7 @@ _ALLOWED_MIME_PREFIXES = (
     "text/plain",
 )
 _MAX_FILE_BYTES = 20 * 1024 * 1024  # 20 MB
+DAILY_EVIDENCE_FIELD_ID = "daily_activity_evidence"
 
 
 def _allowed_mime(mime: str) -> bool:
@@ -567,13 +765,20 @@ async def upload_field_evidence(
     # Only allow uploading for the caller's own node
     if node_id and node_id != caller_node["id"]:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Cannot upload evidence for another node.")
-    _ensure_report_editable(caller_node["id"], role)
+    daily_record = esg_store.get_daily_entry(caller_node["id"], role, fy_key) if role == "project_supervisor" else None
+    if daily_record:
+        is_day_level_attachment = field_id == DAILY_EVIDENCE_FIELD_ID
+        if not is_day_level_attachment and field_id not in (daily_record.get("values") or {}):
+            raise HTTPException(status_code=403, detail="Evidence can only be attached to a value recorded in that daily entry.")
+    else:
+        is_day_level_attachment = False
+        _ensure_report_editable(caller_node["id"], role)
 
     # Validate field ownership
-    if field_id not in REGISTRY_BY_ID:
+    if field_id not in REGISTRY_BY_ID and not is_day_level_attachment:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=f"Field '{field_id}' not in registry.")
-    reg = REGISTRY_BY_ID[field_id]
-    if reg["ownerRole"] != role:
+    reg = REGISTRY_BY_ID.get(field_id)
+    if reg and reg["ownerRole"] != role:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=f"Role '{role}' cannot attach evidence to field '{field_id}' (owned by '{reg['ownerRole']}').",
@@ -630,8 +835,17 @@ def detach_field_evidence(
     caller_node = _resolve_caller_node(db, current_user)
     if node_id != caller_node["id"]:
         raise HTTPException(status_code=403, detail="Can only detach evidence from your own node.")
-    _ensure_report_editable(node_id, _role_str(current_user))
-    if field_id not in REGISTRY_BY_ID or REGISTRY_BY_ID[field_id]["ownerRole"] != _role_str(current_user):
+    role = _role_str(current_user)
+    daily_record = esg_store.get_daily_entry(node_id, role, fy_key) if role == "project_supervisor" else None
+    if daily_record:
+        is_day_level_attachment = field_id == DAILY_EVIDENCE_FIELD_ID
+        if not is_day_level_attachment and field_id not in (daily_record.get("values") or {}):
+            raise HTTPException(status_code=403, detail="Evidence can only be detached from a value recorded in that daily entry.")
+    else:
+        is_day_level_attachment = False
+        _ensure_report_editable(node_id, role)
+    reg = REGISTRY_BY_ID.get(field_id)
+    if (not reg and not is_day_level_attachment) or (reg and reg["ownerRole"] != role):
         raise HTTPException(status_code=403, detail="Cannot detach evidence from this field.")
     removed = esg_store.remove_field_evidence(node_id, _role_str(current_user), field_id, fy_key, evidence_id)
     if not removed:
@@ -651,7 +865,7 @@ def get_evidence_for_field(
     _assert_downward_access(caller_node, node_id)
     role = _role_str(current_user)
     # Determine whose evidence to look up: for reviewers checking a child's evidence, use the field's ownerRole
-    lookup_role = REGISTRY_BY_ID.get(field_id, {}).get("ownerRole", role)
+    lookup_role = REGISTRY_BY_ID.get(field_id, {}).get("ownerRole", "project_supervisor" if field_id == DAILY_EVIDENCE_FIELD_ID else role)
     return {
         "node_id": node_id,
         "field_id": field_id,
@@ -689,15 +903,18 @@ def download_p6_evidence(
     caller_node = _resolve_caller_node(db, current_user)
     _assert_downward_access(caller_node, node_id)
     field = REGISTRY_BY_ID.get(field_id)
-    if not field:
+    if not field and field_id != DAILY_EVIDENCE_FIELD_ID:
         raise HTTPException(status_code=404, detail="Evidence field not found.")
-    evidence = esg_store.get_field_evidence(node_id, field["ownerRole"], field_id)
+    evidence_role = field["ownerRole"] if field else "project_supervisor"
+    evidence = esg_store.get_field_evidence(node_id, evidence_role, field_id)
     record = next(
         (item for records in evidence.values() for item in records if item.get("evidence_id") == evidence_id),
         None,
     )
     if not record:
         raise HTTPException(status_code=404, detail="Evidence file not found.")
+    if field_id == DAILY_EVIDENCE_FIELD_ID and not esg_store.get_daily_entry(node_id, evidence_role, record.get("fy_key", "")):
+        raise HTTPException(status_code=404, detail="Daily record for this evidence was not found.")
     if record.get("storage_key"):
         from app.modules.evidence.storage import storage_service
         payload = storage_service.get_file_bytes(record["storage_key"])
