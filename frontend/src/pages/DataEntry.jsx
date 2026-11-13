@@ -1710,7 +1710,7 @@ function DomainSection({
           ) : (
             inputFields.map(field => (
               <ParameterField
-                key={field.metric_code}
+                key={`${projectId}:${field.metric_code}`}
                 field={field}
                 value={values[field.metric_code]}
                 selectedUnit={units[field.metric_code]}
@@ -1900,6 +1900,14 @@ export default function DataEntry() {
 
   // Track submission ID returned from savePack so submitPack always has a valid ID
   const [activeSubmissionId, setActiveSubmissionId] = React.useState(null);
+
+  // Evidence IDs belong to one entity and period. Never carry an attachment
+  // selection into another project while the scoped form query is changing.
+  React.useEffect(() => {
+    setEvidenceIds({});
+    setActiveSubmissionId(null);
+    setSubmitted(false);
+  }, [selectedEntity, selectedPeriod]);
 
 
   // ── Group form fields into ESG domains ──────────────────────────────────

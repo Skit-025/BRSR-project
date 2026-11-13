@@ -35,24 +35,28 @@ def run_consolidation_engine(
     # Cache for values at each node: node_id -> {metric_code: (value, unit)}
     node_values: Dict[str, Dict[str, tuple[float, str]]] = {}
 
-    # Initialize leaf project values from approved or active submissions
+    # Inspect all current revisions; each parent tier has its own explicit acceptance gate.
     submissions = db.query(Submission).filter(
         Submission.period_id == period_id,
-        Submission.status.in_([
-            SubmissionStatus.SUBMITTED.value,
-            SubmissionStatus.PROJECT_APPROVED.value,
-            SubmissionStatus.UNDER_BU_REVIEW.value,
-            SubmissionStatus.BU_APPROVED.value,
-            SubmissionStatus.UNDER_SUBSIDIARY_REVIEW.value,
-            SubmissionStatus.SUBSIDIARY_APPROVED.value,
-            SubmissionStatus.UNDER_GROUP_REVIEW.value,
-            SubmissionStatus.CONSOLIDATED.value,
-            SubmissionStatus.LOCKED.value
-        ])
+        Submission.is_deleted == False,
     ).all()
 
+    nodes_by_id = {str(n.id): n for n in all_nodes}
+    submission_by_entity = {str(s.entity_id): s for s in submissions}
+    eligible_direct_statuses = {
+        "project": {SubmissionStatus.BU_PROJECT_ACCEPTED.value},
+        "site": {SubmissionStatus.BU_PROJECT_ACCEPTED.value},
+        "business_unit": {SubmissionStatus.BU_APPROVED.value, SubmissionStatus.SUBSIDIARY_BU_ACCEPTED.value},
+        "bu": {SubmissionStatus.BU_APPROVED.value, SubmissionStatus.SUBSIDIARY_BU_ACCEPTED.value},
+        "subsidiary": {SubmissionStatus.SUBSIDIARY_APPROVED.value, SubmissionStatus.GROUP_SUBSIDIARY_ACCEPTED.value},
+        "company": {SubmissionStatus.SUBSIDIARY_APPROVED.value, SubmissionStatus.GROUP_SUBSIDIARY_ACCEPTED.value},
+        "group": {SubmissionStatus.LOCKED.value},
+    }
     direct_entries: Dict[str, Dict[str, Tuple[float, str]]] = {}
     for s in submissions:
+        node = nodes_by_id.get(str(s.entity_id))
+        if not node or s.status not in eligible_direct_statuses.get((node.type or "").lower(), set()):
+            continue
         direct_entries[s.entity_id] = {}
         if s.entity_id not in node_values:
             node_values[s.entity_id] = {}
@@ -77,7 +81,8 @@ def run_consolidation_engine(
         ConsolidatedValue.is_deleted == False
     ).all()
     for cv in existing_cvs:
-        if cv.entity_id not in parent_node_ids:
+        existing_submission = submission_by_entity.get(str(cv.entity_id))
+        if cv.entity_id not in parent_node_ids and (not existing_submission or cv.entity_id in direct_entries):
             if cv.entity_id not in node_values:
                 node_values[cv.entity_id] = {}
             if cv.metric_code not in node_values[cv.entity_id]:
@@ -123,6 +128,16 @@ def run_consolidation_engine(
                     })
 
             for child in children:
+                child_submission = submission_by_entity.get(str(child.id))
+                required_child_status = {
+                    "business_unit": SubmissionStatus.BU_PROJECT_ACCEPTED.value,
+                    "bu": SubmissionStatus.BU_PROJECT_ACCEPTED.value,
+                    "subsidiary": SubmissionStatus.SUBSIDIARY_BU_ACCEPTED.value,
+                    "company": SubmissionStatus.SUBSIDIARY_BU_ACCEPTED.value,
+                    "group": SubmissionStatus.GROUP_SUBSIDIARY_ACCEPTED.value,
+                }.get((parent.type or "").lower())
+                if required_child_status and (not child_submission or child_submission.status != required_child_status):
+                    continue
                 if child.id in node_values and metric_code in node_values[child.id]:
                     child_val, child_unit = node_values[child.id][metric_code]
                     
@@ -302,21 +317,24 @@ def get_reporting_coverage(
     rejected_count = 0
     not_submitted_count = 0
 
-    APPROVED_STATUSES = {
+    parent_type = (parent.type or "").lower()
+    accepted_child_status = {
+        "business_unit": SubmissionStatus.BU_PROJECT_ACCEPTED.value,
+        "bu": SubmissionStatus.BU_PROJECT_ACCEPTED.value,
+        "subsidiary": SubmissionStatus.SUBSIDIARY_BU_ACCEPTED.value,
+        "company": SubmissionStatus.SUBSIDIARY_BU_ACCEPTED.value,
+        "group": SubmissionStatus.GROUP_SUBSIDIARY_ACCEPTED.value,
+    }.get(parent_type)
+
+    PENDING_STATUSES = {
+        SubmissionStatus.SUBMITTED.value,
+        SubmissionStatus.DRAFT.value,
         SubmissionStatus.PROJECT_APPROVED.value,
         SubmissionStatus.UNDER_BU_REVIEW.value,
         SubmissionStatus.BU_APPROVED.value,
         SubmissionStatus.UNDER_SUBSIDIARY_REVIEW.value,
         SubmissionStatus.SUBSIDIARY_APPROVED.value,
         SubmissionStatus.UNDER_GROUP_REVIEW.value,
-        SubmissionStatus.CONSOLIDATED.value,
-        SubmissionStatus.LOCKED.value,
-        "APPROVED"
-    }
-
-    PENDING_STATUSES = {
-        SubmissionStatus.SUBMITTED.value,
-        SubmissionStatus.DRAFT.value,
         "PENDING",
         "BU_REVIEW"
     }
@@ -335,7 +353,7 @@ def get_reporting_coverage(
             submitted_count += 1
             status_val = sub.status
             dp_count = len(sub.data_points) if hasattr(sub, "data_points") else 0
-            is_approved = status_val in APPROVED_STATUSES
+            is_approved = status_val == accepted_child_status or (accepted_child_status is None and status_val == SubmissionStatus.LOCKED.value)
             is_pending = status_val in PENDING_STATUSES
             is_rejected = status_val in REJECTED_STATUSES
 

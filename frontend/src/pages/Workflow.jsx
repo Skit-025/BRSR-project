@@ -16,16 +16,18 @@ import { workflowApi, collectionApi } from '../api/client';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../context/AuthContext';
 import PageHelpButton from '../components/PageHelpButton';
-import WorkflowP6Queue from './WorkflowP6Queue';
 
 const STATUS_STYLES = {
   DRAFT:                   { label: 'Draft',               color: '#475569', bg: '#f1f5f9' },
   SUBMITTED:               { label: 'Submitted (Project)', color: '#b45309', bg: '#fef3c7' },
   PROJECT_APPROVED:        { label: 'Project Approved',    color: '#059669', bg: '#d1fae5' },
+  BU_PROJECT_ACCEPTED:     { label: 'Accepted by BU ESG Manager', color: '#047857', bg: '#d1fae5' },
   UNDER_BU_REVIEW:         { label: 'BU Review',           color: '#0369a1', bg: '#e0f2fe' },
   BU_APPROVED:             { label: 'BU Approved',         color: '#15803d', bg: '#dcfce7' },
+  SUBSIDIARY_BU_ACCEPTED:  { label: 'Accepted by Subsidiary ESG Manager', color: '#047857', bg: '#d1fae5' },
   UNDER_SUBSIDIARY_REVIEW: { label: 'Sub Review',          color: '#6366f1', bg: '#ede9fe' },
   SUBSIDIARY_APPROVED:     { label: 'Sub. Approved',       color: '#4338ca', bg: '#e0e7ff' },
+  GROUP_SUBSIDIARY_ACCEPTED: { label: 'Accepted by Group Supervisor', color: '#047857', bg: '#d1fae5' },
   UNDER_GROUP_REVIEW:      { label: 'Group Review',        color: '#7c3aed', bg: '#f3e8ff' },
   CONSOLIDATED:            { label: 'Consolidated',        color: '#6d28d9', bg: '#ede9fe' },
   LOCKED:                  { label: 'Locked / Published',  color: '#0f172a', bg: '#e2e8f0' },
@@ -36,10 +38,13 @@ const STATUS_COLORS = {
   DRAFT: '#64748b',
   SUBMITTED: '#f59e0b',
   PROJECT_APPROVED: '#10b981',
+  BU_PROJECT_ACCEPTED: '#059669',
   UNDER_BU_REVIEW: '#0284c7',
   BU_APPROVED: '#10b981',
+  SUBSIDIARY_BU_ACCEPTED: '#059669',
   UNDER_SUBSIDIARY_REVIEW: '#6366f1',
   SUBSIDIARY_APPROVED: '#4338ca',
+  GROUP_SUBSIDIARY_ACCEPTED: '#059669',
   UNDER_GROUP_REVIEW: '#7c3aed',
   CONSOLIDATED: '#6d28d9',
   LOCKED: '#0f172a',
@@ -82,8 +87,11 @@ const PIPELINE_STAGES = [
   { key: 'DRAFT',                   label: 'Draft',             icon: '📝' },
   { key: 'SUBMITTED',               label: 'Submitted',         icon: '📤' },
   { key: 'PROJECT_APPROVED',        label: 'Project Approved',  icon: '✅' },
+  { key: 'BU_PROJECT_ACCEPTED',     label: 'BU ESG Accepted',    icon: '✅' },
   { key: 'BU_APPROVED',             label: 'BU Approved',       icon: '🏗️' },
+  { key: 'SUBSIDIARY_BU_ACCEPTED',  label: 'Subsidiary Accepted', icon: '✅' },
   { key: 'SUBSIDIARY_APPROVED',     label: 'Sub Approved',      icon: '🏢' },
+  { key: 'GROUP_SUBSIDIARY_ACCEPTED', label: 'Group Accepted', icon: '✅' },
   { key: 'CONSOLIDATED',            label: 'Consolidated',      icon: '📊' },
   { key: 'LOCKED',                  label: 'Locked',            icon: '🔒' },
 ];
@@ -491,10 +499,6 @@ export default function Workflow() {
       )}
 
       {/* ── REVIEW QUEUE TAB ──────────────────────────────────────── */}
-      {activeTab === 'queue' && (
-        <WorkflowP6Queue user={user} />
-      )}
-
       {activeTab === 'queue' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           {/* Queue Table */}

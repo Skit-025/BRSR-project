@@ -113,10 +113,9 @@ def dispatch_workflow_notification(
         for r in recipients:
             notif_svc.notify_user(r.id, title, msg, link)
 
-    # 2. Project Approval → BU Supervisor (and maker)
+    # 2. Project approval routes the pack to the BU ESG Manager.
     elif event == "PROJECT_APPROVED":
-        # Notify BU Supervisor at parent Business Unit
-        recipients = find_users_for_scope_and_role(db, Role.BU_SUPERVISOR.value, parent_id)
+        recipients = find_users_for_scope_and_role(db, Role.BU_ESG_MANAGER.value, parent_id)
         title = f"Project Approved: {entity_name} ✓"
         msg = f"Project Admin approved {entity_name} ({period_code}). Data is now eligible for BU consolidation."
         link = "/disclosure/bu"
@@ -130,6 +129,17 @@ def dispatch_workflow_notification(
                 f"Project Admin approved your submission for {period_code}.",
                 "/collection"
             )
+
+    elif event == "BU_PROJECT_ACCEPTED":
+        recipients = find_users_for_scope_and_role(db, Role.PROJECT_ADMIN.value, submission.entity_id)
+        for r in recipients:
+            notif_svc.notify_user(r.id, f"Project Report Accepted by BU: {entity_name}", f"The BU ESG Manager accepted the Project Report for {entity_name} ({period_code}).", "/workflow")
+
+    elif event == "BU_PROJECT_REJECTED":
+        recipients = find_users_for_scope_and_role(db, Role.PROJECT_ADMIN.value, submission.entity_id)
+        reason = f" Reason: {comment}" if comment else ""
+        for r in recipients:
+            notif_svc.notify_user(r.id, f"Project Report Returned by BU: {entity_name}", f"The BU ESG Manager returned the Project Report for {entity_name} ({period_code}).{reason}", "/workflow")
 
     # 3. Project Rejection → Project Supervisor
     elif event == "PROJECT_REJECTED":
@@ -151,14 +161,13 @@ def dispatch_workflow_notification(
         for r in recipients:
             notif_svc.notify_user(r.id, title, msg, link)
 
+    elif event == "BU_FINAL_SUBMITTED":
+        recipients = find_users_for_scope_and_role(db, Role.SUBSIDIARY_ESG_MANAGER.value, parent_id)
+        for r in recipients:
+            notif_svc.notify_user(r.id, f"Final BU Report Submitted: {entity_name}", f"BU Admin submitted the accepted and completed BU Report for {entity_name} ({period_code}). Review the Project source reports and BU calculations.", "/workflow")
+
     # 5. BU Approval → Subsidiary ESG Manager (and maker)
     elif event == "BU_APPROVED":
-        recipients = find_users_for_scope_and_role(db, Role.SUBSIDIARY_ESG_MANAGER.value, parent_id)
-        title = f"BU Report Approved: {entity_name} ✓"
-        msg = f"BU Admin approved {entity_name} ({period_code}). Data is now eligible for Subsidiary progressive reporting."
-        link = "/disclosure/subsidiary"
-        for r in recipients:
-            notif_svc.notify_user(r.id, title, msg, link)
         if submission.maker_id:
             notif_svc.notify_user(
                 submission.maker_id,
@@ -178,6 +187,17 @@ def dispatch_workflow_notification(
                 "/disclosure/bu"
             )
 
+    elif event == "SUBSIDIARY_BU_ACCEPTED":
+        recipients = find_users_for_scope_and_role(db, Role.BU_ADMIN.value, submission.entity_id)
+        for r in recipients:
+            notif_svc.notify_user(r.id, f"BU Report Accepted by Subsidiary: {entity_name}", f"The Subsidiary ESG Manager accepted the BU Report for {entity_name} ({period_code}).", "/workflow")
+
+    elif event == "SUBSIDIARY_BU_REJECTED":
+        recipients = find_users_for_scope_and_role(db, Role.BU_ADMIN.value, submission.entity_id)
+        reason = f" Reason: {comment}" if comment else ""
+        for r in recipients:
+            notif_svc.notify_user(r.id, f"BU Report Returned by Subsidiary: {entity_name}", f"The Subsidiary ESG Manager returned the BU Report for {entity_name} ({period_code}).{reason}", "/workflow")
+
     # 7. Subsidiary Submission → Subsidiary Admin
     elif event == "SUBSIDIARY_SUBMITTED":
         recipients = find_users_for_scope_and_role(db, Role.SUBSIDIARY_ADMIN.value, submission.entity_id)
@@ -187,14 +207,13 @@ def dispatch_workflow_notification(
         for r in recipients:
             notif_svc.notify_user(r.id, title, msg, link)
 
-    # 8. Subsidiary Approval → Group ESG Manager (and maker)
-    elif event == "SUBSIDIARY_APPROVED":
-        recipients = find_users_for_scope_and_role(db, Role.GROUP_ESG_MANAGER.value, parent_id)
-        title = f"Subsidiary Report Approved: {entity_name} ✓"
-        msg = f"Subsidiary Admin approved {entity_name} ({period_code}). Approved data is available for Group progressive consolidation."
-        link = "/disclosure/group"
+    elif event == "SUBSIDIARY_FINAL_SUBMITTED":
+        recipients = find_users_for_scope_and_role(db, Role.GROUP_SUPERVISOR.value, parent_id)
         for r in recipients:
-            notif_svc.notify_user(r.id, title, msg, link)
+            notif_svc.notify_user(r.id, f"Final Subsidiary Report Submitted: {entity_name}", f"Subsidiary Admin submitted the accepted and completed Subsidiary Report for {entity_name} ({period_code}). Review accepted BU reports and lineage.", "/workflow")
+
+    # 8. Subsidiary Admin acceptance routes the pack to the Group Supervisor.
+    elif event == "SUBSIDIARY_APPROVED":
         if submission.maker_id:
             notif_svc.notify_user(
                 submission.maker_id,
@@ -202,6 +221,17 @@ def dispatch_workflow_notification(
                 f"Subsidiary Admin approved your report for {period_code}.",
                 "/disclosure/subsidiary"
             )
+
+    elif event == "GROUP_SUBSIDIARY_ACCEPTED":
+        recipients = find_users_for_scope_and_role(db, Role.SUBSIDIARY_ADMIN.value, submission.entity_id)
+        for r in recipients:
+            notif_svc.notify_user(r.id, f"Subsidiary Report Accepted by Group: {entity_name}", f"The Group Supervisor accepted the Subsidiary Report for {entity_name} ({period_code}).", "/workflow")
+
+    elif event == "GROUP_SUBSIDIARY_REJECTED":
+        recipients = find_users_for_scope_and_role(db, Role.SUBSIDIARY_ADMIN.value, submission.entity_id)
+        reason = f" Reason: {comment}" if comment else ""
+        for r in recipients:
+            notif_svc.notify_user(r.id, f"Subsidiary Report Returned by Group: {entity_name}", f"The Group Supervisor returned the Subsidiary Report for {entity_name} ({period_code}).{reason}", "/workflow")
 
     # 9. Subsidiary Rejection → Subsidiary ESG Manager
     elif event == "SUBSIDIARY_REJECTED":

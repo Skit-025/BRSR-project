@@ -151,7 +151,7 @@ export const useScopedForm = (periodId, entityId, opts) => {
   return useQuery({
     queryKey: ['scoped-form', periodId, entityId],
     queryFn: () => formsApi.getScoped(periodId, entityId).then(r => r.data),
-    enabled: !!periodId,
+    enabled: !!periodId && !!entityId,
     ...opts,
   });
 };

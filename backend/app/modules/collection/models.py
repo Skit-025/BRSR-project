@@ -1,6 +1,6 @@
 import enum
 from sqlalchemy import Column, String, Numeric, Integer, DateTime, ForeignKey, UniqueConstraint
-from sqlalchemy.dialects.postgresql import UUID as PG_UUID
+from sqlalchemy.dialects.postgresql import UUID as PG_UUID, JSONB
 from sqlalchemy.orm import relationship
 from app.db.base import Base, UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin
 
@@ -8,12 +8,15 @@ class SubmissionStatus(str, enum.Enum):
     DRAFT = "DRAFT"
     SUBMITTED = "SUBMITTED"                           # Stage 1: submitted by Project Supervisor (Pending Project Admin)
     PROJECT_APPROVED = "PROJECT_APPROVED"             # Stage 2: approved by Project Admin (Eligible for BU)
+    BU_PROJECT_ACCEPTED = "BU_PROJECT_ACCEPTED"       # BU ESG Manager accepted this Project Report
     UNDER_BU_REVIEW = "UNDER_BU_REVIEW"               # Stage 3: submitted by BU Supervisor (Pending BU Admin)
     BU_APPROVED = "BU_APPROVED"                       # Stage 4: approved by BU Admin (Eligible for Subsidiary)
+    SUBSIDIARY_BU_ACCEPTED = "SUBSIDIARY_BU_ACCEPTED" # Subsidiary ESG Manager accepted this BU Report
     CALCULATION_PENDING = "CALCULATION_PENDING"       # Calc engine queued
     CALCULATED = "CALCULATED"                         # Calc engine completed
     UNDER_SUBSIDIARY_REVIEW = "UNDER_SUBSIDIARY_REVIEW" # Stage 5: submitted by Subsidiary Supervisor (Pending Sub Admin)
     SUBSIDIARY_APPROVED = "SUBSIDIARY_APPROVED"       # Stage 6: approved by Subsidiary Admin (Eligible for Group)
+    GROUP_SUBSIDIARY_ACCEPTED = "GROUP_SUBSIDIARY_ACCEPTED" # Group Supervisor accepted this Subsidiary Report
     UNDER_GROUP_REVIEW = "UNDER_GROUP_REVIEW"         # Stage 7: submitted by Group Supervisor (Pending Group Admin)
     CONSOLIDATED = "CONSOLIDATED"                     # Group consolidated
     LOCKED = "LOCKED"                                 # Stage 8: approved by Group Admin (Final Seal)
@@ -53,6 +56,21 @@ class Submission(Base, UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin):
     __table_args__ = (
         UniqueConstraint("entity_id", "period_id", name="uq_entity_period_submission"),
     )
+
+
+class SubmissionRevision(Base, UUIDPrimaryKeyMixin, TimestampMixin):
+    """Immutable content snapshot created for each successful report submission."""
+    __tablename__ = "submission_revisions"
+
+    submission_id = Column(PG_UUID(as_uuid=False), ForeignKey("submissions.id", ondelete="RESTRICT"), nullable=False, index=True)
+    revision_number = Column(Integer, nullable=False)
+    status_at_submission = Column(String(50), nullable=False)
+    submitted_by_id = Column(PG_UUID(as_uuid=False), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    submitted_at = Column(DateTime(timezone=True), nullable=False)
+    snapshot = Column(JSONB, nullable=False)
+    snapshot_sha256 = Column(String(64), nullable=False)
+
+    __table_args__ = (UniqueConstraint("submission_id", "revision_number", name="uq_submission_revision_number"),)
 
 class DataPoint(Base, UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin):
     """

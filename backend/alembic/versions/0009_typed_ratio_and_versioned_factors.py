@@ -40,38 +40,45 @@ def upgrade():
             sa.Column("status_reason", sa.Text(), nullable=True),
         )
 
-    # 2. Emission factors: versioning and lifecycle columns
-    ef_cols = [c["name"] for c in insp.get_columns("emission_factors")]
+    # 2. Emission factors: use the active canonical model name on fresh installs,
+    # while retaining compatibility with older databases that used emission_factors.
+    tables = insp.get_table_names()
+    factor_table = "emission_factors" if "emission_factors" in tables else "statutory_factors"
+    if factor_table in tables:
+        ef_cols = [c["name"] for c in insp.get_columns(factor_table)]
+    else:
+        ef_cols = []
     
     if "version" not in ef_cols:
         op.add_column(
-            "emission_factors",
+            factor_table,
             sa.Column("version", sa.String(20), nullable=False, server_default="1.0"),
         )
     if "effective_from" not in ef_cols:
         op.add_column(
-            "emission_factors",
+            factor_table,
             sa.Column("effective_from", sa.Date(), nullable=True),
         )
     if "effective_to" not in ef_cols:
         op.add_column(
-            "emission_factors",
+            factor_table,
             sa.Column("effective_to", sa.Date(), nullable=True),
         )
     if "superseded_by" not in ef_cols:
         op.add_column(
-            "emission_factors",
+            factor_table,
             sa.Column("superseded_by", sa.String(50), nullable=True),
         )
     if "change_reason" not in ef_cols:
         op.add_column(
-            "emission_factors",
+            factor_table,
             sa.Column("change_reason", sa.Text(), nullable=True),
         )
 
     # Replace unique index on code with composite on (code, version)
-    op.execute("DROP INDEX IF EXISTS ix_emission_factors_code;")
-    op.execute("CREATE UNIQUE INDEX IF NOT EXISTS ix_emission_factors_code_version ON emission_factors(code, version);")
+    if factor_table in tables:
+        op.execute(f"DROP INDEX IF EXISTS ix_{factor_table}_code;")
+        op.execute(f"CREATE UNIQUE INDEX IF NOT EXISTS ix_{factor_table}_code_version ON {factor_table}(code, version);")
 
     # 3. Factor change audit log table
     tables = insp.get_table_names()
@@ -99,14 +106,14 @@ def downgrade():
     if "factor_change_audit_logs" in tables:
         op.drop_table("factor_change_audit_logs")
     
-    op.execute("DROP INDEX IF EXISTS ix_emission_factors_code_version;")
-    op.execute("CREATE UNIQUE INDEX IF NOT EXISTS ix_emission_factors_code ON emission_factors(code);")
-
-    op.drop_column("emission_factors", "change_reason")
-    op.drop_column("emission_factors", "superseded_by")
-    op.drop_column("emission_factors", "effective_to")
-    op.drop_column("emission_factors", "effective_from")
-    op.drop_column("emission_factors", "version")
+    conn = op.get_bind()
+    tables = sa.inspect(conn).get_table_names()
+    factor_table = "emission_factors" if "emission_factors" in tables else "statutory_factors"
+    if factor_table in tables:
+        op.execute(f"DROP INDEX IF EXISTS ix_{factor_table}_code_version;")
+        op.execute(f"CREATE UNIQUE INDEX IF NOT EXISTS ix_{factor_table}_code ON {factor_table}(code);")
+        for column in ("change_reason", "superseded_by", "effective_to", "effective_from", "version"):
+            op.drop_column(factor_table, column)
 
     op.drop_column("consolidated_values", "status_reason")
     op.drop_column("consolidated_values", "status")

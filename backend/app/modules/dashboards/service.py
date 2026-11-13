@@ -136,8 +136,8 @@ class DashboardService:
                 .all()
             )
         total_sub = len(submissions)
-        approved = sum(1 for s in submissions if s.status in [SubmissionStatus.BU_APPROVED.value, SubmissionStatus.SUBSIDIARY_APPROVED.value, SubmissionStatus.CONSOLIDATED.value])
-        in_rev = sum(1 for s in submissions if s.status in [SubmissionStatus.SUBMITTED.value, SubmissionStatus.UNDER_BU_REVIEW.value])
+        approved = sum(1 for s in submissions if s.status in [SubmissionStatus.PROJECT_APPROVED.value, SubmissionStatus.BU_PROJECT_ACCEPTED.value, SubmissionStatus.BU_APPROVED.value, SubmissionStatus.SUBSIDIARY_BU_ACCEPTED.value, SubmissionStatus.SUBSIDIARY_APPROVED.value, SubmissionStatus.GROUP_SUBSIDIARY_ACCEPTED.value, SubmissionStatus.CONSOLIDATED.value, SubmissionStatus.LOCKED.value])
+        in_rev = sum(1 for s in submissions if s.status in [SubmissionStatus.SUBMITTED.value, SubmissionStatus.PROJECT_APPROVED.value, SubmissionStatus.UNDER_BU_REVIEW.value, SubmissionStatus.BU_APPROVED.value, SubmissionStatus.UNDER_SUBSIDIARY_REVIEW.value, SubmissionStatus.SUBSIDIARY_APPROVED.value, SubmissionStatus.UNDER_GROUP_REVIEW.value])
         draft = sum(1 for s in submissions if s.status == SubmissionStatus.DRAFT.value)
         rejected = sum(1 for s in submissions if s.status == SubmissionStatus.RETURNED.value)
 
@@ -302,12 +302,20 @@ class DashboardService:
 
                     child_approved = sum(1 for s in child_subs if s.status in [
                         SubmissionStatus.BU_APPROVED.value,
+                        SubmissionStatus.BU_PROJECT_ACCEPTED.value,
+                        SubmissionStatus.SUBSIDIARY_BU_ACCEPTED.value,
                         SubmissionStatus.SUBSIDIARY_APPROVED.value,
+                        SubmissionStatus.GROUP_SUBSIDIARY_ACCEPTED.value,
                         SubmissionStatus.CONSOLIDATED.value,
                     ])
                     child_in_rev = sum(1 for s in child_subs if s.status in [
                         SubmissionStatus.SUBMITTED.value,
+                        SubmissionStatus.PROJECT_APPROVED.value,
                         SubmissionStatus.UNDER_BU_REVIEW.value,
+                        SubmissionStatus.BU_APPROVED.value,
+                        SubmissionStatus.UNDER_SUBSIDIARY_REVIEW.value,
+                        SubmissionStatus.SUBSIDIARY_APPROVED.value,
+                        SubmissionStatus.UNDER_GROUP_REVIEW.value,
                     ])
 
                     if child_subs:

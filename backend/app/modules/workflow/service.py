@@ -5,7 +5,7 @@ from typing import List, Optional
 from sqlalchemy.orm import Session
 from fastapi import HTTPException, status
 from app.modules.org.models import OrgNode, ReportingPeriod, PeriodStatus
-from app.modules.collection.models import Submission, DataPoint, SubmissionStatus
+from app.modules.collection.models import Submission, SubmissionRevision, DataPoint, SubmissionStatus
 from app.modules.workflow.models import Review, ReviewDecision
 from app.modules.workflow.schemas import ReviewActionRequest, ReviewQueueItem, PeriodLockResponse
 from app.modules.workflow.guards import enforce_segregation_of_duties, enforce_approval_gates
@@ -39,6 +39,8 @@ def process_review(
     from app.security.rbac import Role
     reviewer = db.query(User).filter(User.id == action.reviewer_id).first()
     reviewer_role = reviewer.role if reviewer else None
+    entity = db.query(OrgNode).filter(OrgNode.id == submission.entity_id).first()
+    entity_type = (entity.type if entity else "").lower()
 
     event = "PROJECT_APPROVED"
 
@@ -52,12 +54,18 @@ def process_review(
         submission.status = SubmissionStatus.RETURNED.value
         submission.version += 1
 
-        if current_stage in (SubmissionStatus.SUBMITTED.value, SubmissionStatus.PROJECT_APPROVED.value):
+        if current_stage == SubmissionStatus.SUBMITTED.value:
             event = "PROJECT_REJECTED"
+        elif current_stage == SubmissionStatus.PROJECT_APPROVED.value:
+            event = "BU_PROJECT_REJECTED"
         elif current_stage in (SubmissionStatus.UNDER_BU_REVIEW.value, SubmissionStatus.BU_APPROVED.value):
             event = "BU_REJECTED"
-        elif current_stage in (SubmissionStatus.UNDER_SUBSIDIARY_REVIEW.value, SubmissionStatus.SUBSIDIARY_APPROVED.value):
+        elif current_stage == SubmissionStatus.UNDER_SUBSIDIARY_REVIEW.value and entity_type in ("business_unit", "bu"):
+            event = "SUBSIDIARY_BU_REJECTED"
+        elif current_stage == SubmissionStatus.UNDER_SUBSIDIARY_REVIEW.value:
             event = "SUBSIDIARY_REJECTED"
+        elif current_stage == SubmissionStatus.SUBSIDIARY_APPROVED.value:
+            event = "GROUP_SUBSIDIARY_REJECTED"
         elif current_stage in (SubmissionStatus.UNDER_GROUP_REVIEW.value, SubmissionStatus.CONSOLIDATED.value):
             event = "GROUP_REJECTED"
         else:
@@ -67,40 +75,31 @@ def process_review(
         # Enforce data quality and evidence gates
         enforce_approval_gates(submission, db)
 
-        if reviewer_role == Role.PROJECT_ADMIN.value:
-            if submission.status == SubmissionStatus.SUBMITTED.value:
-                submission.status = SubmissionStatus.PROJECT_APPROVED.value
-                event = "PROJECT_APPROVED"
-            else:
-                submission.status = SubmissionStatus.PROJECT_APPROVED.value
-                event = "PROJECT_APPROVED"
-
-        elif reviewer_role == Role.BU_ADMIN.value:
+        if reviewer_role == Role.PROJECT_ADMIN.value and current_stage == SubmissionStatus.SUBMITTED.value:
+            submission.status = SubmissionStatus.PROJECT_APPROVED.value
+            event = "PROJECT_APPROVED"
+        elif reviewer_role in (Role.BU_ESG_MANAGER.value, Role.BU_SUPERVISOR.value) and entity_type in ("project", "site") and current_stage == SubmissionStatus.PROJECT_APPROVED.value:
+            submission.status = SubmissionStatus.BU_PROJECT_ACCEPTED.value
+            event = "BU_PROJECT_ACCEPTED"
+        elif reviewer_role == Role.BU_ADMIN.value and entity_type in ("business_unit", "bu") and current_stage == SubmissionStatus.UNDER_BU_REVIEW.value:
             submission.status = SubmissionStatus.BU_APPROVED.value
             event = "BU_APPROVED"
-
-        elif reviewer_role == Role.SUBSIDIARY_ADMIN.value:
+        elif reviewer_role in (Role.SUBSIDIARY_ESG_MANAGER.value, Role.SUBSIDIARY_SUPERVISOR.value) and entity_type in ("business_unit", "bu") and current_stage == SubmissionStatus.UNDER_SUBSIDIARY_REVIEW.value:
+            submission.status = SubmissionStatus.SUBSIDIARY_BU_ACCEPTED.value
+            event = "SUBSIDIARY_BU_ACCEPTED"
+        elif reviewer_role == Role.SUBSIDIARY_ADMIN.value and entity_type in ("subsidiary", "company") and current_stage == SubmissionStatus.UNDER_SUBSIDIARY_REVIEW.value:
             submission.status = SubmissionStatus.SUBSIDIARY_APPROVED.value
             event = "SUBSIDIARY_APPROVED"
-
-        elif reviewer_role == Role.GROUP_ADMIN.value:
+        elif reviewer_role in (Role.GROUP_ESG_MANAGER.value, Role.GROUP_SUPERVISOR.value) and entity_type in ("subsidiary", "company") and current_stage == SubmissionStatus.SUBSIDIARY_APPROVED.value:
+            submission.status = SubmissionStatus.GROUP_SUBSIDIARY_ACCEPTED.value
+            event = "GROUP_SUBSIDIARY_ACCEPTED"
+        elif reviewer_role == Role.GROUP_ADMIN.value and entity_type == "group" and current_stage in (SubmissionStatus.UNDER_GROUP_REVIEW.value, SubmissionStatus.CONSOLIDATED.value):
             submission.status = SubmissionStatus.LOCKED.value
             event = "GROUP_APPROVED"
-
+        elif reviewer_role == Role.SYSTEM_ADMIN.value:
+            raise HTTPException(status_code=403, detail="System Admin cannot bypass the assigned review stage.")
         else:
-            # System Admin or generic advancing logic
-            if submission.status == SubmissionStatus.SUBMITTED.value:
-                submission.status = SubmissionStatus.PROJECT_APPROVED.value
-                event = "PROJECT_APPROVED"
-            elif submission.status in (SubmissionStatus.PROJECT_APPROVED.value, SubmissionStatus.UNDER_BU_REVIEW.value):
-                submission.status = SubmissionStatus.BU_APPROVED.value
-                event = "BU_APPROVED"
-            elif submission.status in (SubmissionStatus.BU_APPROVED.value, SubmissionStatus.UNDER_SUBSIDIARY_REVIEW.value):
-                submission.status = SubmissionStatus.SUBSIDIARY_APPROVED.value
-                event = "SUBSIDIARY_APPROVED"
-            else:
-                submission.status = SubmissionStatus.LOCKED.value
-                event = "GROUP_APPROVED"
+            raise HTTPException(status_code=409, detail="This role or report stage is not authorized for this review decision.")
 
         submission.version += 1
 
@@ -109,6 +108,9 @@ def process_review(
         submission_id=submission.id,
         stage=current_stage,
         reviewer_id=action.reviewer_id,
+        submission_revision_id=(db.query(SubmissionRevision.id)
+            .filter(SubmissionRevision.submission_id == submission.id)
+            .order_by(SubmissionRevision.revision_number.desc()).limit(1).scalar()),
         decision=action.decision.value,
         comment=action.comment,
         decided_at=datetime.now(timezone.utc)
@@ -347,34 +349,32 @@ def get_review_queue(db: Session, reviewer_user=None) -> List[ReviewQueueItem]:
 
     role = getattr(reviewer_user, "role", None)
 
-    if role == Role.PROJECT_ADMIN.value:
-        pending_statuses = [SubmissionStatus.SUBMITTED.value]
-    elif role == Role.BU_ADMIN.value:
-        pending_statuses = [
-            SubmissionStatus.UNDER_BU_REVIEW.value,
-            SubmissionStatus.PROJECT_APPROVED.value,
-            SubmissionStatus.SUBMITTED.value,  # fallback for direct submission to BU
-        ]
-    elif role == Role.SUBSIDIARY_ADMIN.value:
-        pending_statuses = [
-            SubmissionStatus.UNDER_SUBSIDIARY_REVIEW.value,
-            SubmissionStatus.BU_APPROVED.value,
-        ]
-    elif role == Role.GROUP_ADMIN.value:
-        pending_statuses = [
-            SubmissionStatus.UNDER_GROUP_REVIEW.value,
-            SubmissionStatus.SUBSIDIARY_APPROVED.value,
-        ]
+    review_config = {
+        Role.PROJECT_ADMIN.value: ([SubmissionStatus.SUBMITTED.value], {"project", "site"}, True),
+        Role.BU_ESG_MANAGER.value: ([SubmissionStatus.PROJECT_APPROVED.value], {"project", "site"}, False),
+        Role.BU_SUPERVISOR.value: ([SubmissionStatus.PROJECT_APPROVED.value], {"project", "site"}, False),
+        Role.BU_ADMIN.value: ([SubmissionStatus.UNDER_BU_REVIEW.value], {"business_unit", "bu"}, True),
+        Role.SUBSIDIARY_ESG_MANAGER.value: ([SubmissionStatus.UNDER_SUBSIDIARY_REVIEW.value], {"business_unit", "bu"}, False),
+        Role.SUBSIDIARY_SUPERVISOR.value: ([SubmissionStatus.UNDER_SUBSIDIARY_REVIEW.value], {"business_unit", "bu"}, False),
+        Role.SUBSIDIARY_ADMIN.value: ([SubmissionStatus.UNDER_SUBSIDIARY_REVIEW.value], {"subsidiary", "company"}, True),
+        Role.GROUP_ESG_MANAGER.value: ([SubmissionStatus.SUBSIDIARY_APPROVED.value], {"subsidiary", "company"}, False),
+        Role.GROUP_SUPERVISOR.value: ([SubmissionStatus.SUBSIDIARY_APPROVED.value], {"subsidiary", "company"}, False),
+        Role.GROUP_ADMIN.value: ([SubmissionStatus.UNDER_GROUP_REVIEW.value], {"group"}, True),
+    }
+    if role in review_config:
+        pending_statuses, entity_types, exact_entity = review_config[role]
     elif role == Role.SYSTEM_ADMIN.value or role is None:
+        pending_statuses = [SubmissionStatus.SUBMITTED.value]
         pending_statuses = [
             SubmissionStatus.SUBMITTED.value,
             SubmissionStatus.PROJECT_APPROVED.value,
             SubmissionStatus.UNDER_BU_REVIEW.value,
-            SubmissionStatus.BU_APPROVED.value,
             SubmissionStatus.UNDER_SUBSIDIARY_REVIEW.value,
             SubmissionStatus.SUBSIDIARY_APPROVED.value,
             SubmissionStatus.UNDER_GROUP_REVIEW.value,
         ]
+        entity_types = None
+        exact_entity = False
     else:
         # Supervisors do not have an approval queue
         return []
@@ -382,10 +382,15 @@ def get_review_queue(db: Session, reviewer_user=None) -> List[ReviewQueueItem]:
     pending_query = db.query(Submission).filter(
         Submission.status.in_(pending_statuses)
     )
+    if entity_types:
+        matching_nodes = db.query(OrgNode.id).filter(OrgNode.type.in_(entity_types), OrgNode.is_deleted == False).subquery()
+        pending_query = pending_query.filter(Submission.entity_id.in_(matching_nodes))
 
     # Scoped isolation
     if reviewer_user:
-        if reviewer_user.role == Role.PROJECT_ADMIN.value:
+        if exact_entity and reviewer_user.org_node_id:
+            pending_query = pending_query.filter(Submission.entity_id == str(reviewer_user.org_node_id))
+        elif reviewer_user.role == Role.PROJECT_ADMIN.value:
             assigned_ids = get_user_assigned_project_ids(db, reviewer_user)
             if assigned_ids:
                 pending_query = pending_query.filter(Submission.entity_id.in_(list(assigned_ids)))

@@ -1,13 +1,19 @@
+import hashlib
+import json
+import logging
 from datetime import datetime, timezone
 from typing import Optional, Dict, Any
 from sqlalchemy.orm import Session
 from fastapi import HTTPException, status
 from app.modules.org.models import ReportingPeriod, PeriodStatus, OrgNode, NodeType
+from app.modules.auth.models import User
 from app.modules.metrics.models import Metric, EvidenceRule
-from app.modules.collection.models import Submission, DataPoint, SubmissionStatus
+from app.modules.collection.models import Submission, SubmissionRevision, DataPoint, SubmissionStatus
 from app.modules.collection.schemas import SubmissionSaveRequest
 from app.modules.collection.unit_converter import normalize_to_base_unit
-from app.modules.evidence.models import EvidenceLink
+from app.modules.evidence.models import EvidenceLink, EvidenceFile
+
+logger = logging.getLogger(__name__)
 
 def get_or_create_submission(
     db: Session,
@@ -55,23 +61,23 @@ def save_draft_submission(
             detail=f"Reporting period '{period.code}' is LOCKED. No modifications permitted."
         )
 
-    # 2. Check entity node level (Project & BU-level entry rule)
+    # 2. Restrict direct KPI entry to the role assigned at this hierarchy tier.
+    maker = db.query(User).filter(User.id == user_id).first() if user_id else None
     entity = db.query(OrgNode).filter(OrgNode.id == save_req.entity_id).first()
-    if entity and entity.type not in (
-        NodeType.PROJECT.value,
-        NodeType.SITE.value,
-        NodeType.BUSINESS_UNIT.value,
-        "business_unit",
-        "bu"
-    ):
+    entity_type = (entity.type if entity else "").lower()
+    entry_roles = {
+        "project": {"project_supervisor"}, "site": {"project_supervisor"},
+        "business_unit": {"bu_esg_manager", "bu_supervisor"}, "bu": {"bu_esg_manager", "bu_supervisor"},
+        "subsidiary": {"subsidiary_esg_manager", "subsidiary_supervisor"}, "company": {"subsidiary_esg_manager", "subsidiary_supervisor"},
+        "group": {"group_esg_manager", "group_supervisor"},
+    }
+    if entity and entity_type not in entry_roles:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=(
-                f"Data entry is permitted at Project, Site, and Business Unit levels. "
-                f"Node '{entity.name}' is of type '{entity.type}'. "
-                "Consolidation happens automatically at Company and Group level."
-            )
+            detail=f"Data entry is not enabled at '{entity.name}' ({entity.type}).",
         )
+    if entity and getattr(maker, "role", None) not in entry_roles[entity_type]:
+        raise HTTPException(status_code=403, detail=f"Role '{getattr(maker, 'role', None)}' cannot enter data at {entity_type} level.")
 
     # 3. Get or initialize submission
     submission = get_or_create_submission(db, save_req.entity_id, save_req.period_id, user_id)
@@ -208,29 +214,26 @@ def submit_submission_pack(
     if not submission:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No active draft submission pack found to submit.")
 
-    if submission.status not in [SubmissionStatus.DRAFT.value, SubmissionStatus.RETURNED.value]:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Cannot submit: pack is already in '{submission.status}' status."
-        )
+    # Validate tier and role below; accepted BU/subsidiary packs may be explicitly forwarded.
 
     # ── P0 Guard 1: Project, Site, and Business Unit level nodes may submit data packs ────────
     entity = db.query(OrgNode).filter(OrgNode.id == submission.entity_id).first()
-    if entity and entity.type not in (
-        NodeType.PROJECT.value,
-        NodeType.SITE.value,
-        NodeType.BUSINESS_UNIT.value,
-        "business_unit",
-        "bu",
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=(
-                f"Data entry is permitted at Project, Site, and Business Unit levels. "
-                f"Node '{entity.name}' is of type '{entity.type}'. "
-                "Consolidation happens automatically at Company and Group level."
-            )
-        )
+    entity_type = (entity.type if entity else "").lower()
+    submitter = db.query(User).filter(User.id == user_id).first()
+    role = getattr(submitter, "role", None)
+    tier_roles = {
+        "project": {"project_supervisor"}, "site": {"project_supervisor"},
+        "business_unit": {"bu_esg_manager", "bu_supervisor"}, "bu": {"bu_esg_manager", "bu_supervisor"},
+        "subsidiary": {"subsidiary_esg_manager", "subsidiary_supervisor"}, "company": {"subsidiary_esg_manager", "subsidiary_supervisor"},
+        "group": {"group_esg_manager", "group_supervisor"},
+    }
+    forward_to_subsidiary = role == "bu_admin" and entity_type in ("business_unit", "bu") and submission.status == SubmissionStatus.BU_APPROVED.value
+    forward_to_group = role == "subsidiary_admin" and entity_type in ("subsidiary", "company") and submission.status == SubmissionStatus.SUBSIDIARY_APPROVED.value
+    forward_handoff = forward_to_subsidiary or forward_to_group
+    if role not in tier_roles.get(entity_type, set()) and not forward_handoff:
+        raise HTTPException(status_code=403, detail=f"Role '{role}' cannot submit a report at {entity_type} level or from this workflow stage.")
+    if submission.status not in [SubmissionStatus.DRAFT.value, SubmissionStatus.RETURNED.value] and not forward_handoff:
+        raise HTTPException(status_code=400, detail=f"Cannot submit: pack is already in '{submission.status}' status.")
 
     # ── P0 Guard 2: Submission must not be empty ──────────────────────────
     data_points = db.query(DataPoint).filter(DataPoint.submission_id == submission.id).all()
@@ -277,17 +280,97 @@ def submit_submission_pack(
             )
 
 
-    submission.status = SubmissionStatus.SUBMITTED.value
-    submission.maker_id = user_id
+    if forward_to_subsidiary:
+        submission.status = SubmissionStatus.UNDER_SUBSIDIARY_REVIEW.value
+    elif forward_to_group:
+        submission.status = SubmissionStatus.UNDER_GROUP_REVIEW.value
+    else:
+        submission.status = {
+            "business_unit": SubmissionStatus.UNDER_BU_REVIEW.value,
+            "bu": SubmissionStatus.UNDER_BU_REVIEW.value,
+            "subsidiary": SubmissionStatus.UNDER_SUBSIDIARY_REVIEW.value,
+            "company": SubmissionStatus.UNDER_SUBSIDIARY_REVIEW.value,
+            "group": SubmissionStatus.UNDER_GROUP_REVIEW.value,
+        }.get(entity_type, SubmissionStatus.SUBMITTED.value)
+    if not submission.maker_id:
+        submission.maker_id = user_id
     submission.submitted_at = datetime.now(timezone.utc)
     submission.version += 1
+
+    # Seal the exact submitted values and evidence references. Returned corrections
+    # create a later snapshot; this submitted revision is never updated in place.
+    revision_number = (db.query(SubmissionRevision.revision_number)
+        .filter(SubmissionRevision.submission_id == submission.id)
+        .order_by(SubmissionRevision.revision_number.desc()).limit(1).scalar() or 0) + 1
+    snapshot_points = []
+    for dp in sorted(data_points, key=lambda item: item.metric_code):
+        links = db.query(EvidenceLink).filter(EvidenceLink.data_point_id == dp.id).all()
+        evidence_refs = []
+        for link in links:
+            evidence = db.query(EvidenceFile).filter(EvidenceFile.id == link.evidence_id).first()
+            if evidence:
+                evidence_refs.append({
+                    "evidence_id": str(evidence.id),
+                    "evidence_display_id": evidence.evidence_display_id,
+                    "filename": evidence.original_name,
+                    "sha256": evidence.sha256,
+                    "storage_key": evidence.storage_key,
+                })
+        snapshot_points.append({
+            "data_point_id": str(dp.id),
+            "metric_code": dp.metric_code,
+            "value_numeric": float(dp.value_numeric) if dp.value_numeric is not None else None,
+            "value_text": dp.value_text,
+            "unit": dp.unit,
+            "normalized_value": float(dp.normalized_value) if dp.normalized_value is not None else None,
+            "status": dp.status,
+            "entry_method": dp.entry_method,
+            "notes": dp.notes,
+            "version": dp.version,
+            "evidence": evidence_refs,
+        })
+    entity = db.query(OrgNode).filter(OrgNode.id == submission.entity_id).first()
+    period = db.query(ReportingPeriod).filter(ReportingPeriod.id == submission.period_id).first()
+    snapshot = {
+        "submission_id": str(submission.id),
+        "revision": revision_number,
+        "entity_id": str(submission.entity_id),
+        "entity_code": entity.code if entity else None,
+        "entity_name": entity.name if entity else None,
+        "period_id": str(submission.period_id),
+        "period_code": period.code if period else None,
+        "submitted_by_id": str(user_id),
+        "submitted_at": submission.submitted_at.isoformat(),
+        "status": submission.status,
+        "data_points": snapshot_points,
+    }
+    snapshot_bytes = json.dumps(snapshot, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+    db.add(SubmissionRevision(
+        submission_id=submission.id,
+        revision_number=revision_number,
+        status_at_submission=submission.status,
+        submitted_by_id=user_id,
+        submitted_at=submission.submitted_at,
+        snapshot=snapshot,
+        snapshot_sha256=hashlib.sha256(snapshot_bytes).hexdigest(),
+    ))
 
     db.commit()
     db.refresh(submission)
 
+    event_by_type = {
+        "project": "PROJECT_SUBMITTED",
+        "site": "PROJECT_SUBMITTED",
+        "business_unit": "BU_SUBMITTED",
+        "bu": "BU_SUBMITTED",
+        "subsidiary": "SUBSIDIARY_SUBMITTED",
+        "company": "SUBSIDIARY_SUBMITTED",
+        "group": "GROUP_SUBMITTED",
+    }
     try:
         from app.modules.workflow.notifications import dispatch_workflow_notification
-        dispatch_workflow_notification(db, "PROJECT_SUBMITTED", submission)
+        submit_event = "BU_FINAL_SUBMITTED" if forward_to_subsidiary else "SUBSIDIARY_FINAL_SUBMITTED" if forward_to_group else event_by_type.get(entity_type, "PROJECT_SUBMITTED")
+        dispatch_workflow_notification(db, submit_event, submission)
     except Exception as exc:
         logger.warning("Project submission notification failed: %s", exc)
 

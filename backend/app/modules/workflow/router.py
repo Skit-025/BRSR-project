@@ -41,15 +41,20 @@ def review_submission_pack(
     """
     allowed_reviewers = [
         Role.PROJECT_ADMIN.value,
+        Role.BU_ESG_MANAGER.value,
+        Role.BU_SUPERVISOR.value,
         Role.BU_ADMIN.value,
+        Role.SUBSIDIARY_ESG_MANAGER.value,
+        Role.SUBSIDIARY_SUPERVISOR.value,
         Role.SUBSIDIARY_ADMIN.value,
+        Role.GROUP_ESG_MANAGER.value,
+        Role.GROUP_SUPERVISOR.value,
         Role.GROUP_ADMIN.value,
-        Role.SYSTEM_ADMIN.value,
     ]
     if current_user.role not in allowed_reviewers:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Supervisors are not permitted to review or approve submissions. Approvals must be performed by Admins."
+            detail="Your role is not the assigned reviewer for this workflow stage."
         )
 
     from app.modules.collection.models import Submission

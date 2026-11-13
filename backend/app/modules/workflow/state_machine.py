@@ -16,8 +16,11 @@ VALID_TRANSITIONS: Dict[str, Set[str]] = {
         SubmissionStatus.RETURNED.value
     },
     SubmissionStatus.PROJECT_APPROVED.value: {
+        SubmissionStatus.BU_PROJECT_ACCEPTED.value,
+        SubmissionStatus.RETURNED.value
+    },
+    SubmissionStatus.BU_PROJECT_ACCEPTED.value: {
         SubmissionStatus.UNDER_BU_REVIEW.value,
-        SubmissionStatus.BU_APPROVED.value,
         SubmissionStatus.RETURNED.value
     },
     SubmissionStatus.UNDER_BU_REVIEW.value: {
@@ -26,17 +29,22 @@ VALID_TRANSITIONS: Dict[str, Set[str]] = {
     },
     SubmissionStatus.BU_APPROVED.value: {
         SubmissionStatus.UNDER_SUBSIDIARY_REVIEW.value,
-        SubmissionStatus.SUBSIDIARY_APPROVED.value,
         SubmissionStatus.RETURNED.value
     },
     SubmissionStatus.UNDER_SUBSIDIARY_REVIEW.value: {
+        SubmissionStatus.SUBSIDIARY_BU_ACCEPTED.value,
         SubmissionStatus.SUBSIDIARY_APPROVED.value,
         SubmissionStatus.RETURNED.value
     },
+    SubmissionStatus.SUBSIDIARY_BU_ACCEPTED.value: {
+        SubmissionStatus.RETURNED.value
+    },
     SubmissionStatus.SUBSIDIARY_APPROVED.value: {
+        SubmissionStatus.GROUP_SUBSIDIARY_ACCEPTED.value,
         SubmissionStatus.UNDER_GROUP_REVIEW.value,
-        SubmissionStatus.CONSOLIDATED.value,
-        SubmissionStatus.LOCKED.value,
+        SubmissionStatus.RETURNED.value
+    },
+    SubmissionStatus.GROUP_SUBSIDIARY_ACCEPTED.value: {
         SubmissionStatus.RETURNED.value
     },
     SubmissionStatus.UNDER_GROUP_REVIEW.value: {
